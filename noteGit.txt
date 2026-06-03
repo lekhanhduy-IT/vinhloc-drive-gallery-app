@@ -10,14 +10,64 @@ git commit -m "split js from html"
 5. Push lên GitHub
 git push origin main
 
+Kiểm tra trước khi push
+
+Xem file nào thay đổi:
+
+git status
+
+Xem commit mới nhất:
+
+git log --oneline -5
+
+Kiểm tra đang trỏ đúng repo:
+
+git remote -v
+
+file sheet
 https://docs.google.com/spreadsheets/d/1rzm6zSX24UB03QOKRhR3O4BvGiQvnaOz6mhA6YL3GqA/edit?gid=0#gid=0
-
+link app script
 https://script.google.com/u/0/home/projects/1KezbJucJAsjN13f2r57vOIgeoPpPrLBx2ubDn9K08CG8eRYPgXOLLEaN/edit
-
+link google đăng nhập
 https://console.cloud.google.com/auth/clients?project=vinhloc-drive-auth-image-app
-
+link vercel build domains
 https://vercel.com/khanhduyhazo-6916s-projects/vinhloc-drive-gallery-app/7hDNKaeuhVBm6LFgM2cDPwTbY34D
-
+link gemini 
 https://gemini.google.com/app/1aa7e6a8194e5fd3?hl=vi
-
+link plasform code google
 https://me.developers.google.com/u/me
+link git commit mới
+https://github.com/lekhanhduy-IT/vinhloc-drive-gallery-app
+link codespace
+
+
+=======================================================================================
+=======================================================================================
+Cách làm sạch và đồng bộ hoàn toàn
+Bước 1: Sao lưu
+
+Không làm gì trên GitHub trước.
+
+Bước 2: Ép toàn bộ source hiện tại lên repo app
+
+Trong thư mục:
+
+C:\Vinhlocanh\vinhloc-drive-gallery-app
+
+chạy:
+
+git fetch origin
+git push -f origin main
+
+Nếu thành công sẽ thấy:
+
+To https://github.com/lekhanhduy-IT/vinhloc-drive-gallery-app.git
+ + xxxxx...b182061 main -> main (forced update)
+
+Kiểm tra GitHub
+
+Mở:
+
+https://github.com/lekhanhduy-IT/vinhloc-drive-gallery-app
+
+sau đó kiểm tra vercel

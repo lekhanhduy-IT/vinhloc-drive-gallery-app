@@ -4837,32 +4837,37 @@ setTimeout(() => {
     const originalInitDatabaseP32 = window.initDatabase;
     window.initDatabase = async function() {
         try {
-            // Kiểm tra siêu tốc xem ổ cứng có trống không
+            // Kiểm tra lần cuối nạp não nhện là khi nào
+            const lastBrainSync = await localforage.getItem('vinhloc_last_brain_sync') || 0;
             const localFolderCache = await localforage.getItem('vinhloc_folder_cache') || {};
             const isCacheEmpty = Object.keys(localFolderCache).length <= 1;
-
-            if (isCacheEmpty) {
+            
+            // ÉP TẢI NÃO NHỆN NẾU: Ổ cứng trống HOẶC đã quá 30 phút kể từ lần cuối mở app
+            if (isCacheEmpty || (Date.now() - lastBrainSync > 1800000)) {
                 const folderListEl = document.getElementById('folderList');
-                if (folderListEl) folderListEl.innerHTML = '<div class="text-center text-blue-600 mt-12 w-full"><div class="loader mx-auto mb-4 border-blue-600"></div><span class="font-bold animate-pulse">Đang đồng bộ dữ liệu mạng lưới...</span></div>';
+                if (folderListEl && isCacheEmpty) {
+                    folderListEl.innerHTML = '<div class="text-center text-blue-600 mt-12 w-full"><div class="loader mx-auto mb-4 border-blue-600"></div><span class="font-bold animate-pulse">Đang đồng bộ dữ liệu mạng lưới...</span></div>';
+                }
 
-                // Đi "Tải Não" ngay lập tức
+                // Đi "Tải Não" từ file _vinhloc_global_cache.json trên Drive
                 const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'loadGlobalCache' }) }).then(r => r.json());
 
                 if (res && res.success && res.data) {
-                    folderDataCache = res.data.folderData || {};
-                    subFolderCache = res.data.subData || {};
+                    // Trộn dữ liệu não nhện vào ổ cứng hiện tại (không ghi đè mù quáng)
+                    folderDataCache = { ...folderDataCache, ...(res.data.folderData || {}) };
+                    subFolderCache = { ...subFolderCache, ...(res.data.subData || {}) };
+                    
                     await localforage.setItem('vinhloc_folder_cache', folderDataCache);
                     await localforage.setItem('vinhloc_subfolder_cache', subFolderCache);
-                    console.log("🕷️ Đã cấy ghép Não Nhện thành công ngay giây số 0!");
+                    await localforage.setItem('vinhloc_last_brain_sync', Date.now());
+                    console.log("🕷️ Đã cấy ghép/cập nhật Não Nhện toàn cầu thành công!");
                 }
             }
         } catch(e) { console.error("Lỗi cấy ghép Não Nhện:", e); }
 
-        // Móc nối lại vào hàm khởi tạo gốc (chứa Patch 23 xử lý link chia sẻ) để chạy tiếp
         if (originalInitDatabaseP32) await originalInitDatabaseP32();
     };
 })();
-
 // --------------------------------------------------------------
 // PHẦN 2: "BƠM NÃO" & BẮT SỰ KIỆN - CHỜ 17 GIÂY ĐỂ ỔN ĐỊNH HỆ THỐNG
 // --------------------------------------------------------------
@@ -5961,3 +5966,83 @@ setTimeout(() => {
     
     console.log("✅ PATCH 44: Đã gắn Nút Đăng xuất (Custom UI) vào Menu Header!");
 }, 29000);
+// TẢI NGẦM THƯ VIỆN LOGO
+setTimeout(async () => {
+    if (typeof state !== 'undefined' && state.savedWatermarks.length === 0) {
+        try {
+            console.log("🕷️ Nhện đang nạp ngầm Thư viện Logo...");
+            let res = await fetch(SCRIPT_URL, { 
+                method: 'POST', 
+                body: JSON.stringify({ action: 'list', folderId: WM_FOLDER_ID }) 
+            }).then(r => r.json());
+            
+            if (res && res.success) {
+                const files = res.data.filter(i => i.type === 'file'); 
+                state.savedWatermarks = files.map(f => ({ 
+                    id: f.id, 
+                    src: `https://drive.google.com/thumbnail?id=${f.id}&sz=w800` 
+                }));
+                console.log("✅ Đã nạp xong Thư viện Logo ngầm!");
+            }
+        } catch (e) {
+            console.warn("🕷️ Nhện nạp Logo thất bại, sẽ tải khi người dùng bấm nút.");
+        }
+    }
+}, 5000); // Khởi chạy nhẹ nhàng sau 5 giây mở app
+// ==============================================================
+// PATCH BỔ SUNG: ƯU TIÊN TẢI THƯ MỤC VỪA CLICK & NẠP NGẦM LOGO
+// ==============================================================
+
+setTimeout(() => {
+    // 1. CẮT HÀNG CON NHỆN KHI NGƯỜI DÙNG BẤM MỞ THƯ MỤC
+    if (window.loadFolder) {
+        const originalLoadFolder = window.loadFolder;
+        window.loadFolder = async function(folderId, folderName, isNewNavigation = false, isPopState = false) {
+            
+            // Can thiệp vào hàng đợi của nhện
+            let queue = await localforage.getItem('vinhloc_crawl_queue') || [];
+            let crawled = await localforage.getItem('vinhloc_crawled_set') || {};
+            
+            // Nếu thư mục này con nhện chưa từng tải tới
+            if (!crawled[folderId]) {
+                // Rút folderId này ra khỏi vị trí cũ (nếu có)
+                queue = queue.filter(id => id !== folderId);
+                // Nhét thẳng lên đầu hàng đợi (ƯU TIÊN SỐ 1)
+                queue.unshift(folderId);
+                await localforage.setItem('vinhloc_crawl_queue', queue);
+            }
+            
+            // Đánh dấu thiết bị này vừa cập nhật ưu tiên, ép Trạm phát sóng đẩy lên mây ở chu kỳ 3 phút tiếp theo
+            window.vinhloc_cache_modified = true;
+
+            // Chạy hàm mở thư mục gốc
+            return originalLoadFolder(folderId, folderName, isNewNavigation, isPopState);
+        };
+    }
+
+    // 2. TẢI NGẦM THƯ VIỆN LOGO/CHỮ (Theo yêu cầu của bạn)
+    // Tự động kéo thư viện Logo về RAM sau 10 giây kể từ khi mở App
+    setTimeout(async () => {
+        if (typeof state !== 'undefined' && state.savedWatermarks.length === 0) {
+            console.log("🕷️ Nhện đang nạp ngầm Thư viện Logo...");
+            try {
+                let res = await fetch(SCRIPT_URL, { 
+                    method: 'POST', 
+                    body: JSON.stringify({ action: 'list', folderId: WM_FOLDER_ID }) 
+                }).then(r => r.json());
+                
+                if (res && res.success) {
+                    const files = res.data.filter(i => i.type === 'file'); 
+                    state.savedWatermarks = files.map(f => ({ 
+                        id: f.id, 
+                        src: `https://drive.google.com/thumbnail?id=${f.id}&sz=w800` 
+                    }));
+                    console.log("✅ Đã nạp xong Thư viện Logo ngầm!");
+                }
+            } catch (e) {
+                console.warn("🕷️ Nhện nạp Logo thất bại, sẽ chờ người dùng bấm.");
+            }
+        }
+    }, 10000);
+
+}, 18000); // Kích hoạt sau khi các hệ thống khác ổn định
