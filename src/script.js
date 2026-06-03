@@ -6328,3 +6328,63 @@ setTimeout(() => {
     forceLoadBrainNow();
 
 })();
+// ==============================================================
+// PATCH 47: TỰ ĐỘNG XÓA CHỌN KHI RỜI THƯ MỤC & BÁO CÁO SỐ LƯỢNG THỰC TẾ
+// ==============================================================
+setTimeout(() => {
+    // 1. Tự động dọn dẹp các mục đã chọn khi chuyển đổi nội dung hiển thị (renderItems)
+    if (window.renderItems && !window.renderItems.isSelectionAutoClearHooked) {
+        const originalRenderItemsForSelection = window.renderItems;
+        
+        window.renderItems = function(items, isSearchMode = false) {
+            // Lọc lại bộ nhớ tạm: Chỉ giữ lại những ID CÓ MẶT trong danh sách chuẩn bị vẽ ra
+            if (window.multiSelectState && window.multiSelectState.selectedIds) {
+                // Tạo một danh sách các ID của item sắp được hiển thị
+                const visibleIds = new Set();
+                if (items && Array.isArray(items)) {
+                    items.forEach(item => visibleIds.add(item.id));
+                }
+                
+                // Quét qua các ID đang được chọn, nếu cái nào không có trên màn hình -> Xóa sổ
+                for (let id of window.multiSelectState.selectedIds) {
+                    if (!visibleIds.has(id)) {
+                        window.multiSelectState.selectedIds.delete(id);
+                    }
+                }
+            }
+
+            // Chạy hàm vẽ giao diện gốc
+            originalRenderItemsForSelection.apply(this, arguments);
+
+            // Nếu menu header đang mở, cập nhật lại số lượng ngay lập tức để đồng bộ UI
+            const headerDropdown = document.getElementById('headerDropdown');
+            if (headerDropdown && !headerDropdown.classList.contains('hidden') && typeof window.buildHeaderMenu === 'function') {
+                window.buildHeaderMenu();
+            }
+        };
+        window.renderItems.isSelectionAutoClearHooked = true;
+    }
+
+    // 2. Chốt chặn an toàn: Hủy toàn bộ lựa chọn khi người dùng bấm chuyển thư mục (loadFolder)
+    if (window.loadFolder && !window.loadFolder.isSelectionAutoClearHooked) {
+        const originalLoadFolderForSelection = window.loadFolder;
+        
+        window.loadFolder = function(folderId, folderName, isNewNavigation, isPopState) {
+            // Nếu đích đến khác với thư mục hiện tại -> Dọn sạch toàn bộ bộ nhớ chọn
+            if (window.currentFolderId !== folderId) {
+                if (window.multiSelectState && window.multiSelectState.selectedIds) {
+                    window.multiSelectState.selectedIds.clear();
+                }
+                
+                // Ẩn menu Header đang đếm số lượng nếu đang mở để tránh lỗi giao diện
+                const headerDropdown = document.getElementById('headerDropdown');
+                if (headerDropdown) headerDropdown.classList.add('hidden');
+            }
+            
+            return originalLoadFolderForSelection.apply(this, arguments);
+        };
+        window.loadFolder.isSelectionAutoClearHooked = true;
+    }
+
+    console.log("✅ PATCH 47: Đã tối ưu bộ đếm Đa Lựa Chọn (Tự động xóa chọn khi rời khỏi màn hình)!");
+}, 30000); // Khởi chạy trễ nhất (30s) để bọc ra ngoài cùng của tất cả các Patch trước đó
