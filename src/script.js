@@ -6152,30 +6152,37 @@ setTimeout(() => {
 }, 29500); // Kích hoạt ở chu kỳ trễ nhất để tích hợp êm ái
 
 // ==============================================================
-// SUPER PATCH 46 & 44 (FIXED): ÁP DỤNG NGAY LẬP TỨC KHÔNG CẦN CHỜ
+// SUPER PATCH 48: KHẮC PHỤC CHỐNG TRÙNG LOGOUT & CHỐNG ĐƠ MENU
 // ==============================================================
 (function() {
-    console.log("🚀 Kích hoạt Patch 44 & 46 ngay lập tức...");
+    console.log("🛠️ Khởi động Patch 48: Tối ưu hiệu năng Menu & Đăng xuất...");
 
-    // --- 1. PATCH 44: ĐĂNG XUẤT AN TOÀN (KHÔNG XÓA DỮ LIỆU) ---
-    if (window.buildHeaderMenu && !window.buildHeaderMenu.isLogoutHookedFixed) {
+    // --- 1. SỬA LỖI 2 NÚT ĐĂNG XUẤT (CHỐNG TRÙNG LẶP) ---
+    if (window.buildHeaderMenu && !window.buildHeaderMenu.isLogoutHookedV48) {
         const originalBuildHeaderMenuForLogout = window.buildHeaderMenu;
+        
         window.buildHeaderMenu = function() {
+            // Chạy hàm gốc để dựng menu tiêu chuẩn
             originalBuildHeaderMenuForLogout();
+            
             const headerDropdown = document.getElementById('headerDropdown');
             if (headerDropdown) {
+                // KIỂM TRA CHỐT CHẶN: Nếu đã có nút đăng xuất của Vĩnh Lộc thì bỏ qua, không chèn trùng
+                if (document.getElementById('vinhloc-logout-btn')) return;
+
                 const logoutHtml = `
-                    <div class="border-t border-gray-100 my-1"></div>
-                    <div class="px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center cursor-pointer transition" onclick="window.vinhlocForceLogout(event)">
+                    <div id="vinhloc-logout-splitter" class="border-t border-gray-100 my-1"></div>
+                    <div id="vinhloc-logout-btn" class="px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center cursor-pointer transition" onclick="window.vinhlocForceLogout(event)">
                         <i class="fa-solid fa-right-from-bracket w-5 text-center mr-2"></i><span>Đăng xuất</span>
                     </div>
                 `;
                 headerDropdown.insertAdjacentHTML('beforeend', logoutHtml);
             }
         };
-        window.buildHeaderMenu.isLogoutHookedFixed = true;
+        window.buildHeaderMenu.isLogoutHookedV48 = true;
     }
 
+    // Hàm xử lý đăng xuất an toàn giữ cache ngoại tuyến
     window.vinhlocForceLogout = function(e) {
         if (e) e.stopPropagation();
         const headerDropdown = document.getElementById('headerDropdown');
@@ -6189,7 +6196,7 @@ setTimeout(() => {
 
         if (customModal && modalTitle && modalDesc && confirmBtn) {
             modalTitle.textContent = 'Xác nhận Đăng xuất';
-            modalDesc.textContent = 'Bạn có chắc chắn muốn quay ra màn hình đăng nhập? (Dữ liệu ngoại tuyến vẫn sẽ được giữ nguyên an toàn)';
+            modalDesc.textContent = 'Bạn có chắc chắn muốn quay ra màn hình đăng nhập? (Dữ liệu ngoại tuyến vẫn được giữ lại để lần sau vào app mở nhanh hơn)';
             modalDesc.classList.remove('hidden');
             if (modalInput) modalInput.classList.add('hidden');
 
@@ -6198,7 +6205,6 @@ setTimeout(() => {
 
             confirmBtn.onclick = () => {
                 if (typeof closeModal === 'function') closeModal();
-                // Chỉ gỡ thẻ ra vào, tuyệt đối không đụng tới kho dữ liệu
                 localStorage.removeItem("vinhloc_authenticated_email");
                 window.location.reload();
             };
@@ -6212,7 +6218,7 @@ setTimeout(() => {
         }
     };
 
-    // --- 2. PATCH 46: ÉP MÀN HÌNH CHỜ ĐỢI TẢI NÃO XONG MỚI ĐƯỢC VÀO ---
+    // --- 2. SỬA LỖI MÀN HÌNH CHỜ (KẾT HỢP SMOOTH LOADING) ---
     window.initSpiderLoaderFlow = function() {
         const currentEmail = localStorage.getItem("vinhloc_authenticated_email");
         if (!currentEmail) return;
@@ -6229,14 +6235,14 @@ setTimeout(() => {
             let percent = 1;
             
             const loadingInterval = setInterval(() => {
-                // Đóng băng ở 90% nếu Mây vẫn chưa gửi dữ liệu về xong
-                if (window._isBrainLoading && percent >= 90) {
-                    textEl.innerText = `Đang đồng bộ mây ${percent}%...`;
+                // Nếu "Não nhện nặng" chưa xử lý xong chuỗi dữ liệu JSON, ép thanh loading giữ ở 92% để đợi
+                if (window._isBrainLoading && percent >= 92) {
+                    textEl.innerText = `Đang đồng bộ cấu trúc mây ${percent}%...`;
                     return;
                 }
 
-                percent += 3; // Chạy lẹ hơn chút cho mượt
-                textEl.innerText = `Đang nạp ${percent}%...`;
+                percent += 4; 
+                textEl.innerText = `Đang giải nén bộ nhớ ${percent}%...`;
 
                 if (percent >= 100) {
                     clearInterval(loadingInterval);
@@ -6246,18 +6252,69 @@ setTimeout(() => {
                     localStorage.setItem("vinhloc_loaded_accounts", JSON.stringify(loadedAccounts));
                     localStorage.setItem("vinhloc_device_patched", "true");
 
-                    setTimeout(() => { loader.style.display = "none"; }, 1000);
-                    // F5 giao diện với đồ mới nhất
-                    if (typeof currentDriveItems !== 'undefined') window.renderItems(currentDriveItems);
+                    setTimeout(() => { 
+                        loader.style.display = "none"; 
+                        // Não nạp xong là kích hoạt dựng lại toàn bộ giao diện và menu ngay lập tức
+                        if (window.currentFolderId && window.loadFolder) {
+                            window.loadFolder(window.currentFolderId, window.currentFolderName || "Thư mục gốc", false, true);
+                        }
+                    }, 800);
                 }
-            }, 100); 
+            }, 80); 
         } else {
             if (loader) loader.style.display = "none";
             localStorage.setItem("vinhloc_device_patched", "true"); 
         }
     };
 
-    // Trạm phát sóng lên Mây (Hoạt động sau 10s để App rảnh rỗi khởi động xong)
+    // --- 3. SỬA LỖI ĐƠ APP: CHUYỂN TÁC VỤ NẶNG SANG LUỒNG CHẠY NỀN KHÔNG BLOCK UI ---
+    async function forceLoadBrainNow() {
+        try {
+            const lastBrainSync = await localforage.getItem('vinhloc_last_brain_sync') || 0;
+            const localFolderCache = await localforage.getItem('vinhloc_folder_cache') || {};
+            const isCacheEmpty = Object.keys(localFolderCache).length <= 1;
+            
+            if (isCacheEmpty || (Date.now() - lastBrainSync > 1800000)) { // 30 Phút
+                window._isBrainLoading = true; 
+                
+                const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'loadGlobalCache' }) }).then(r => r.json());
+
+                if (res && res.success && res.data) {
+                    // Dùng setTimeout(..., 0) để đẩy luồng Parse JSON nặng nề ra sau, giúp Menu HTML kịp hiển thị mượt mà, không bị chìm/đơ
+                    setTimeout(async () => {
+                        folderDataCache = { ...folderDataCache, ...(res.data.folderData || {}) };
+                        subFolderCache = { ...subFolderCache, ...(res.data.subData || {}) };
+                        
+                        if (res.data.spiderMemory) await localforage.setItem('vinhloc_crawled_set', res.data.spiderMemory);
+                        if (res.data.appMeta) {
+                            appMeta = { ...appMeta, ...res.data.appMeta };
+                            await localforage.setItem('vinhloc_meta', appMeta);
+                        }
+
+                        await localforage.setItem('vinhloc_folder_cache', folderDataCache);
+                        await localforage.setItem('vinhloc_subfolder_cache', subFolderCache);
+                        await localforage.setItem('vinhloc_last_brain_sync', Date.now());
+                        
+                        console.log("🕷️ [Patch 48] Bộ não khổng lồ đã nạp xong không gây đơ UI!");
+                        window._isBrainLoading = false; // Mở khóa thanh phần trăm
+
+                        // Buộc Menu và nội dung vẽ lại đồ mới ngay lập tức
+                        if (window.buildHeaderMenu) window.buildHeaderMenu();
+                        if (typeof currentDriveItems !== 'undefined' && window.renderItems) {
+                            const updatedItems = folderDataCache[currentFolderId];
+                            if (updatedItems) window.renderItems(updatedItems);
+                        }
+                    }, 50);
+                } else {
+                    window._isBrainLoading = false;
+                }
+            }
+        } catch(e) { 
+            window._isBrainLoading = false; 
+        }
+    }
+
+    // Tự động phát sóng đồng bộ dữ liệu định kỳ
     setTimeout(() => {
         setInterval(async () => {
             if (window.vinhloc_cache_modified && Object.keys(folderDataCache).length > 0) {
@@ -6272,59 +6329,18 @@ setTimeout(() => {
                             cacheData: JSON.stringify({ 
                                 folderData: folderDataCache, 
                                 subData: subFolderCache,
-                                spiderMemory: crawledSet, // Có trí nhớ Nhện
-                                appMeta: meta             // Có thiết lập UI
+                                spiderMemory: crawledSet,
+                                appMeta: meta
                             })
                         })
                     });
-                    console.log("📡 [Patch 46] Đã phát sóng Não Nhện TOÀN DIỆN!");
+                    console.log("📡 [Patch 48] Đã phát sóng sao lưu Não Nhện.");
                 } catch(e) { window.vinhloc_cache_modified = true; }
             }
-        }, 180000); // 3 Phút
-    }, 10000);
-
-    // --- 3. ĐI BẮT CÓC DỮ LIỆU TỪ MÂY NGAY LẬP TỨC CHỨ KHÔNG ĐỢI NỮA ---
-    async function forceLoadBrainNow() {
-        try {
-            const lastBrainSync = await localforage.getItem('vinhloc_last_brain_sync') || 0;
-            const localFolderCache = await localforage.getItem('vinhloc_folder_cache') || {};
-            const isCacheEmpty = Object.keys(localFolderCache).length <= 1;
-            
-            if (isCacheEmpty || (Date.now() - lastBrainSync > 1800000)) { // 30 phút
-                window._isBrainLoading = true; // Giật chuông báo hiệu cho màn hình chờ biết
-                
-                const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'loadGlobalCache' }) }).then(r => r.json());
-
-                if (res && res.success && res.data) {
-                    folderDataCache = { ...folderDataCache, ...(res.data.folderData || {}) };
-                    subFolderCache = { ...subFolderCache, ...(res.data.subData || {}) };
-                    
-                    if (res.data.spiderMemory) await localforage.setItem('vinhloc_crawled_set', res.data.spiderMemory);
-                    if (res.data.appMeta) {
-                        appMeta = { ...appMeta, ...res.data.appMeta };
-                        await localforage.setItem('vinhloc_meta', appMeta);
-                    }
-
-                    await localforage.setItem('vinhloc_folder_cache', folderDataCache);
-                    await localforage.setItem('vinhloc_subfolder_cache', subFolderCache);
-                    await localforage.setItem('vinhloc_last_brain_sync', Date.now());
-                    
-                    console.log("🕷️ [Patch 46] Đã cấy ghép Não Nhện ngay từ Giây Số 0!");
-                    
-                    // Render lại nếu đang ở thư mục hiện tại để ập ảnh lên luôn
-                    if (typeof currentDriveItems !== 'undefined') {
-                        currentDriveItems = folderDataCache[currentFolderId] || currentDriveItems;
-                        if(window.renderItems) window.renderItems(currentDriveItems);
-                    }
-                }
-                window._isBrainLoading = false; // Báo hiệu tải xong cho màn hình 30s mở cửa
-            }
-        } catch(e) { 
-            window._isBrainLoading = false; // Lỗi mạng thì vẫn mở cửa cho vào
-        }
-    }
+        }, 180000);
+    }, 15000);
     
-    // Bóp cò phát bắn ngay tại đây!
+    // Thực thi nạp dữ liệu
     forceLoadBrainNow();
 
 })();
