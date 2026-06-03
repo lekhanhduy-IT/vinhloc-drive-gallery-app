@@ -5796,208 +5796,91 @@ setTimeout(() => {
     console.log("✅ PATCH 43 (FIXED): Nút Cây Bút đã hết ngốc, chỉ hiển thị quyền lực khi thư mục thực sự có ảnh!");
 }, 28000);
 // ==============================================================
-
-// PATCH 42 (BẢN FIX CUỐI CÙNG TẬN GỐC): ÉP FACEBOOK NHẬN VIDEO THÔ
-
+// PATCH 42 (BẢN FIX TỐI ƯU): CHIA SẺ ẢNH LÊN FACEBOOK KHÔNG BỊ ĐƠ
 // ==============================================================
-
 setTimeout(() => {
-
     window.shareItem = async function (id, type, name, e) {
-
         if (e) e.stopPropagation(); 
-
         document.querySelectorAll('.item-action-menu').forEach(menu => menu.classList.add('hidden'));
-
         
-
         let mimeTypeParam = '';
-
         let isImage = false;
 
-        let isVideo = false;
-
-        let currentMimeType = '';
-
-
-
         if (type === 'file') {
-
             const fileObj = currentDriveItems.find(i => i.id === id);
-
             if (fileObj && fileObj.mimeType) {
-
-                currentMimeType = fileObj.mimeType;
-
                 mimeTypeParam = `&mimeType=${encodeURIComponent(fileObj.mimeType)}`;
-
                 if (fileObj.mimeType.includes('image')) isImage = true;
-
-                if (fileObj.mimeType.includes('video')) isVideo = true;
-
             }
-
         }
-
-
 
         const shareUrl = `${window.location.origin}${window.location.pathname}?shareId=${id}&shareType=${type}&shareName=${encodeURIComponent(name)}${mimeTypeParam}`;
+        const shareText = `Mở xem chi tiết "${name}" trong ứng dụng:\n${shareUrl}`;
 
-
-
-        // NẾU LÀ ẢNH HOẶC VIDEO -> TRÍCH XUẤT FILE VẬT LÝ ÉP ĐĂNG FACEBOOK
-
-        if ((isImage || isVideo) && navigator.canShare) {
-
-            const mediaTypeLabel = isImage ? 'ảnh' : 'video';
-
-            showToast(`<i class="fas fa-spinner fa-spin mr-2"></i> Đang trích xuất ${mediaTypeLabel} thô để đăng lên Facebook...`);
-
-            
-
+        // NẾU LÀ ẢNH -> LẤY BLOB TRỰC TIẾP QUA PROXY (KHÔNG DÙNG BASE64 ĐỂ CHỐNG ĐƠ RAM)
+        if (isImage && navigator.canShare) {
+            showToast('<i class="fas fa-spinner fa-spin mr-2"></i> Đang nạp ảnh chuẩn để Share...');
             try {
+                // Dùng Thumbnail chất lượng cao (w2000) thay vì file gốc để tải siêu nhanh
+                const driveImgUrl = `https://drive.google.com/thumbnail?id=${id}&sz=w2000`;
+                
+                // Mạng lưới Proxy vượt rào CORS (Tận dụng lại mảng có sẵn trong code của bạn)
+                const urlsToTry = [
+                    "https://wsrv.nl/?url=" + encodeURIComponent(driveImgUrl),
+                    "https://corsproxy.io/?" + encodeURIComponent(driveImgUrl),
+                    "https://api.allorigins.win/raw?url=" + encodeURIComponent(driveImgUrl)
+                ];
 
                 let blob = null;
-
-
-
-                if (isVideo) {
-
-                    // [BÍ QUYẾT] DÙNG CHÍNH SERVER APP SCRIPT CỦA BẠN ĐỂ LẤY VIDEO THÔ (NÉ CẢNH BÁO VIRUS)
-
-                    const b64Res = await apiCall('getFileBase64', { fileId: id });
-
-                    if (b64Res && b64Res.success && b64Res.data) {
-
-                        const byteCharacters = atob(b64Res.data);
-
-                        const byteNumbers = new Array(byteCharacters.length);
-
-                        for (let i = 0; i < byteCharacters.length; i++) {
-
-                            byteNumbers[i] = byteCharacters.charCodeAt(i);
-
+                for (let proxyUrl of urlsToTry) {
+                    try {
+                        const response = await fetch(proxyUrl);
+                        if (response.ok) {
+                            blob = await response.blob(); // Đổi thẳng dữ liệu thành File vật lý cực mượt
+                            break;
                         }
-
-                        blob = new Blob([new Uint8Array(byteNumbers)], { type: b64Res.mimeType || 'video/mp4' });
-
-                    } else {
-
-                        throw new Error("Lấy dữ liệu video thất bại từ Server.");
-
+                    } catch (err) { 
+                        console.warn("Proxy bận, đang chuyển trạm...", err); 
                     }
-
-                } else {
-
-                    // ẢNH THÌ DÙNG PROXY VẪN NHANH VÀ TỐT
-
-                    let sourceUrl = `https://drive.google.com/thumbnail?id=${id}&sz=w2000`;
-
-                    const urlsToTry = [
-
-                        "https://wsrv.nl/?url=" + encodeURIComponent(sourceUrl),
-
-                        "https://corsproxy.io/?" + encodeURIComponent(sourceUrl)
-
-                    ];
-
-                    for (let proxyUrl of urlsToTry) {
-
-                        try {
-
-                            const response = await fetch(proxyUrl);
-
-                            if (response.ok) { blob = await response.blob(); break; }
-
-                        } catch (err) {}
-
-                    }
-
                 }
-
-
 
                 if (blob) {
+                    // Đóng gói Blob thành File thực thụ
+                    const fileObj = new File([blob], name, { type: blob.type || 'image/jpeg' });
 
-                    let finalMime = currentMimeType || blob.type;
-
-                    if (isVideo && !finalMime.includes('video')) finalMime = 'video/mp4';
-
-                    if (isImage && !finalMime.includes('image')) finalMime = 'image/jpeg';
-
-                    
-
-                    // Lọc ký tự lạ trong tên file để OS không bị ngu
-
-                    let fixedFileName = name.replace(/[^a-zA-Z0-9.\-_]/g, '_'); 
-
-                    if (isVideo && !/\.(mp4|mov|m4v|3gp|avi)$/i.test(fixedFileName)) fixedFileName += '.mp4';
-
-                    else if (isImage && !/\.(jpg|jpeg|png|gif|webp)$/i.test(fixedFileName)) fixedFileName += '.jpg';
-
-
-
-                    const fileObj = new File([blob], fixedFileName, { type: finalMime });
-
-
-
+                    // Gửi File + Link vào Bảng Share của Hệ điều hành
                     if (navigator.canShare({ files: [fileObj] })) {
-
-                        // CHỈ TRUYỀN DUY NHẤT MẢNG FILES. KHÔNG ĐƯỢC CÓ URL HAY TEXT Ở ĐÂY NỮA
-
-                        await navigator.share({ files: [fileObj] });
-
-                        
-
-                        // Ẩn toast ngay khi mở bảng Share
-
-                        const toast = document.getElementById('toast-container');
-
-                        if(toast) toast.innerHTML = '';
-
-                        return; 
-
+                        await navigator.share({ 
+                            files: [fileObj], 
+                            title: `Chia sẻ: ${name}`, 
+                            text: shareText // Link sẽ tự động thành Caption trên Facebook
+                        });
+                        return; // Xử lý xong, thoát hàm
                     }
-
                 } else {
-
-                    throw new Error("Không thể tạo luồng dữ liệu");
-
+                    throw new Error("Không thể tải ảnh qua mạng lưới Proxy");
                 }
-
             } catch (err) {
-
-                console.warn("Lỗi tạo file vật lý, tự động lùi về Share Link", err);
-
-                showToast("Video hơi lớn, đang tự động chuyển sang Chia sẻ Link...", true);
-
+                console.warn("Lỗi tạo file vật lý, tự động lùi về chế độ share link thuần", err);
             }
-
         }
 
-
-
-        // FALLBACK TRUYỀN THỐNG NẾU LỖI HOẶC SHARE THƯ MỤC
-
-        const shareTextFallback = `Mở xem chi tiết "${name}" trong ứng dụng:\n${shareUrl}`;
-
+        // FALLBACK: Trở về Share Link nếu thất bại hoặc mục đang chia sẻ là Thư mục / File văn bản
         if (navigator.share) {
-
-            try { await navigator.share({ title: `Chia sẻ: ${name}`, text: shareTextFallback, url: shareUrl }); } catch (err) { }
-
+            try { 
+                await navigator.share({ 
+                    title: `Chia sẻ: ${name}`, 
+                    text: `Mở xem chi tiết "${name}" trong ứng dụng:`, 
+                    url: shareUrl 
+                }); 
+            } catch (err) { }
         } else {
-
             navigator.clipboard.writeText(shareUrl).then(() => showToast(`<i class="fas fa-link mr-2"></i> Đã copy link!`));
-
         }
-
     };
-
     
-
-    console.log("✅ PATCH 42 (FINAL): Trị dứt điểm bệnh biến Video thành Link App trên Facebook!");
-
-}, 30000)
+    console.log("✅ PATCH 42 (FIXED): Đã tối ưu thuật toán truyền File vào Facebook siêu tốc!");
+}, 28500); // Khởi chạy trễ nhất để chắc chắn đè bẹp bản Patch 42 bị lỗi
 // ==============================================================
 // PATCH 44 (BẢN DÙNG MODAL CSS): THÊM NÚT ĐĂNG XUẤT VÀO MENU HEADER
 // ==============================================================
@@ -6268,141 +6151,17 @@ setTimeout(() => {
     console.log("✅ PATCH 45: Đã cập nhật tính năng Chia sẻ nhiều mục & Đăng Facebook Đa phương tiện!");
 }, 29500); // Kích hoạt ở chu kỳ trễ nhất để tích hợp êm ái
 
-
 // ==============================================================
-// SUPER PATCH 46: ĐỒNG BỘ MÀN HÌNH CHỜ & FULL BACKUP NÃO NHỆN
+// SUPER PATCH 46 & 44 (FIXED): ÁP DỤNG NGAY LẬP TỨC KHÔNG CẦN CHỜ
 // ==============================================================
-setTimeout(() => {
+(function() {
+    console.log("🚀 Kích hoạt Patch 44 & 46 ngay lập tức...");
 
-    // 1. NÂNG CẤP TRẠM PHÁT SÓNG (Lưu cả trí nhớ của Nhện)
-    setInterval(async () => {
-        if (window.vinhloc_cache_modified && Object.keys(folderDataCache).length > 0) {
-            try {
-                window.vinhloc_cache_modified = false; 
-                
-                // Lấy thêm tiến trình của Nhện
-                const crawledSet = await localforage.getItem('vinhloc_crawled_set') || {};
-                const meta = await localforage.getItem('vinhloc_meta') || {};
-
-                await fetch(SCRIPT_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        action: 'saveGlobalCache',
-                        cacheData: JSON.stringify({ 
-                            folderData: folderDataCache, 
-                            subData: subFolderCache,
-                            spiderMemory: crawledSet, // Bơm trí nhớ nhện vào mây
-                            appMeta: meta             // Bơm luôn ảnh/tên vào mây
-                        })
-                    })
-                });
-                console.log("📡 [Patch 46] Đã phát sóng Não Nhện TOÀN DIỆN lên Drive!");
-            } catch(e) { window.vinhloc_cache_modified = true; }
-        }
-    }, 180000);
-
-    // 2. NÂNG CẤP HÀM NẠP NÃO (Phục hồi trí nhớ)
-    const originalInitDatabaseP46 = window.initDatabase;
-    window.initDatabase = async function() {
-        try {
-            const lastBrainSync = await localforage.getItem('vinhloc_last_brain_sync') || 0;
-            const localFolderCache = await localforage.getItem('vinhloc_folder_cache') || {};
-            const isCacheEmpty = Object.keys(localFolderCache).length <= 1;
-            
-            if (isCacheEmpty || (Date.now() - lastBrainSync > 1800000)) {
-                // Biến toàn cục báo hiệu đang tải não
-                window._isBrainLoading = true; 
-
-                const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'loadGlobalCache' }) }).then(r => r.json());
-
-                if (res && res.success && res.data) {
-                    folderDataCache = { ...folderDataCache, ...(res.data.folderData || {}) };
-                    subFolderCache = { ...subFolderCache, ...(res.data.subData || {}) };
-                    
-                    // Phục hồi trí nhớ nhện và Meta ảnh
-                    if (res.data.spiderMemory) await localforage.setItem('vinhloc_crawled_set', res.data.spiderMemory);
-                    if (res.data.appMeta) {
-                        appMeta = { ...appMeta, ...res.data.appMeta };
-                        await localforage.setItem('vinhloc_meta', appMeta);
-                    }
-
-                    await localforage.setItem('vinhloc_folder_cache', folderDataCache);
-                    await localforage.setItem('vinhloc_subfolder_cache', subFolderCache);
-                    await localforage.setItem('vinhloc_last_brain_sync', Date.now());
-                    
-                    console.log("🕷️ [Patch 46] Đã cấy ghép 100% Não Nhện toàn cầu!");
-                }
-                window._isBrainLoading = false; // Tải xong!
-            }
-        } catch(e) { 
-            window._isBrainLoading = false; 
-            console.error("Lỗi cấy ghép Não Nhện:", e); 
-        }
-
-        // Khởi động UI
-        if (originalInitDatabaseP46) await originalInitDatabaseP46();
-    };
-
-    // 3. SỬA LẠI MÀN HÌNH CHỜ: THỰC SỰ ĐỢI NÃO TẢI XONG
-    if (window.initSpiderLoaderFlow) {
-        window.initSpiderLoaderFlow = function() {
-            const currentEmail = localStorage.getItem("vinhloc_authenticated_email");
-            if (!currentEmail) return;
-
-            let loadedAccounts = JSON.parse(localStorage.getItem("vinhloc_loaded_accounts") || "[]");
-            const isAccountLoaded = loadedAccounts.includes(currentEmail);
-            
-            const loader = document.getElementById("spider-brain-loader");
-            const textEl = document.getElementById("spider-brain-text");
-
-            if (!isAccountLoaded && loader && textEl) {
-                loader.style.display = "flex";
-                loader.classList.remove("fade-out-spider");
-                let percent = 1;
-                
-                const loadingInterval = setInterval(() => {
-                    // Nếu "Não" vẫn đang tải (do initDatabase gọi), thì giữ ở 90% không cho vào
-                    if (window._isBrainLoading && percent >= 90) {
-                        textEl.innerText = `Đang đồng bộ mây ${percent}%...`;
-                        return; // Dừng tăng %
-                    }
-
-                    percent += 2; // Tăng tốc độ hiển thị UI
-                    textEl.innerText = `Đang nạp ${percent}%...`;
-
-                    if (percent >= 100) {
-                        clearInterval(loadingInterval);
-                        loader.classList.add("fade-out-spider");
-                        
-                        loadedAccounts.push(currentEmail);
-                        localStorage.setItem("vinhloc_loaded_accounts", JSON.stringify(loadedAccounts));
-                        localStorage.setItem("vinhloc_device_patched", "true");
-
-                        // Xóa luôn UI loader
-                        setTimeout(() => { loader.style.display = "none"; }, 1000);
-                        
-                        // F5 lại giao diện 1 lần để chắc chắn dữ liệu Não đã ập vào
-                        if (typeof currentDriveItems !== 'undefined') window.renderItems(currentDriveItems);
-                    }
-                }, 200); // Rút ngắn vòng lặp
-            } else {
-                if (loader) loader.style.display = "none";
-                localStorage.setItem("vinhloc_device_patched", "true"); 
-            }
-        };
-    }
-
-}, 32000); // Chạy trễ nhất để đè mọi cấu hình cũ
-// ==============================================================
-// PATCH 44 (BẢN UPDATE SAFE LOGOUT): ĐĂNG XUẤT AN TOÀN - GIỮ NGUYÊN CACHE
-// ==============================================================
-setTimeout(() => {
-    if (window.buildHeaderMenu && !window.buildHeaderMenu.isLogoutHooked) {
+    // --- 1. PATCH 44: ĐĂNG XUẤT AN TOÀN (KHÔNG XÓA DỮ LIỆU) ---
+    if (window.buildHeaderMenu && !window.buildHeaderMenu.isLogoutHookedFixed) {
         const originalBuildHeaderMenuForLogout = window.buildHeaderMenu;
-        
         window.buildHeaderMenu = function() {
             originalBuildHeaderMenuForLogout();
-            
             const headerDropdown = document.getElementById('headerDropdown');
             if (headerDropdown) {
                 const logoutHtml = `
@@ -6414,13 +6173,11 @@ setTimeout(() => {
                 headerDropdown.insertAdjacentHTML('beforeend', logoutHtml);
             }
         };
-        window.buildHeaderMenu.isLogoutHooked = true;
+        window.buildHeaderMenu.isLogoutHookedFixed = true;
     }
 
-    // HÀM XỬ LÝ SỰ KIỆN ĐĂNG XUẤT "BẤT TỬ" DỮ LIỆU
     window.vinhlocForceLogout = function(e) {
         if (e) e.stopPropagation();
-        
         const headerDropdown = document.getElementById('headerDropdown');
         if (headerDropdown) headerDropdown.classList.add('hidden');
 
@@ -6432,7 +6189,7 @@ setTimeout(() => {
 
         if (customModal && modalTitle && modalDesc && confirmBtn) {
             modalTitle.textContent = 'Xác nhận Đăng xuất';
-            modalDesc.textContent = 'Bạn có chắc chắn muốn quay ra màn hình đăng nhập? (Dữ liệu ngoại tuyến vẫn sẽ được giữ nguyên)';
+            modalDesc.textContent = 'Bạn có chắc chắn muốn quay ra màn hình đăng nhập? (Dữ liệu ngoại tuyến vẫn sẽ được giữ nguyên an toàn)';
             modalDesc.classList.remove('hidden');
             if (modalInput) modalInput.classList.add('hidden');
 
@@ -6441,25 +6198,133 @@ setTimeout(() => {
 
             confirmBtn.onclick = () => {
                 if (typeof closeModal === 'function') closeModal();
-                
-                // Chỉ xóa phiên đăng nhập để kích hoạt lại khung Google Sign-In
+                // Chỉ gỡ thẻ ra vào, tuyệt đối không đụng tới kho dữ liệu
                 localStorage.removeItem("vinhloc_authenticated_email");
-                
-                // KHÔNG xóa localforage.clear(), KHÔNG xóa loaded_accounts
-                // Ép tải lại trang để hiển thị màn hình khóa Auth Overlay
                 window.location.reload();
             };
-
             customModal.classList.remove('hidden');
             customModal.classList.add('flex');
         } else {
-            // Fallback phòng trường hợp lỗi DOM
             if (confirm("Bạn có chắc chắn muốn đăng xuất không?")) {
                 localStorage.removeItem("vinhloc_authenticated_email");
                 window.location.reload();
             }
         }
     };
+
+    // --- 2. PATCH 46: ÉP MÀN HÌNH CHỜ ĐỢI TẢI NÃO XONG MỚI ĐƯỢC VÀO ---
+    window.initSpiderLoaderFlow = function() {
+        const currentEmail = localStorage.getItem("vinhloc_authenticated_email");
+        if (!currentEmail) return;
+
+        let loadedAccounts = JSON.parse(localStorage.getItem("vinhloc_loaded_accounts") || "[]");
+        const isAccountLoaded = loadedAccounts.includes(currentEmail);
+        
+        const loader = document.getElementById("spider-brain-loader");
+        const textEl = document.getElementById("spider-brain-text");
+
+        if (!isAccountLoaded && loader && textEl) {
+            loader.style.display = "flex";
+            loader.classList.remove("fade-out-spider");
+            let percent = 1;
+            
+            const loadingInterval = setInterval(() => {
+                // Đóng băng ở 90% nếu Mây vẫn chưa gửi dữ liệu về xong
+                if (window._isBrainLoading && percent >= 90) {
+                    textEl.innerText = `Đang đồng bộ mây ${percent}%...`;
+                    return;
+                }
+
+                percent += 3; // Chạy lẹ hơn chút cho mượt
+                textEl.innerText = `Đang nạp ${percent}%...`;
+
+                if (percent >= 100) {
+                    clearInterval(loadingInterval);
+                    loader.classList.add("fade-out-spider");
+                    
+                    loadedAccounts.push(currentEmail);
+                    localStorage.setItem("vinhloc_loaded_accounts", JSON.stringify(loadedAccounts));
+                    localStorage.setItem("vinhloc_device_patched", "true");
+
+                    setTimeout(() => { loader.style.display = "none"; }, 1000);
+                    // F5 giao diện với đồ mới nhất
+                    if (typeof currentDriveItems !== 'undefined') window.renderItems(currentDriveItems);
+                }
+            }, 100); 
+        } else {
+            if (loader) loader.style.display = "none";
+            localStorage.setItem("vinhloc_device_patched", "true"); 
+        }
+    };
+
+    // Trạm phát sóng lên Mây (Hoạt động sau 10s để App rảnh rỗi khởi động xong)
+    setTimeout(() => {
+        setInterval(async () => {
+            if (window.vinhloc_cache_modified && Object.keys(folderDataCache).length > 0) {
+                try {
+                    window.vinhloc_cache_modified = false; 
+                    const crawledSet = await localforage.getItem('vinhloc_crawled_set') || {};
+                    const meta = await localforage.getItem('vinhloc_meta') || {};
+                    await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            action: 'saveGlobalCache',
+                            cacheData: JSON.stringify({ 
+                                folderData: folderDataCache, 
+                                subData: subFolderCache,
+                                spiderMemory: crawledSet, // Có trí nhớ Nhện
+                                appMeta: meta             // Có thiết lập UI
+                            })
+                        })
+                    });
+                    console.log("📡 [Patch 46] Đã phát sóng Não Nhện TOÀN DIỆN!");
+                } catch(e) { window.vinhloc_cache_modified = true; }
+            }
+        }, 180000); // 3 Phút
+    }, 10000);
+
+    // --- 3. ĐI BẮT CÓC DỮ LIỆU TỪ MÂY NGAY LẬP TỨC CHỨ KHÔNG ĐỢI NỮA ---
+    async function forceLoadBrainNow() {
+        try {
+            const lastBrainSync = await localforage.getItem('vinhloc_last_brain_sync') || 0;
+            const localFolderCache = await localforage.getItem('vinhloc_folder_cache') || {};
+            const isCacheEmpty = Object.keys(localFolderCache).length <= 1;
+            
+            if (isCacheEmpty || (Date.now() - lastBrainSync > 1800000)) { // 30 phút
+                window._isBrainLoading = true; // Giật chuông báo hiệu cho màn hình chờ biết
+                
+                const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'loadGlobalCache' }) }).then(r => r.json());
+
+                if (res && res.success && res.data) {
+                    folderDataCache = { ...folderDataCache, ...(res.data.folderData || {}) };
+                    subFolderCache = { ...subFolderCache, ...(res.data.subData || {}) };
+                    
+                    if (res.data.spiderMemory) await localforage.setItem('vinhloc_crawled_set', res.data.spiderMemory);
+                    if (res.data.appMeta) {
+                        appMeta = { ...appMeta, ...res.data.appMeta };
+                        await localforage.setItem('vinhloc_meta', appMeta);
+                    }
+
+                    await localforage.setItem('vinhloc_folder_cache', folderDataCache);
+                    await localforage.setItem('vinhloc_subfolder_cache', subFolderCache);
+                    await localforage.setItem('vinhloc_last_brain_sync', Date.now());
+                    
+                    console.log("🕷️ [Patch 46] Đã cấy ghép Não Nhện ngay từ Giây Số 0!");
+                    
+                    // Render lại nếu đang ở thư mục hiện tại để ập ảnh lên luôn
+                    if (typeof currentDriveItems !== 'undefined') {
+                        currentDriveItems = folderDataCache[currentFolderId] || currentDriveItems;
+                        if(window.renderItems) window.renderItems(currentDriveItems);
+                    }
+                }
+                window._isBrainLoading = false; // Báo hiệu tải xong cho màn hình 30s mở cửa
+            }
+        } catch(e) { 
+            window._isBrainLoading = false; // Lỗi mạng thì vẫn mở cửa cho vào
+        }
+    }
     
-    console.log("✅ PATCH 44: Đã cập nhật Đăng xuất an toàn (Không xóa dữ liệu ngầm)!");
-}, 29000);
+    // Bóp cò phát bắn ngay tại đây!
+    forceLoadBrainNow();
+
+})();
