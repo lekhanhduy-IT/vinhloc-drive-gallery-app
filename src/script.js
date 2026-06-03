@@ -5796,7 +5796,7 @@ setTimeout(() => {
     console.log("✅ PATCH 43 (FIXED): Nút Cây Bút đã hết ngốc, chỉ hiển thị quyền lực khi thư mục thực sự có ảnh!");
 }, 28000);
 // ==============================================================
-// PATCH 42 (BẢN FIX CUỐI CÙNG TẬN GỐC): ÉP FACEBOOK NHẬN VIDEO THÔ
+// PATCH 42 (BẢN FIX TỐI ƯU): CHIA SẺ ẢNH LÊN FACEBOOK KHÔNG BỊ ĐƠ
 // ==============================================================
 setTimeout(() => {
     window.shareItem = async function (id, type, name, e) {
@@ -5805,98 +5805,82 @@ setTimeout(() => {
         
         let mimeTypeParam = '';
         let isImage = false;
-        let isVideo = false;
-        let currentMimeType = '';
 
         if (type === 'file') {
             const fileObj = currentDriveItems.find(i => i.id === id);
             if (fileObj && fileObj.mimeType) {
-                currentMimeType = fileObj.mimeType;
                 mimeTypeParam = `&mimeType=${encodeURIComponent(fileObj.mimeType)}`;
                 if (fileObj.mimeType.includes('image')) isImage = true;
-                if (fileObj.mimeType.includes('video')) isVideo = true;
             }
         }
 
         const shareUrl = `${window.location.origin}${window.location.pathname}?shareId=${id}&shareType=${type}&shareName=${encodeURIComponent(name)}${mimeTypeParam}`;
+        const shareText = `Mở xem chi tiết "${name}" trong ứng dụng:\n${shareUrl}`;
 
-        // NẾU LÀ ẢNH HOẶC VIDEO -> TRÍCH XUẤT FILE VẬT LÝ ÉP ĐĂNG FACEBOOK
-        if ((isImage || isVideo) && navigator.canShare) {
-            const mediaTypeLabel = isImage ? 'ảnh' : 'video';
-            showToast(`<i class="fas fa-spinner fa-spin mr-2"></i> Đang trích xuất ${mediaTypeLabel} thô để đăng lên Facebook...`);
-            
+        // NẾU LÀ ẢNH -> LẤY BLOB TRỰC TIẾP QUA PROXY (KHÔNG DÙNG BASE64 ĐỂ CHỐNG ĐƠ RAM)
+        if (isImage && navigator.canShare) {
+            showToast('<i class="fas fa-spinner fa-spin mr-2"></i> Đang nạp ảnh chuẩn để Share...');
             try {
-                let blob = null;
+                // Dùng Thumbnail chất lượng cao (w2000) thay vì file gốc để tải siêu nhanh
+                const driveImgUrl = `https://drive.google.com/thumbnail?id=${id}&sz=w2000`;
+                
+                // Mạng lưới Proxy vượt rào CORS (Tận dụng lại mảng có sẵn trong code của bạn)
+                const urlsToTry = [
+                    "https://wsrv.nl/?url=" + encodeURIComponent(driveImgUrl),
+                    "https://corsproxy.io/?" + encodeURIComponent(driveImgUrl),
+                    "https://api.allorigins.win/raw?url=" + encodeURIComponent(driveImgUrl)
+                ];
 
-                if (isVideo) {
-                    // [BÍ QUYẾT] DÙNG CHÍNH SERVER APP SCRIPT CỦA BẠN ĐỂ LẤY VIDEO THÔ (NÉ CẢNH BÁO VIRUS)
-                    const b64Res = await apiCall('getFileBase64', { fileId: id });
-                    if (b64Res && b64Res.success && b64Res.data) {
-                        const byteCharacters = atob(b64Res.data);
-                        const byteNumbers = new Array(byteCharacters.length);
-                        for (let i = 0; i < byteCharacters.length; i++) {
-                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                let blob = null;
+                for (let proxyUrl of urlsToTry) {
+                    try {
+                        const response = await fetch(proxyUrl);
+                        if (response.ok) {
+                            blob = await response.blob(); // Đổi thẳng dữ liệu thành File vật lý cực mượt
+                            break;
                         }
-                        blob = new Blob([new Uint8Array(byteNumbers)], { type: b64Res.mimeType || 'video/mp4' });
-                    } else {
-                        throw new Error("Lấy dữ liệu video thất bại từ Server.");
-                    }
-                } else {
-                    // ẢNH THÌ DÙNG PROXY VẪN NHANH VÀ TỐT
-                    let sourceUrl = `https://drive.google.com/thumbnail?id=${id}&sz=w2000`;
-                    const urlsToTry = [
-                        "https://wsrv.nl/?url=" + encodeURIComponent(sourceUrl),
-                        "https://corsproxy.io/?" + encodeURIComponent(sourceUrl)
-                    ];
-                    for (let proxyUrl of urlsToTry) {
-                        try {
-                            const response = await fetch(proxyUrl);
-                            if (response.ok) { blob = await response.blob(); break; }
-                        } catch (err) {}
+                    } catch (err) { 
+                        console.warn("Proxy bận, đang chuyển trạm...", err); 
                     }
                 }
 
                 if (blob) {
-                    let finalMime = currentMimeType || blob.type;
-                    if (isVideo && !finalMime.includes('video')) finalMime = 'video/mp4';
-                    if (isImage && !finalMime.includes('image')) finalMime = 'image/jpeg';
-                    
-                    // Lọc ký tự lạ trong tên file để OS không bị ngu
-                    let fixedFileName = name.replace(/[^a-zA-Z0-9.\-_]/g, '_'); 
-                    if (isVideo && !/\.(mp4|mov|m4v|3gp|avi)$/i.test(fixedFileName)) fixedFileName += '.mp4';
-                    else if (isImage && !/\.(jpg|jpeg|png|gif|webp)$/i.test(fixedFileName)) fixedFileName += '.jpg';
+                    // Đóng gói Blob thành File thực thụ
+                    const fileObj = new File([blob], name, { type: blob.type || 'image/jpeg' });
 
-                    const fileObj = new File([blob], fixedFileName, { type: finalMime });
-
+                    // Gửi File + Link vào Bảng Share của Hệ điều hành
                     if (navigator.canShare({ files: [fileObj] })) {
-                        // CHỈ TRUYỀN DUY NHẤT MẢNG FILES. KHÔNG ĐƯỢC CÓ URL HAY TEXT Ở ĐÂY NỮA
-                        await navigator.share({ files: [fileObj] });
-                        
-                        // Ẩn toast ngay khi mở bảng Share
-                        const toast = document.getElementById('toast-container');
-                        if(toast) toast.innerHTML = '';
-                        return; 
+                        await navigator.share({ 
+                            files: [fileObj], 
+                            title: `Chia sẻ: ${name}`, 
+                            text: shareText // Link sẽ tự động thành Caption trên Facebook
+                        });
+                        return; // Xử lý xong, thoát hàm
                     }
                 } else {
-                    throw new Error("Không thể tạo luồng dữ liệu");
+                    throw new Error("Không thể tải ảnh qua mạng lưới Proxy");
                 }
             } catch (err) {
-                console.warn("Lỗi tạo file vật lý, tự động lùi về Share Link", err);
-                showToast("Video hơi lớn, đang tự động chuyển sang Chia sẻ Link...", true);
+                console.warn("Lỗi tạo file vật lý, tự động lùi về chế độ share link thuần", err);
             }
         }
 
-        // FALLBACK TRUYỀN THỐNG NẾU LỖI HOẶC SHARE THƯ MỤC
-        const shareTextFallback = `Mở xem chi tiết "${name}" trong ứng dụng:\n${shareUrl}`;
+        // FALLBACK: Trở về Share Link nếu thất bại hoặc mục đang chia sẻ là Thư mục / File văn bản
         if (navigator.share) {
-            try { await navigator.share({ title: `Chia sẻ: ${name}`, text: shareTextFallback, url: shareUrl }); } catch (err) { }
+            try { 
+                await navigator.share({ 
+                    title: `Chia sẻ: ${name}`, 
+                    text: `Mở xem chi tiết "${name}" trong ứng dụng:`, 
+                    url: shareUrl 
+                }); 
+            } catch (err) { }
         } else {
             navigator.clipboard.writeText(shareUrl).then(() => showToast(`<i class="fas fa-link mr-2"></i> Đã copy link!`));
         }
     };
     
-    console.log("✅ PATCH 42 (FINAL): Trị dứt điểm bệnh biến Video thành Link App trên Facebook!");
-}, 30000); // 30s để đè nát mọi bản Patch 42 cũ kỹ
+    console.log("✅ PATCH 42 (FIXED): Đã tối ưu thuật toán truyền File vào Facebook siêu tốc!");
+}, 28500); // Khởi chạy trễ nhất để chắc chắn đè bẹp bản Patch 42 bị lỗi
 // ==============================================================
 // PATCH 44 (BẢN DÙNG MODAL CSS): THÊM NÚT ĐĂNG XUẤT VÀO MENU HEADER
 // ==============================================================
@@ -6166,3 +6150,89 @@ setTimeout(() => {
     
     console.log("✅ PATCH 45: Đã cập nhật tính năng Chia sẻ nhiều mục & Đăng Facebook Đa phương tiện!");
 }, 29500); // Kích hoạt ở chu kỳ trễ nhất để tích hợp êm ái
+// ==============================================================
+// PATCH 46: CƠ CHẾ ĐỘC LẬP CHUYÊN TẢI & CHIA SẺ VIDEO LÊN FACEBOOK
+// ==============================================================
+setTimeout(() => {
+    // 1. Lưu lại hàm shareItem của Patch 42 (Patch xử lý ảnh siêu tốc của bạn)
+    const fastImageShareFunction = window.shareItem;
+
+    // 2. Cài đặt trạm kiểm soát phân luồng
+    window.shareItem = async function (id, type, name, e) {
+        let isVideo = false;
+
+        // Kiểm tra định dạng file
+        if (type === 'file') {
+            const fileObj = currentDriveItems.find(i => i.id === id);
+            if (fileObj && fileObj.mimeType && fileObj.mimeType.includes('video')) {
+                isVideo = true;
+            }
+        }
+
+        // PHÂN LUỒNG 1: NẾU KHÔNG PHẢI VIDEO -> TRẢ LẠI CHO PATCH 42 XỬ LÝ CỰC NHANH
+        if (!isVideo) {
+            if (fastImageShareFunction) {
+                return fastImageShareFunction(id, type, name, e);
+            }
+        }
+
+        // ======================================================
+        // PHÂN LUỒNG 2: NẾU LÀ VIDEO -> CHẠY CƠ CHẾ LẤY FILE THÔ
+        // ======================================================
+        if (e) e.stopPropagation(); 
+        document.querySelectorAll('.item-action-menu').forEach(menu => menu.classList.add('hidden'));
+
+        const shareUrl = `${window.location.origin}${window.location.pathname}?shareId=${id}&shareType=${type}&shareName=${encodeURIComponent(name)}`;
+
+        if (navigator.canShare) {
+            showToast('<i class="fas fa-spinner fa-spin mr-2"></i> Đang kéo Video từ Server để đăng lên Facebook (Sẽ hơi lâu)...', 15000);
+            
+            try {
+                // Hút luồng dữ liệu Video thông qua Apps Script
+                const b64Res = await apiCall('getFileBase64', { fileId: id });
+                
+                if (b64Res && b64Res.success && b64Res.data) {
+                    const byteCharacters = atob(b64Res.data);
+                    const byteNumbers = new Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    
+                    const blob = new Blob([new Uint8Array(byteNumbers)], { type: b64Res.mimeType || 'video/mp4' });
+                    
+                    // Lọc ký tự lạ và ép đuôi .mp4
+                    let fixedFileName = name.replace(/[^a-zA-Z0-9.\-_]/g, '_'); 
+                    if (!/\.(mp4|mov|m4v|3gp|avi)$/i.test(fixedFileName)) {
+                        fixedFileName += '.mp4';
+                    }
+
+                    const fileObj = new File([blob], fixedFileName, { type: blob.type });
+
+                    if (navigator.canShare({ files: [fileObj] })) {
+                        // Gửi duy nhất file Video để ép Facebook mở giao diện Đăng Video
+                        await navigator.share({ files: [fileObj] });
+                        
+                        const toast = document.getElementById('toast-container');
+                        if(toast) toast.innerHTML = '';
+                        return; 
+                    }
+                } else {
+                    throw new Error("Lấy dữ liệu video thất bại từ Server.");
+                }
+            } catch (err) {
+                console.warn("Lỗi kéo Video, chuyển sang Share Link", err);
+                showToast("Video hơi lớn, đang tự động chuyển sang Chia sẻ Link...", true);
+            }
+        }
+
+        // FALLBACK NẾU GẶP LỖI
+        const shareTextFallback = `Xem video "${name}":\n${shareUrl}`;
+        if (navigator.share) {
+            try { await navigator.share({ title: name, text: shareTextFallback, url: shareUrl }); } catch (err) { }
+        } else {
+            navigator.clipboard.writeText(shareUrl).then(() => showToast(`<i class="fas fa-link mr-2"></i> Đã copy link!`));
+        }
+    };
+    
+    console.log("✅ PATCH 46: Đã tách riêng thành công luồng xử lý Video thô!");
+}, 29500); // Kích hoạt ở giây 29.5 để đảm bảo Patch 42 (giây 28.5) đã nạp xong và bị "bắt cóc" thành công
