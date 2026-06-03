@@ -6213,204 +6213,49 @@ setTimeout(() => {
     console.log("✅ PATCH 47: Đã tối ưu bộ đếm Đa Lựa Chọn (Tự động xóa chọn khi rời khỏi màn hình)!");
 }, 30000); // Khởi chạy trễ nhất (30s) để bọc ra ngoài cùng của tất cả các Patch trước đó
 // ==============================================================
-// SUPER PATCH 59: KHỚP NỐI FRONTEND VỚI CLIPBOARDOPS BACKEND (KHÔNG CẦN SỬA CODE.GS)
+// SUPER PATCH 54: CHỐNG ĐƠ GIAO DIỆN CHÍNH (GIẢI PHÓNG LUỒNG MAIN)
 // ==============================================================
 (function() {
-    console.log("⚡ Khởi động Patch 59: Kết nối hệ thống Copy/Cut với ClipboardOps...");
+    console.log("⚡ Khởi động Patch 54: Giải quyết lỗi đơ UI 2 giây...");
 
+    // --- 0. BÚA TẠ CSS: ÉP TÀNG HÌNH MỌI NÚT ĐĂNG XUẤT CŨ ---
     const css = `
-        #headerDropdown > div[onclick*="ogout"]:not(#vinhloc-logout-btn) { display: none !important; }
-        @keyframes bounceZoom { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
-        .animate-bounce-zoom { animation: bounceZoom 0.5s ease-out; }
+        #headerDropdown > div[onclick*="ogout"]:not(#vinhloc-logout-btn) {
+            display: none !important;
+        }
     `;
     const style = document.createElement('style');
     style.innerHTML = css;
     document.head.appendChild(style);
 
-    // --- 1. BIẾN LƯU TRỮ ĐƯỜNG DẪN ---
-    window.pasteDestinationId = null; 
-    window.pasteDestinationPath = null; 
-
-    // --- 2. THÊM NÚT COPY & CUT DƯỚI GÓC MÀN HÌNH ---
-    const fabContainer = document.querySelector('.absolute.bottom-20.right-6');
-    if (fabContainer && !document.getElementById('btn-copy-cut')) {
-        const copyBtnHtml = `
-            <button id="btn-copy-cut" onclick="window.openCopyCutModal()" title="Mở bảng Dán" class="w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition transform hover:scale-105 active:scale-95 overflow-hidden bg-transparent border-none p-0 relative" style="z-index: 25;">
-                <img src="coppyandcut.png" class="w-full h-full object-cover" alt="Copy & Cut" onerror="this.src='https://cdn-icons-png.flaticon.com/512/1261/1261908.png'">
-            </button>
-        `;
-        fabContainer.insertAdjacentHTML('beforeend', copyBtnHtml);
-    }
-
-    // --- 3. TẠO POPUP GIAO DIỆN CHÍNH ---
-    if (!document.getElementById('copyCutModal')) {
-        const modalHtml = `
-        <div id="copyCutModal" class="fixed inset-0 bg-black/50 z-[9999999] hidden items-center justify-center backdrop-blur-sm transition-opacity" onclick="window.closeCopyCutModal(false)">
-            <div class="bg-white rounded-3xl w-11/12 max-w-sm overflow-hidden shadow-2xl p-6 transform transition-all" onclick="event.stopPropagation()">
-                <h3 class="text-xl font-bold text-gray-800 mb-5 text-center">Sao chép & Di chuyển</h3>
-                
-                <div class="flex items-center bg-gray-50 rounded-xl border border-gray-200 p-3 mb-6 shadow-inner pointer-events-none">
-                    <i class="fa-solid fa-folder-open text-blue-500 mr-3 text-xl"></i>
-                    <input type="text" id="destPathInput" readonly class="bg-transparent flex-1 outline-none text-gray-700 font-medium w-full text-sm" placeholder="Chưa đánh dấu Đích dán...">
-                    <button id="btnClearDest" class="pointer-events-auto p-2 ml-2 text-gray-400 hover:text-red-500 hover:bg-red-50 transition rounded-full flex items-center justify-center w-8 h-8" onclick="window.clearDestination()">
-                        <i class="fa-solid fa-times text-lg"></i>
-                    </button>
-                </div>
-
-                <div class="flex flex-col gap-3">
-                    <button onclick="window.executeCopyCut('copy')" class="w-full py-3.5 rounded-xl font-bold bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-100 transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-copy"></i> Sao chép vào đây
-                    </button>
-                    <button onclick="window.executeCopyCut('move')" class="w-full py-3.5 rounded-xl font-bold bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white border border-orange-100 transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-scissors"></i> Di chuyển vào đây
-                    </button>
-                    <button onclick="window.closeCopyCutModal(true)" class="w-full py-3 rounded-xl font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition mt-2">
-                        Xong
-                    </button>
-                </div>
-            </div>
-        </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-    }
-
-    // --- 4. LOGIC XỬ LÝ SỰ KIỆN GIAO DIỆN ---
+    // --- 1. ĐẢM BẢO MENU CLICK LÀ MỞ ĐƯỢC NGAY LẬP TỨC ---
     window.toggleHeaderMenu = function(e) {
         if (e) e.stopPropagation();
         const dropdown = document.getElementById('headerDropdown');
         if (dropdown) dropdown.classList.toggle('hidden');
     };
 
-    window.markDestination = function(e) {
-        if(e) e.stopPropagation();
-        const dropdown = document.getElementById('headerDropdown');
-        if (dropdown) dropdown.classList.add('hidden');
-
-        // Bắt ID gốc bằng hằng số sẵn có của bạn
-        window.pasteDestinationId = window.currentFolderId || (typeof ROOT_FOLDER_ID !== 'undefined' ? ROOT_FOLDER_ID : 'ROOT');
-        
-        const headerTitleElement = document.getElementById('currentFolderName');
-        window.pasteDestinationPath = headerTitleElement ? headerTitleElement.innerText.trim() : (window.currentFolderName || 'Thư mục gốc');
-
-        if(window.showToast) window.showToast('<i class="fa-solid fa-map-pin mr-2"></i> Đã đánh dấu thư mục đích!');
-
-        const btn = document.getElementById('btn-copy-cut');
-        if(btn) {
-            btn.classList.remove('animate-bounce-zoom');
-            void btn.offsetWidth;
-            btn.classList.add('animate-bounce-zoom');
-        }
-    };
-
-    window.openCopyCutModal = function() {
-        const modal = document.getElementById('copyCutModal');
-        const input = document.getElementById('destPathInput');
-        input.value = window.pasteDestinationId ? window.pasteDestinationPath : "";
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-    };
-
-    window.closeCopyCutModal = function(isDoneClicked = false) {
-        const modal = document.getElementById('copyCutModal');
-        if(modal) {
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-        }
-        if(isDoneClicked) {
-            window.clearDestination();
-            if(window.multiSelectState && window.multiSelectState.selectedIds) window.multiSelectState.selectedIds.clear();
-            if(window.toggleMultiSelectMode) window.toggleMultiSelectMode(false);
-            document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = false);
-            if(window.buildHeaderMenu) window.buildHeaderMenu();
-        }
-    };
-
-    window.clearDestination = function() {
-        window.pasteDestinationId = null;
-        window.pasteDestinationPath = null;
-        const input = document.getElementById('destPathInput');
-        if(input) input.value = "";
-    };
-
-    // --- 5. LOGIC THỰC THI (KẾT NỐI VỚI HỆ THỐNG CLIPBOARD CŨ CỦA BẠN) ---
-    window.executeCopyCut = async function(type) {
-        if(!window.pasteDestinationId) {
-            if(window.showToast) window.showToast('⚠️ Vui lòng chọn "Đích dán" trước!');
-            return;
-        }
-        if(!window.multiSelectState || !window.multiSelectState.selectedIds || window.multiSelectState.selectedIds.size === 0) {
-            if(window.showToast) window.showToast(`⚠️ Vui lòng chọn ít nhất 1 mục để ${type === 'copy' ? 'sao chép' : 'di chuyển'}!`);
-            return;
-        }
-
-        const selectedIds = Array.from(window.multiSelectState.selectedIds);
-        let fileCount = 0; let folderCount = 0;
-        const itemsToProcess = [];
-
-        // Đóng gói mảng file đúng theo định dạng clipboardOps cũ của bạn
-        const allItems = Object.values(window.folderDataCache || {}).flat();
-        selectedIds.forEach(id => {
-            const item = allItems.find(i => i.id === id);
-            if(item) {
-                itemsToProcess.push({ id: item.id, type: item.type, origParent: window.currentFolderId });
-                if(item.type === 'folder') folderCount++; else fileCount++;
-            } else {
-                itemsToProcess.push({ id: id, type: 'file', origParent: window.currentFolderId });
-                fileCount++;
-            }
-        });
-
-        window.closeCopyCutModal(false); // Đóng popup, không xóa chọn!
-        if(window.showToast) window.showToast('⏳ Đang xử lý trên máy chủ...');
-
-        try {
-            // GỌI ĐẾN ACTION "clipboardOps" ĐÃ CÓ SẴN CỦA BẠN TRÊN CODE.GS
-            const res = await fetch(SCRIPT_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'clipboardOps',
-                    mode: type, // 'copy' hoặc 'move'
-                    items: itemsToProcess,
-                    targetFolderId: window.pasteDestinationId
-                })
-            }).then(r => r.json());
-
-            if (res && res.success) {
-                if(window.showToast) window.showToast(`✅ ${type === 'copy' ? 'Sao chép' : 'Di chuyển'} hoàn tất ${folderCount} thư mục, ${fileCount} file!`);
-                // Gọi làm mới lại ngầm (không f5, giữ lựa chọn)
-                if (typeof window.silentFetchFolder === 'function') window.silentFetchFolder();
-            } else {
-                if(window.showToast) window.showToast(`⚠️ Lỗi từ Google Drive: ${res.message}`);
-            }
-        } catch(e) {
-            if(window.showToast) window.showToast(`⚠️ Lỗi kết nối mạng, vui lòng kiểm tra lại!`);
-        }
-    };
-
-    // --- 6. MENU HEADER & HỆ THỐNG GIAO DIỆN ---
-    if (window.buildHeaderMenu && !window.buildHeaderMenu.isV59) {
+    // --- 2. GHI ĐÈ HÀM DỌN RÁC & NHỒI RUỘT MENU ---
+    if (window.buildHeaderMenu && !window.buildHeaderMenu.isV54) {
         const originalBuildMenuForClean = window.buildHeaderMenu;
         window.buildHeaderMenu = function() {
             originalBuildMenuForClean();
             const headerDropdown = document.getElementById('headerDropdown');
             if (headerDropdown) {
                 Array.from(headerDropdown.children).forEach(item => {
-                    if (item.id !== 'vinhloc-logout-btn' && item.id !== 'vinhloc-set-dest-btn') {
-                        const txt = item.innerText || ""; const htm = item.innerHTML || ""; const clk = item.getAttribute('onclick') || "";
-                        if (txt.toLowerCase().includes('đăng xuất') || htm.includes('fa-right-from-bracket') || clk.toLowerCase().includes('ogout') || item.id === 'vinhloc-logout-splitter') {
-                            item.remove(); item.style.display = 'none';
+                    if (item.id !== 'vinhloc-logout-btn') {
+                        const txt = item.innerText || "";
+                        const htm = item.innerHTML || "";
+                        const clk = item.getAttribute('onclick') || "";
+                        if (txt.toLowerCase().includes('đăng xuất') || 
+                            htm.includes('fa-right-from-bracket') || 
+                            clk.toLowerCase().includes('ogout') ||
+                            item.id === 'vinhloc-logout-splitter') {
+                            item.remove();
+                            item.style.display = 'none';
                         }
                     }
                 });
-
-                if (!document.getElementById('vinhloc-set-dest-btn')) {
-                    const destHtml = `
-                        <div id="vinhloc-set-dest-btn" class="px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 flex items-center cursor-pointer transition font-medium" onclick="window.markDestination(event)">
-                            <i class="fa-solid fa-crosshairs w-5 text-center mr-2 text-blue-600"></i><span>Đích dán</span>
-                        </div>
-                    `;
-                    headerDropdown.insertAdjacentHTML('afterbegin', destHtml);
-                }
 
                 if (!document.getElementById('vinhloc-logout-btn')) {
                     const logoutHtml = `
@@ -6423,9 +6268,10 @@ setTimeout(() => {
                 }
             }
         };
-        window.buildHeaderMenu.isV59 = true;
+        window.buildHeaderMenu.isV54 = true;
     }
 
+    // --- 3. ÉP HIỂN THỊ MENU & NHỒI DỮ LIỆU Ở GIÂY SỐ 0 ---
     function forceInjectMenuAndBuild() {
         const loadingDiv = document.getElementById('loading');
         if (loadingDiv && !document.getElementById('headerDropdownContainer')) {
@@ -6440,44 +6286,154 @@ setTimeout(() => {
     }
     forceInjectMenuAndBuild();
 
+    // --- 4. ĐĂNG XUẤT AN TOÀN (GIỮ 100% CACHE) ---
     window.vinhlocForceLogout = function(e) {
         if (e) e.stopPropagation();
-        localStorage.removeItem("vinhloc_authenticated_email");
-        window.location.reload();
+        const headerDropdown = document.getElementById('headerDropdown');
+        if (headerDropdown) headerDropdown.classList.add('hidden');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalDesc = document.getElementById('modalDesc');
+        const modalInput = document.getElementById('modalInput');
+        const confirmBtn = document.getElementById('modalConfirmBtn');
+        const customModal = document.getElementById('customModal');
+
+        if (customModal && modalTitle && modalDesc && confirmBtn) {
+            modalTitle.textContent = 'Xác nhận Đăng xuất';
+            modalDesc.textContent = 'Bạn có chắc chắn muốn quay ra màn hình đăng nhập? (Dữ liệu ngoại tuyến vẫn sẽ được giữ an toàn)';
+            modalDesc.classList.remove('hidden');
+            if (modalInput) modalInput.classList.add('hidden');
+            confirmBtn.textContent = 'Đăng xuất';
+            confirmBtn.className = 'px-5 py-2 bg-red-600 text-white font-bold rounded-xl';
+
+            confirmBtn.onclick = () => {
+                if (typeof closeModal === 'function') closeModal();
+                localStorage.removeItem("vinhloc_authenticated_email");
+                window.location.reload();
+            };
+            customModal.classList.remove('hidden');
+            customModal.classList.add('flex');
+        } else {
+            if (confirm("Bạn có chắc chắn muốn đăng xuất?")) {
+                localStorage.removeItem("vinhloc_authenticated_email");
+                window.location.reload();
+            }
+        }
     };
 
+    // --- 5. HỦY ĐỘ TRỄ MÀN HÌNH CHỜ (0 GIÂY VÀO APP) ---
     window.initSpiderLoaderFlow = async function() {
         const currentEmail = localStorage.getItem("vinhloc_authenticated_email");
         if (!currentEmail) return;
+        
+        let loadedAccounts = JSON.parse(localStorage.getItem("vinhloc_loaded_accounts") || "[]");
+        const isAccountLoaded = loadedAccounts.includes(currentEmail);
+        
         const loader = document.getElementById("spider-brain-loader");
-        if (loader) loader.style.display = "none";
-        localStorage.setItem("vinhloc_device_patched", "true"); 
+        const textEl = document.getElementById("spider-brain-text");
+
+        const localFolderCache = await localforage.getItem('vinhloc_folder_cache') || {};
+        const hasOfflineData = Object.keys(localFolderCache).length > 1;
+
+        if (!isAccountLoaded && !hasOfflineData && loader && textEl) {
+            loader.style.display = "flex";
+            loader.classList.remove("fade-out-spider");
+            let percent = 1;
+            
+            const loadingInterval = setInterval(() => {
+                if (window._isBrainLoading && percent >= 92) return;
+                percent += 15;
+                textEl.innerText = `Đang nạp ${percent}%...`;
+
+                if (percent >= 100) {
+                    clearInterval(loadingInterval);
+                    loader.classList.add("fade-out-spider");
+                    loadedAccounts.push(currentEmail);
+                    localStorage.setItem("vinhloc_loaded_accounts", JSON.stringify(loadedAccounts));
+                    localStorage.setItem("vinhloc_device_patched", "true");
+                    setTimeout(() => { loader.style.display = "none"; }, 300);
+                    
+                    if (window.currentFolderId && window.loadFolder) {
+                        window.loadFolder(window.currentFolderId, window.currentFolderName || "Thư mục gốc", false, true);
+                    }
+                }
+            }, 40); 
+        } else {
+            if (loader) loader.style.display = "none";
+            if (!isAccountLoaded) {
+                loadedAccounts.push(currentEmail);
+                localStorage.setItem("vinhloc_loaded_accounts", JSON.stringify(loadedAccounts));
+            }
+            localStorage.setItem("vinhloc_device_patched", "true"); 
+        }
     };
 
+    // --- 6. TRẠM PHÁT SÓNG ---
+    setTimeout(() => {
+        setInterval(async () => {
+            if (window.vinhloc_cache_modified && Object.keys(folderDataCache).length > 0) {
+                try {
+                    window.vinhloc_cache_modified = false; 
+                    const crawledSet = await localforage.getItem('vinhloc_crawled_set') || {};
+                    const meta = await localforage.getItem('vinhloc_meta') || {};
+                    await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'saveGlobalCache', cacheData: JSON.stringify({ folderData: folderDataCache, subData: subFolderCache, spiderMemory: crawledSet, appMeta: meta })})
+                    });
+                } catch(e) { window.vinhloc_cache_modified = true; }
+            }
+        }, 180000);
+    }, 15000);
+
+    // --- 7. TẮT HÀM GỐC GÂY ĐƠ & DỜI LỊCH SYNC NẶNG NỀ SANG 4 GIÂY SAU ---
     window.initDatabase = async function() {
         try {
             const lastBrainSync = await localforage.getItem('vinhloc_last_brain_sync') || 0;
-            const isCacheEmpty = Object.keys(await localforage.getItem('vinhloc_folder_cache') || {}).length <= 1;
+            const localFolderCache = await localforage.getItem('vinhloc_folder_cache') || {};
+            const isCacheEmpty = Object.keys(localFolderCache).length <= 1;
             
             if (isCacheEmpty || (Date.now() - lastBrainSync > 1800000)) { 
+                
+                // BÍ QUYẾT LÀ ĐÂY: Nếu có sẵn dữ liệu, hãy đợi 4 giây (để UI mượt) rồi mới tải Data ngầm!
                 const delayTime = isCacheEmpty ? 0 : 4000; 
+
                 setTimeout(async () => {
+                    window._isBrainLoading = true; 
                     const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'loadGlobalCache' }) }).then(r => r.json());
+
                     if (res && res.success && res.data) {
+                        // Nhường luồng xử lý bằng một micro-task ngắn
                         setTimeout(async () => {
                             folderDataCache = { ...folderDataCache, ...(res.data.folderData || {}) };
                             subFolderCache = { ...subFolderCache, ...(res.data.subData || {}) };
+                            
                             if (res.data.spiderMemory) await localforage.setItem('vinhloc_crawled_set', res.data.spiderMemory);
+                            if (res.data.appMeta) {
+                                appMeta = { ...appMeta, ...res.data.appMeta };
+                                await localforage.setItem('vinhloc_meta', appMeta);
+                            }
+
                             await localforage.setItem('vinhloc_folder_cache', folderDataCache);
                             await localforage.setItem('vinhloc_subfolder_cache', subFolderCache);
                             await localforage.setItem('vinhloc_last_brain_sync', Date.now());
+                            
+                            window._isBrainLoading = false; 
+                            console.log("🕷️ [Patch 54] Sync data ngầm hoàn tất! Không làm đơ nút Menu.");
+
                             if (window.buildHeaderMenu) window.buildHeaderMenu();
-                            if (typeof currentDriveItems !== 'undefined' && window.renderItems) window.renderItems(folderDataCache[currentFolderId] || currentDriveItems);
+                            if (typeof currentDriveItems !== 'undefined' && window.renderItems) {
+                                currentDriveItems = folderDataCache[currentFolderId] || currentDriveItems;
+                                window.renderItems(currentDriveItems);
+                            }
                         }, 50);
+                    } else {
+                        window._isBrainLoading = false;
                     }
                 }, delayTime);
             }
-        } catch(e) { }
+        } catch(e) { window._isBrainLoading = false; }
     };
+
+    // Gọi duy nhất hàm này (thay vì gọi 2 hàm chồng lên nhau như cũ)
     window.initDatabase();
+
 })();
