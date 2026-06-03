@@ -6213,10 +6213,10 @@ setTimeout(() => {
     console.log("✅ PATCH 47: Đã tối ưu bộ đếm Đa Lựa Chọn (Tự động xóa chọn khi rời khỏi màn hình)!");
 }, 30000); // Khởi chạy trễ nhất (30s) để bọc ra ngoài cùng của tất cả các Patch trước đó
 // ==============================================================
-// SUPER PATCH 58: HIỂN THỊ ĐƯỜNG DẪN BREADCRUMB (TRIỂN KHAI > ...) TRONG POPUP COPY/CUT
+// SUPER PATCH 59: KHỚP NỐI FRONTEND VỚI CLIPBOARDOPS BACKEND (KHÔNG CẦN SỬA CODE.GS)
 // ==============================================================
 (function() {
-    console.log("⚡ Khởi động Patch 58: Cập nhật giao diện hiển thị đường dẫn thư mục...");
+    console.log("⚡ Khởi động Patch 59: Kết nối hệ thống Copy/Cut với ClipboardOps...");
 
     const css = `
         #headerDropdown > div[onclick*="ogout"]:not(#vinhloc-logout-btn) { display: none !important; }
@@ -6227,9 +6227,9 @@ setTimeout(() => {
     style.innerHTML = css;
     document.head.appendChild(style);
 
-    // --- 1. BIẾN LƯU TRỮ BẢO MẬT & ĐƯỜNG DẪN ---
-    window.pasteDestinationId = null; // Chứa ID thật ngầm của Google Drive
-    window.pasteDestinationPath = null; // Chứa chuỗi đường dẫn (Triển khai > ...) để hiển thị UI
+    // --- 1. BIẾN LƯU TRỮ ĐƯỜNG DẪN ---
+    window.pasteDestinationId = null; 
+    window.pasteDestinationPath = null; 
 
     // --- 2. THÊM NÚT COPY & CUT DƯỚI GÓC MÀN HÌNH ---
     const fabContainer = document.querySelector('.absolute.bottom-20.right-6');
@@ -6286,16 +6286,14 @@ setTimeout(() => {
         const dropdown = document.getElementById('headerDropdown');
         if (dropdown) dropdown.classList.add('hidden');
 
-        // Ghi nhận ID thật (ẩn đi)
-        window.pasteDestinationId = window.currentFolderId || 'ROOT';
+        // Bắt ID gốc bằng hằng số sẵn có của bạn
+        window.pasteDestinationId = window.currentFolderId || (typeof ROOT_FOLDER_ID !== 'undefined' ? ROOT_FOLDER_ID : 'ROOT');
         
-        // Bắt trực tiếp đoạn text đang hiển thị trên thanh Header (Triển khai > Mục A...)
         const headerTitleElement = document.getElementById('currentFolderName');
         window.pasteDestinationPath = headerTitleElement ? headerTitleElement.innerText.trim() : (window.currentFolderName || 'Thư mục gốc');
 
         if(window.showToast) window.showToast('<i class="fa-solid fa-map-pin mr-2"></i> Đã đánh dấu thư mục đích!');
 
-        // Hiệu ứng nảy nút
         const btn = document.getElementById('btn-copy-cut');
         if(btn) {
             btn.classList.remove('animate-bounce-zoom');
@@ -6307,7 +6305,6 @@ setTimeout(() => {
     window.openCopyCutModal = function() {
         const modal = document.getElementById('copyCutModal');
         const input = document.getElementById('destPathInput');
-        // Đưa đường dẫn vừa bắt được vào ô UI
         input.value = window.pasteDestinationId ? window.pasteDestinationPath : "";
         modal.classList.remove('hidden');
         modal.classList.add('flex');
@@ -6324,6 +6321,7 @@ setTimeout(() => {
             if(window.multiSelectState && window.multiSelectState.selectedIds) window.multiSelectState.selectedIds.clear();
             if(window.toggleMultiSelectMode) window.toggleMultiSelectMode(false);
             document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = false);
+            if(window.buildHeaderMenu) window.buildHeaderMenu();
         }
     };
 
@@ -6334,7 +6332,7 @@ setTimeout(() => {
         if(input) input.value = "";
     };
 
-    // --- 5. LOGIC THỰC THI (GỬI ID THẬT LÊN MÁY CHỦ) ---
+    // --- 5. LOGIC THỰC THI (KẾT NỐI VỚI HỆ THỐNG CLIPBOARD CŨ CỦA BẠN) ---
     window.executeCopyCut = async function(type) {
         if(!window.pasteDestinationId) {
             if(window.showToast) window.showToast('⚠️ Vui lòng chọn "Đích dán" trước!');
@@ -6347,38 +6345,50 @@ setTimeout(() => {
 
         const selectedIds = Array.from(window.multiSelectState.selectedIds);
         let fileCount = 0; let folderCount = 0;
+        const itemsToProcess = [];
+
+        // Đóng gói mảng file đúng theo định dạng clipboardOps cũ của bạn
         const allItems = Object.values(window.folderDataCache || {}).flat();
         selectedIds.forEach(id => {
             const item = allItems.find(i => i.id === id);
-            if(item && item.type === 'folder') folderCount++;
-            else fileCount++;
+            if(item) {
+                itemsToProcess.push({ id: item.id, type: item.type, origParent: window.currentFolderId });
+                if(item.type === 'folder') folderCount++; else fileCount++;
+            } else {
+                itemsToProcess.push({ id: id, type: 'file', origParent: window.currentFolderId });
+                fileCount++;
+            }
         });
 
-        window.closeCopyCutModal(false); 
+        window.closeCopyCutModal(false); // Đóng popup, không xóa chọn!
         if(window.showToast) window.showToast('⏳ Đang xử lý trên máy chủ...');
 
         try {
+            // GỌI ĐẾN ACTION "clipboardOps" ĐÃ CÓ SẴN CỦA BẠN TRÊN CODE.GS
             const res = await fetch(SCRIPT_URL, {
                 method: 'POST',
                 body: JSON.stringify({
-                    action: type === 'copy' ? 'copyItems' : 'moveItems',
-                    itemIds: selectedIds,
-                    destinationId: window.pasteDestinationId
+                    action: 'clipboardOps',
+                    mode: type, // 'copy' hoặc 'move'
+                    items: itemsToProcess,
+                    targetFolderId: window.pasteDestinationId
                 })
             }).then(r => r.json());
 
             if (res && res.success) {
-                if(window.showToast) window.showToast(`✅ ${type === 'copy' ? 'Sao chép' : 'Di chuyển'} hoàn tất! Đang đồng bộ...`);
+                if(window.showToast) window.showToast(`✅ ${type === 'copy' ? 'Sao chép' : 'Di chuyển'} hoàn tất ${folderCount} thư mục, ${fileCount} file!`);
+                // Gọi làm mới lại ngầm (không f5, giữ lựa chọn)
+                if (typeof window.silentFetchFolder === 'function') window.silentFetchFolder();
             } else {
-                if(window.showToast) window.showToast(`⚠️ Có lỗi xảy ra, thử lại sau!`);
+                if(window.showToast) window.showToast(`⚠️ Lỗi từ Google Drive: ${res.message}`);
             }
         } catch(e) {
-            if(window.showToast) window.showToast(`✅ Đã gửi lệnh ${type === 'copy' ? 'sao chép' : 'di chuyển'}!`);
+            if(window.showToast) window.showToast(`⚠️ Lỗi kết nối mạng, vui lòng kiểm tra lại!`);
         }
     };
 
     // --- 6. MENU HEADER & HỆ THỐNG GIAO DIỆN ---
-    if (window.buildHeaderMenu && !window.buildHeaderMenu.isV58) {
+    if (window.buildHeaderMenu && !window.buildHeaderMenu.isV59) {
         const originalBuildMenuForClean = window.buildHeaderMenu;
         window.buildHeaderMenu = function() {
             originalBuildMenuForClean();
@@ -6413,7 +6423,7 @@ setTimeout(() => {
                 }
             }
         };
-        window.buildHeaderMenu.isV58 = true;
+        window.buildHeaderMenu.isV59 = true;
     }
 
     function forceInjectMenuAndBuild() {
