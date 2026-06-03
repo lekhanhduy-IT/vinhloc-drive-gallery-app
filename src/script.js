@@ -5796,7 +5796,7 @@ setTimeout(() => {
     console.log("✅ PATCH 43 (FIXED): Nút Cây Bút đã hết ngốc, chỉ hiển thị quyền lực khi thư mục thực sự có ảnh!");
 }, 28000);
 // ==============================================================
-// PATCH 42 (BẢN FIX TỐI ƯU): CHIA SẺ ẢNH LÊN FACEBOOK KHÔNG BỊ ĐƠ
+// PATCH 42 (BẢN FIX TỐI ƯU CẢ ẢNH & VIDEO): CHIA SẺ TRỰC TIẾP LÊN FB KHÔNG ĐƠ
 // ==============================================================
 setTimeout(() => {
     window.shareItem = async function (id, type, name, e) {
@@ -5805,67 +5805,80 @@ setTimeout(() => {
         
         let mimeTypeParam = '';
         let isImage = false;
+        let isVideo = false;
+        let currentMimeType = '';
 
         if (type === 'file') {
             const fileObj = currentDriveItems.find(i => i.id === id);
             if (fileObj && fileObj.mimeType) {
+                currentMimeType = fileObj.mimeType;
                 mimeTypeParam = `&mimeType=${encodeURIComponent(fileObj.mimeType)}`;
                 if (fileObj.mimeType.includes('image')) isImage = true;
+                if (fileObj.mimeType.includes('video')) isVideo = true;
             }
         }
 
         const shareUrl = `${window.location.origin}${window.location.pathname}?shareId=${id}&shareType=${type}&shareName=${encodeURIComponent(name)}${mimeTypeParam}`;
         const shareText = `Mở xem chi tiết "${name}" trong ứng dụng:\n${shareUrl}`;
 
-        // NẾU LÀ ẢNH -> LẤY BLOB TRỰC TIẾP QUA PROXY (KHÔNG DÙNG BASE64 ĐỂ CHỐNG ĐƠ RAM)
-        if (isImage && navigator.canShare) {
-            showToast('<i class="fas fa-spinner fa-spin mr-2"></i> Đang nạp ảnh chuẩn để Share...');
+        // NẾU LÀ ẢNH HOẶC VIDEO -> LẤY BLOB TRỰC TIẾP QUA PROXY PHÙ HỢP (CHỐNG ĐƠ RAM)
+        if ((isImage || isVideo) && navigator.canShare) {
+            const mediaTypeLabel = isImage ? 'ảnh' : 'video';
+            showToast(`<i class="fas fa-spinner fa-spin mr-2"></i> Đang nạp ${mediaTypeLabel} chuẩn để Share...`);
+            
             try {
-                // Dùng Thumbnail chất lượng cao (w2000) thay vì file gốc để tải siêu nhanh
-                const driveImgUrl = `https://drive.google.com/thumbnail?id=${id}&sz=w2000`;
+                // Xác định URL nguồn tối ưu cho từng loại định dạng
+                let sourceUrl = '';
+                if (isImage) {
+                    sourceUrl = `https://drive.google.com/thumbnail?id=${id}&sz=w2000`; // Thumbnail nét cao cho ảnh
+                } else if (isVideo) {
+                    sourceUrl = `https://drive.google.com/uc?export=download&id=${id}`; // Luồng tải trực tiếp cho video
+                }
                 
-                // Mạng lưới Proxy vượt rào CORS (Tận dụng lại mảng có sẵn trong code của bạn)
-                const urlsToTry = [
-                    "https://wsrv.nl/?url=" + encodeURIComponent(driveImgUrl),
-                    "https://corsproxy.io/?" + encodeURIComponent(driveImgUrl),
-                    "https://api.allorigins.win/raw?url=" + encodeURIComponent(driveImgUrl)
-                ];
+                // Thiết lập mạng lưới mạng proxy an toàn (wsrv.nl sẽ bị loại bỏ nếu là video vì nó chỉ xử lý ảnh)
+                const urlsToTry = [];
+                if (isImage) {
+                    urlsToTry.push("https://wsrv.nl/?url=" + encodeURIComponent(sourceUrl));
+                }
+                urlsToTry.push("https://corsproxy.io/?" + encodeURIComponent(sourceUrl));
+                urlsToTry.push("https://api.allorigins.win/raw?url=" + encodeURIComponent(sourceUrl));
 
                 let blob = null;
                 for (let proxyUrl of urlsToTry) {
                     try {
                         const response = await fetch(proxyUrl);
                         if (response.ok) {
-                            blob = await response.blob(); // Đổi thẳng dữ liệu thành File vật lý cực mượt
+                            blob = await response.blob(); // Đổi trực tiếp luồng nhị phân thành Blob mượt mà
                             break;
                         }
                     } catch (err) { 
-                        console.warn("Proxy bận, đang chuyển trạm...", err); 
+                        console.warn("Trạm trung chuyển bận, đang đổi tuyến...", err); 
                     }
                 }
 
                 if (blob) {
-                    // Đóng gói Blob thành File thực thụ
-                    const fileObj = new File([blob], name, { type: blob.type || 'image/jpeg' });
+                    // Đóng gói chính xác MIME Type gốc của file hoặc cấu hình dự phòng thông minh
+                    const finalMime = currentMimeType || blob.type || (isImage ? 'image/jpeg' : 'video/mp4');
+                    const fileObj = new File([blob], name, { type: finalMime });
 
-                    // Gửi File + Link vào Bảng Share của Hệ điều hành
+                    // Tiến hành chuyển tiếp dữ liệu đa phương tiện vật lý vào khay hệ thống
                     if (navigator.canShare({ files: [fileObj] })) {
                         await navigator.share({ 
                             files: [fileObj], 
                             title: `Chia sẻ: ${name}`, 
-                            text: shareText // Link sẽ tự động thành Caption trên Facebook
+                            text: shareText // Đường dẫn quay ngược về App sẽ tự điền vào Caption bài đăng/tin nhắn
                         });
-                        return; // Xử lý xong, thoát hàm
+                        return; // Hoàn tất luồng xử lý cao cấp
                     }
                 } else {
-                    throw new Error("Không thể tải ảnh qua mạng lưới Proxy");
+                    throw new Error("Không thể trích xuất luồng dữ liệu qua hệ thống Proxy");
                 }
             } catch (err) {
                 console.warn("Lỗi tạo file vật lý, tự động lùi về chế độ share link thuần", err);
             }
         }
 
-        // FALLBACK: Trở về Share Link nếu thất bại hoặc mục đang chia sẻ là Thư mục / File văn bản
+        // FALLBACK TRUYỀN THỐNG: Trở về Share Link nếu thiết bị cũ không hỗ trợ share file hoặc đối tượng là Folder
         if (navigator.share) {
             try { 
                 await navigator.share({ 
@@ -5879,8 +5892,8 @@ setTimeout(() => {
         }
     };
     
-    console.log("✅ PATCH 42 (FIXED): Đã tối ưu thuật toán truyền File vào Facebook siêu tốc!");
-}, 28500); // Khởi chạy trễ nhất để chắc chắn đè bẹp bản Patch 42 bị lỗi
+    console.log("✅ PATCH 42 (MỚI NHẤT): Đã đồng bộ luồng chia sẻ file vật lý cho cả Ảnh và Video lên Facebook!");
+}, 28500);
 // ==============================================================
 // PATCH 44 (BẢN DÙNG MODAL CSS): THÊM NÚT ĐĂNG XUẤT VÀO MENU HEADER
 // ==============================================================
