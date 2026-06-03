@@ -6213,10 +6213,10 @@ setTimeout(() => {
     console.log("✅ PATCH 47: Đã tối ưu bộ đếm Đa Lựa Chọn (Tự động xóa chọn khi rời khỏi màn hình)!");
 }, 30000); // Khởi chạy trễ nhất (30s) để bọc ra ngoài cùng của tất cả các Patch trước đó
 // ==============================================================
-// SUPER PATCH 52: MENU TỐC ĐỘ ÁNH SÁNG & NÃO NHỆN HOÀN THIỆN
+// SUPER PATCH 54: CHỐNG ĐƠ GIAO DIỆN CHÍNH (GIẢI PHÓNG LUỒNG MAIN)
 // ==============================================================
 (function() {
-    console.log("⚡ Khởi động Patch 52: Tối ưu độ mượt Menu 3 chấm...");
+    console.log("⚡ Khởi động Patch 54: Giải quyết lỗi đơ UI 2 giây...");
 
     // --- 0. BÚA TẠ CSS: ÉP TÀNG HÌNH MỌI NÚT ĐĂNG XUẤT CŨ ---
     const css = `
@@ -6236,7 +6236,7 @@ setTimeout(() => {
     };
 
     // --- 2. GHI ĐÈ HÀM DỌN RÁC & NHỒI RUỘT MENU ---
-    if (window.buildHeaderMenu && !window.buildHeaderMenu.isV52) {
+    if (window.buildHeaderMenu && !window.buildHeaderMenu.isV54) {
         const originalBuildMenuForClean = window.buildHeaderMenu;
         window.buildHeaderMenu = function() {
             originalBuildMenuForClean();
@@ -6268,7 +6268,7 @@ setTimeout(() => {
                 }
             }
         };
-        window.buildHeaderMenu.isV52 = true;
+        window.buildHeaderMenu.isV54 = true;
     }
 
     // --- 3. ÉP HIỂN THỊ MENU & NHỒI DỮ LIỆU Ở GIÂY SỐ 0 ---
@@ -6282,8 +6282,6 @@ setTimeout(() => {
             </div>`;
             loadingDiv.insertAdjacentHTML('afterend', menuHtml);
         }
-        
-        // Gọi thẳng hàm Build để nhồi các tùy chọn vào Menu ngay tức thì, không đợi Não Nhện
         if (window.buildHeaderMenu) window.buildHeaderMenu();
     }
     forceInjectMenuAndBuild();
@@ -6322,26 +6320,28 @@ setTimeout(() => {
         }
     };
 
-    // --- 5. ÉP MÀN HÌNH CHỜ ĐỢI NÃO NHỆN ---
-    window.initSpiderLoaderFlow = function() {
+    // --- 5. HỦY ĐỘ TRỄ MÀN HÌNH CHỜ (0 GIÂY VÀO APP) ---
+    window.initSpiderLoaderFlow = async function() {
         const currentEmail = localStorage.getItem("vinhloc_authenticated_email");
         if (!currentEmail) return;
+        
         let loadedAccounts = JSON.parse(localStorage.getItem("vinhloc_loaded_accounts") || "[]");
         const isAccountLoaded = loadedAccounts.includes(currentEmail);
+        
         const loader = document.getElementById("spider-brain-loader");
         const textEl = document.getElementById("spider-brain-text");
 
-        if (!isAccountLoaded && loader && textEl) {
+        const localFolderCache = await localforage.getItem('vinhloc_folder_cache') || {};
+        const hasOfflineData = Object.keys(localFolderCache).length > 1;
+
+        if (!isAccountLoaded && !hasOfflineData && loader && textEl) {
             loader.style.display = "flex";
             loader.classList.remove("fade-out-spider");
             let percent = 1;
             
             const loadingInterval = setInterval(() => {
-                if (window._isBrainLoading && percent >= 92) {
-                    textEl.innerText = `Đang đồng bộ mây ${percent}%...`;
-                    return;
-                }
-                percent += 3;
+                if (window._isBrainLoading && percent >= 92) return;
+                percent += 15;
                 textEl.innerText = `Đang nạp ${percent}%...`;
 
                 if (percent >= 100) {
@@ -6350,20 +6350,24 @@ setTimeout(() => {
                     loadedAccounts.push(currentEmail);
                     localStorage.setItem("vinhloc_loaded_accounts", JSON.stringify(loadedAccounts));
                     localStorage.setItem("vinhloc_device_patched", "true");
-                    setTimeout(() => { loader.style.display = "none"; }, 1000);
+                    setTimeout(() => { loader.style.display = "none"; }, 300);
                     
                     if (window.currentFolderId && window.loadFolder) {
                         window.loadFolder(window.currentFolderId, window.currentFolderName || "Thư mục gốc", false, true);
                     }
                 }
-            }, 80); 
+            }, 40); 
         } else {
             if (loader) loader.style.display = "none";
+            if (!isAccountLoaded) {
+                loadedAccounts.push(currentEmail);
+                localStorage.setItem("vinhloc_loaded_accounts", JSON.stringify(loadedAccounts));
+            }
             localStorage.setItem("vinhloc_device_patched", "true"); 
         }
     };
 
-    // --- 6. TRẠM PHÁT SÓNG LÊN DRIVE ---
+    // --- 6. TRẠM PHÁT SÓNG ---
     setTimeout(() => {
         setInterval(async () => {
             if (window.vinhloc_cache_modified && Object.keys(folderDataCache).length > 0) {
@@ -6380,49 +6384,56 @@ setTimeout(() => {
         }, 180000);
     }, 15000);
 
-    // --- 7. BẮT CÓC DỮ LIỆU TỪ MÂY (CHỐNG NGHẼN LUỒNG) ---
-    async function forceLoadBrainNow() {
+    // --- 7. TẮT HÀM GỐC GÂY ĐƠ & DỜI LỊCH SYNC NẶNG NỀ SANG 4 GIÂY SAU ---
+    window.initDatabase = async function() {
         try {
             const lastBrainSync = await localforage.getItem('vinhloc_last_brain_sync') || 0;
             const localFolderCache = await localforage.getItem('vinhloc_folder_cache') || {};
             const isCacheEmpty = Object.keys(localFolderCache).length <= 1;
             
             if (isCacheEmpty || (Date.now() - lastBrainSync > 1800000)) { 
-                window._isBrainLoading = true; 
                 
-                const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'loadGlobalCache' }) }).then(r => r.json());
+                // BÍ QUYẾT LÀ ĐÂY: Nếu có sẵn dữ liệu, hãy đợi 4 giây (để UI mượt) rồi mới tải Data ngầm!
+                const delayTime = isCacheEmpty ? 0 : 4000; 
 
-                if (res && res.success && res.data) {
-                    // Dãn thời gian ra 200ms để trình duyệt rảnh tay render Menu xong xuôi, tránh block click
-                    setTimeout(async () => {
-                        folderDataCache = { ...folderDataCache, ...(res.data.folderData || {}) };
-                        subFolderCache = { ...subFolderCache, ...(res.data.subData || {}) };
-                        
-                        if (res.data.spiderMemory) await localforage.setItem('vinhloc_crawled_set', res.data.spiderMemory);
-                        if (res.data.appMeta) {
-                            appMeta = { ...appMeta, ...res.data.appMeta };
-                            await localforage.setItem('vinhloc_meta', appMeta);
-                        }
+                setTimeout(async () => {
+                    window._isBrainLoading = true; 
+                    const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'loadGlobalCache' }) }).then(r => r.json());
 
-                        await localforage.setItem('vinhloc_folder_cache', folderDataCache);
-                        await localforage.setItem('vinhloc_subfolder_cache', subFolderCache);
-                        await localforage.setItem('vinhloc_last_brain_sync', Date.now());
-                        
-                        console.log("🕷️ [Patch 52] Não Nhện đồng bộ hoàn tất!");
-                        window._isBrainLoading = false; 
+                    if (res && res.success && res.data) {
+                        // Nhường luồng xử lý bằng một micro-task ngắn
+                        setTimeout(async () => {
+                            folderDataCache = { ...folderDataCache, ...(res.data.folderData || {}) };
+                            subFolderCache = { ...subFolderCache, ...(res.data.subData || {}) };
+                            
+                            if (res.data.spiderMemory) await localforage.setItem('vinhloc_crawled_set', res.data.spiderMemory);
+                            if (res.data.appMeta) {
+                                appMeta = { ...appMeta, ...res.data.appMeta };
+                                await localforage.setItem('vinhloc_meta', appMeta);
+                            }
 
-                        if (window.buildHeaderMenu) window.buildHeaderMenu();
-                        if (typeof currentDriveItems !== 'undefined' && window.renderItems) {
-                            currentDriveItems = folderDataCache[currentFolderId] || currentDriveItems;
-                            window.renderItems(currentDriveItems);
-                        }
-                    }, 200);
-                } else {
-                    window._isBrainLoading = false;
-                }
+                            await localforage.setItem('vinhloc_folder_cache', folderDataCache);
+                            await localforage.setItem('vinhloc_subfolder_cache', subFolderCache);
+                            await localforage.setItem('vinhloc_last_brain_sync', Date.now());
+                            
+                            window._isBrainLoading = false; 
+                            console.log("🕷️ [Patch 54] Sync data ngầm hoàn tất! Không làm đơ nút Menu.");
+
+                            if (window.buildHeaderMenu) window.buildHeaderMenu();
+                            if (typeof currentDriveItems !== 'undefined' && window.renderItems) {
+                                currentDriveItems = folderDataCache[currentFolderId] || currentDriveItems;
+                                window.renderItems(currentDriveItems);
+                            }
+                        }, 50);
+                    } else {
+                        window._isBrainLoading = false;
+                    }
+                }, delayTime);
             }
         } catch(e) { window._isBrainLoading = false; }
-    }
-    forceLoadBrainNow(); 
+    };
+
+    // Gọi duy nhất hàm này (thay vì gọi 2 hàm chồng lên nhau như cũ)
+    window.initDatabase();
 
 })();
