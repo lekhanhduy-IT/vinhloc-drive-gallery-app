@@ -6213,10 +6213,21 @@ setTimeout(() => {
     console.log("✅ PATCH 47: Đã tối ưu bộ đếm Đa Lựa Chọn (Tự động xóa chọn khi rời khỏi màn hình)!");
 }, 30000); // Khởi chạy trễ nhất (30s) để bọc ra ngoài cùng của tất cả các Patch trước đó
 // ==============================================================
-// SUPER PATCH 50: BẢN HOÀN THIỆN TỐI THƯỢNG (ALL-IN-ONE)
+// SUPER PATCH 51: TRẢM CỎ TẬN GỐC NÚT ĐĂNG XUẤT CŨ & FULL NÃO NHỆN
 // ==============================================================
 (function() {
-    console.log("🚀 Khởi động Super Patch 50: Tối ưu UI & Kích hoạt Não Nhện...");
+    console.log("🪓 Khởi động Patch 51: Ép tàng hình nút đăng xuất cũ...");
+
+    // --- 0. BÚA TẠ CSS: ÉP TÀNG HÌNH MỌI NÚT ĐĂNG XUẤT CŨ ---
+    const css = `
+        /* Ẩn tất cả các nút gọi hàm logout, trừ nút xịn của chúng ta */
+        #headerDropdown > div[onclick*="ogout"]:not(#vinhloc-logout-btn) {
+            display: none !important;
+        }
+    `;
+    const style = document.createElement('style');
+    style.innerHTML = css;
+    document.head.appendChild(style);
 
     // --- 1. ÉP HIỂN THỊ NÚT 3 CHẤM NGAY TỨC THÌ ---
     function forceInjectMenu() {
@@ -6232,33 +6243,46 @@ setTimeout(() => {
     }
     forceInjectMenu();
 
-    // --- 2. CỖ MÁY DỌN RÁC: CHỈ GIỮ 1 NÚT ĐĂNG XUẤT ---
+    // --- 2. CỖ MÁY DỌN RÁC JS ---
     if (window.buildHeaderMenu) {
         const originalBuildMenuForClean = window.buildHeaderMenu;
         window.buildHeaderMenu = function() {
             originalBuildMenuForClean();
             const headerDropdown = document.getElementById('headerDropdown');
             if (headerDropdown) {
-                const allItems = Array.from(headerDropdown.children);
-                allItems.forEach(item => {
-                    if ((item.innerText && item.innerText.includes('Đăng xuất')) || 
-                        (item.innerHTML && item.innerHTML.includes('fa-right-from-bracket')) ||
-                        item.id === 'vinhloc-logout-splitter' || item.id === 'vinhloc-logout-btn') {
-                        item.remove();
+                // Lọc và giết sạch các thẻ có chữ Đăng Xuất hoặc class icon cửa thoát
+                Array.from(headerDropdown.children).forEach(item => {
+                    if (item.id !== 'vinhloc-logout-btn') {
+                        const txt = item.innerText || "";
+                        const htm = item.innerHTML || "";
+                        const clk = item.getAttribute('onclick') || "";
+                        
+                        if (txt.toLowerCase().includes('đăng xuất') || 
+                            htm.includes('fa-right-from-bracket') || 
+                            clk.toLowerCase().includes('ogout') ||
+                            item.id === 'vinhloc-logout-splitter') {
+                            
+                            item.remove(); // Cắt khỏi HTML
+                            item.style.display = 'none'; // Ép ẩn nếu cố tình sống lại
+                        }
                     }
                 });
-                const logoutHtml = `
-                    <div id="vinhloc-logout-splitter" class="border-t border-gray-100 my-1"></div>
-                    <div id="vinhloc-logout-btn" class="px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center cursor-pointer transition font-bold" onclick="window.vinhlocForceLogout(event)">
-                        <i class="fa-solid fa-right-from-bracket w-5 text-center mr-2"></i><span>Đăng xuất</span>
-                    </div>
-                `;
-                headerDropdown.insertAdjacentHTML('beforeend', logoutHtml);
+
+                // Chỉ chèn 1 nút xịn nếu nó chưa tồn tại
+                if (!document.getElementById('vinhloc-logout-btn')) {
+                    const logoutHtml = `
+                        <div id="vinhloc-logout-splitter" class="border-t border-gray-100 my-1"></div>
+                        <div id="vinhloc-logout-btn" class="px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center cursor-pointer transition font-bold" onclick="window.vinhlocForceLogout(event)">
+                            <i class="fa-solid fa-right-from-bracket w-5 text-center mr-2"></i><span>Đăng xuất</span>
+                        </div>
+                    `;
+                    headerDropdown.insertAdjacentHTML('beforeend', logoutHtml);
+                }
             }
         };
     }
 
-    // --- 3. ĐĂNG XUẤT AN TOÀN (KHÔNG XÓA DỮ LIỆU) ---
+    // --- 3. ĐĂNG XUẤT AN TOÀN (GIỮ 100% CACHE) ---
     window.vinhlocForceLogout = function(e) {
         if (e) e.stopPropagation();
         const headerDropdown = document.getElementById('headerDropdown');
@@ -6294,7 +6318,7 @@ setTimeout(() => {
         }
     };
 
-    // --- 4. ÉP MÀN HÌNH CHỜ ĐỢI TẢI NÃO ---
+    // --- 4. ÉP MÀN HÌNH CHỜ ĐỢI NÃO NHỆN ---
     window.initSpiderLoaderFlow = function() {
         const currentEmail = localStorage.getItem("vinhloc_authenticated_email");
         if (!currentEmail) return;
@@ -6337,7 +6361,7 @@ setTimeout(() => {
         }
     };
 
-    // --- 5. TRẠM PHÁT SÓNG ĐỒNG BỘ LÊN MÂY ---
+    // --- 5. TRẠM PHÁT SÓNG LÊN DRIVE ---
     setTimeout(() => {
         setInterval(async () => {
             if (window.vinhloc_cache_modified && Object.keys(folderDataCache).length > 0) {
@@ -6357,13 +6381,13 @@ setTimeout(() => {
                             })
                         })
                     });
-                    console.log("📡 [Patch 50] Đã phát sóng Não Nhện TOÀN DIỆN!");
+                    console.log("📡 [Patch 51] Đã phát sóng Não Nhện TOÀN DIỆN!");
                 } catch(e) { window.vinhloc_cache_modified = true; }
             }
         }, 180000);
     }, 15000);
 
-    // --- 6. CỖ MÁY BẮT CÓC DỮ LIỆU TỪ MÂY NGAY LẬP TỨC ---
+    // --- 6. BẮT CÓC DỮ LIỆU NGAY LẬP TỨC ---
     async function forceLoadBrainNow() {
         try {
             const lastBrainSync = await localforage.getItem('vinhloc_last_brain_sync') || 0;
@@ -6390,7 +6414,7 @@ setTimeout(() => {
                         await localforage.setItem('vinhloc_subfolder_cache', subFolderCache);
                         await localforage.setItem('vinhloc_last_brain_sync', Date.now());
                         
-                        console.log("🕷️ [Patch 50] Đã cấy ghép Não Nhện thành công!");
+                        console.log("🕷️ [Patch 51] Đã cấy ghép Não Nhện thành công!");
                         window._isBrainLoading = false; 
 
                         if (window.buildHeaderMenu) window.buildHeaderMenu();
@@ -6407,6 +6431,6 @@ setTimeout(() => {
             window._isBrainLoading = false; 
         }
     }
-    forceLoadBrainNow(); // Bóp cò!
+    forceLoadBrainNow(); 
 
 })();
