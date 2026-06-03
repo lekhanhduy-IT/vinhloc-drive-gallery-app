@@ -6438,40 +6438,53 @@ setTimeout(() => {
 
 })();
 // ==============================================================
-// SUPER PATCH 55 (V6): FIX POPUP OVERLAP & MOBILE LONG-PRESS
+// SUPER PATCH 55 (V7): DOUBLE CLICK SELECT & FLASH ANIMATION & UI
 // ==============================================================
 (function() {
-    // 1. CHÈN CSS (NÂNG CẤP VÙNG CHẠM VÀ HẠ THẤP POPUP)
-    const style55v6 = document.createElement('style');
-    style55v6.innerHTML = `
-        /* Khóa CHẶT tính năng bôi đen/menu/tải ảnh của điện thoại */
-        .prevent-default-long-press {
+    // 1. CHÈN CSS (HIỆU ỨNG LÓE SÁNG XANH DƯƠNG -> XANH LÁ)
+    const style55v7 = document.createElement('style');
+    style55v7.innerHTML = `
+        /* Khóa text selection để khi click đúp không bị bôi đen văn bản/hình ảnh */
+        .prevent-double-click-select {
             -webkit-touch-callout: none !important;
             -webkit-user-select: none !important;
             user-select: none !important;
         }
 
-        /* Xóa bỏ khả năng nhận diện chạm của các thẻ con bên trong vùng click chính (Đặc biệt là thẻ IMG) */
-        .prevent-default-long-press .flex-1 * {
-            pointer-events: none !important;
-            -webkit-touch-callout: none !important;
+        /* Hiệu ứng lóe sáng từ Xanh Dương sang Xanh Lá */
+        @keyframes flashBlueToGreen {
+            0% { border-color: #3b82f6 !important; background-color: rgba(59,130,246,0.3) !important; box-shadow: 0 0 20px rgba(59,130,246,0.8) inset; }
+            50% { border-color: #22c55e !important; background-color: rgba(34,197,94,0.3) !important; box-shadow: 0 0 20px rgba(34,197,94,0.8) inset; }
+            100% { border-color: #22c55e !important; background-color: rgba(34,197,94,0.15) !important; box-shadow: 0 0 15px rgba(34,197,94,0.6) inset; }
         }
 
-        /* Đè màu xanh lá cho file/folder được chọn trong mảng */
-        .image-card.selected-green::after { border-color: #22c55e !important; background: rgba(34,197,94,0.15) !important; box-shadow: 0 0 15px rgba(34,197,94,0.6) inset; animation: pulse-border55 1.5s infinite; }
-        .subfolder-row.selected-green { background-color: #f0fdf4 !important; border-color: #86efac !important; box-shadow: 0 0 12px rgba(34,197,94,0.3); }
+        /* Vòng lặp nhịp đập Xanh lá duy trì sau khi lóe sáng */
+        @keyframes pulse-border55 { 
+            0% { border-color: rgba(34,197,94,0.6); } 
+            50% { border-color: rgba(34,197,94,1); } 
+            100% { border-color: rgba(34,197,94,0.6); } 
+        }
+
+        /* Áp dụng chuỗi Animation cho các item được chọn */
+        .image-card.selected-green::after { 
+            animation: flashBlueToGreen 0.6s ease-out forwards, pulse-border55 1.5s infinite 0.6s; 
+        }
+        .subfolder-row.selected-green { 
+            animation: flashBlueToGreen 0.6s ease-out forwards, pulse-border55 1.5s infinite 0.6s;
+        }
         .subfolder-row.selected-green h4 { color: #166534 !important; }
-        .file-item-card.selected-green { background-color: #f0fdf4 !important; border-color: #22c55e !important; box-shadow: 0 0 12px rgba(34,197,94,0.4); }
+        
+        .file-item-card.selected-green { 
+            animation: flashBlueToGreen 0.6s ease-out forwards, pulse-border55 1.5s infinite 0.6s;
+        }
         .file-item-card.selected-green .drive-img-name { color: #166534 !important; }
         .check-icon-green { background-color: #22c55e !important; color: white !important; }
 
-        @keyframes pulse-border55 { 0% { border-color: rgba(34,197,94,0.6); } 50% { border-color: rgba(34,197,94,1); } 100% { border-color: rgba(34,197,94,0.6); } }
-
-        /* Hiệu ứng mờ ảo trạng thái Ghost */
+        /* Hiệu ứng Ghost */
         .ghost-paste { opacity: 0.45 !important; filter: grayscale(40%); pointer-events: none !important; animation: upload-ghost55 1.5s infinite; }
         @keyframes upload-ghost55 { 0% { opacity: 0.3; } 50% { opacity: 0.6; } 100% { opacity: 0.3; } }
         
-        /* Popup đích dán - Hạ top xuống 85px để tránh đè nút */
+        /* Popup đích dán */
         #pastePopup {
             position: fixed; top: 85px; right: 10px; width: 350px; max-width: 92vw; max-height: 60vh;
             background: white; border-radius: 16px; box-shadow: 0 12px 50px rgba(0,0,0,0.3); border: 1px solid #e5e7eb;
@@ -6483,9 +6496,9 @@ setTimeout(() => {
         .paste-target-btn.active { background-color: #dcfce7 !important; color: #16a34a !important; border-color: #86efac !important; animation: pulse-bullseye55 1.5s infinite; }
         @keyframes pulse-bullseye55 { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); } 70% { box-shadow: 0 0 0 8px rgba(34,197,94,0); } 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); } }
     `;
-    document.head.appendChild(style55v6);
+    document.head.appendChild(style55v7);
 
-    // 2. KHỞI TẠO GIAO DIỆN (THÊM NÚT ĐÓNG X RÕ RÀNG TRONG POPUP)
+    // 2. KHỞI TẠO GIAO DIỆN (CĂN CHỈNH NÚT X VÀ THANH URL NGANG NHAU)
     function initPasteTargetUI() {
         const searchContainer = document.querySelector('.sticky.top-0 > div.relative');
         if (!searchContainer) return;
@@ -6507,18 +6520,20 @@ setTimeout(() => {
             popup.id = 'pastePopup';
             popup.innerHTML = `
                 <div class="p-3 bg-gray-50 border-b flex flex-col gap-2 shadow-sm z-10 relative">
-                    <div class="flex items-center justify-between">
-                        <div class="flex-1 overflow-hidden pr-2">
-                            <h3 class="font-bold text-xs text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                                <i class="fas fa-bullseye text-green-600 text-sm"></i> Thư mục đích dán
-                            </h3>
-                            <p id="pastePopupPath" class="text-[12px] font-bold text-blue-600 truncate mt-1 bg-blue-50 py-1.5 px-2.5 rounded-lg border border-blue-100">drive.vinhloc/Root</p>
+                    <h3 class="font-bold text-xs text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fas fa-bullseye text-green-600 text-sm"></i> Thư mục đích dán
+                    </h3>
+                    
+                    <div class="flex items-center gap-2 mt-0.5">
+                        <div id="pastePopupPath" class="flex-1 text-[12px] font-bold text-blue-600 truncate bg-blue-50 px-3 border border-blue-100 flex items-center rounded-lg" style="height: 36px;">
+                            drive.vinhloc/Root
                         </div>
-                        <button onclick="window.togglePastePopup()" class="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center transition active:scale-95 shrink-0">
-                            <i class="fas fa-times text-sm"></i>
+                        <button onclick="window.togglePastePopup()" class="shrink-0 bg-gray-200 text-gray-600 hover:bg-gray-300 transition active:scale-95 border border-gray-300 flex items-center justify-center rounded-lg" style="height: 36px; width: 36px;">
+                            <i class="fas fa-times text-base"></i>
                         </button>
                     </div>
-                    <div class="flex gap-2 mt-0.5">
+
+                    <div class="flex gap-2 mt-1">
                         <button id="miniBtnCopy" class="flex-1 py-2 px-3 bg-blue-600 text-white text-xs font-bold rounded-xl active:scale-95 transition shadow-sm flex items-center justify-center gap-1.5 hover:bg-blue-700">
                             <i class="fas fa-copy"></i> Sao chép vào đây
                         </button>
@@ -6592,7 +6607,6 @@ setTimeout(() => {
         const btn = document.getElementById('pasteDestBtn');
         if (popup && popup.classList.contains('show')) {
             if (!document.body.contains(e.target)) return;
-            // Nếu click không trúng popup và không trúng nút ngoài thì đóng
             if (!popup.contains(e.target) && btn && !btn.contains(e.target)) {
                 window.togglePastePopup();
             }
@@ -6752,7 +6766,7 @@ setTimeout(() => {
     };
 
     // 6. GHI ĐÈ HÀM RENDER
-    if (window.renderItems && !window.renderItems_patched55v6) {
+    if (window.renderItems && !window.renderItems_patched55v7) {
         const originalRenderItems = window.renderItems;
         window.renderItems = function(items, isSearchMode = false) {
             originalRenderItems(items, isSearchMode);
@@ -6767,6 +6781,7 @@ setTimeout(() => {
                 
                 if (isGhost) element.classList.add('ghost-paste');
 
+                // Khi isSelected là true, CSS class này sẽ tự động chạy Animation lóe sáng Xanh Dương -> Xanh Lá
                 if (isSelected) {
                     element.classList.remove('ring-blue-500', 'bg-blue-50', 'border-blue-200');
                     element.classList.add('selected-green');
@@ -6788,104 +6803,73 @@ setTimeout(() => {
                 if (idMatch) applySelectLogic(row, idMatch[1]);
             });
         };
-        window.renderItems_patched55v6 = true;
+        window.renderItems_patched55v7 = true;
     }
 
-    // 7. THIẾT LẬP CƠ CHẾ NHẤN GIỮ (NGĂN CHẶN MENU CHUỘT PHẢI TUYỆT ĐỐI)
+    // 7. THIẾT LẬP CƠ CHẾ DOUBLE CLICK (NHẤP ĐÚP) THAY CHO LONG PRESS
     function setupItemInteractions(el, id, itemData) {
         el.removeAttribute('onclick');
-        el.classList.add('prevent-default-long-press');
-
-        // Bắt chết sự kiện contextmenu từ trứng nước
-        el.addEventListener('contextmenu', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            return false;
-        }, { capture: true });
+        el.classList.add('prevent-double-click-select'); // Chống bôi đen khi nhấp đúp
 
         const clickArea = el.querySelector('.flex-1.cursor-pointer') || el.querySelector('.flex-1.overflow-hidden');
-        if (clickArea) {
-            clickArea.removeAttribute('onclick');
-            clickArea.addEventListener('contextmenu', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }, { capture: true });
-        }
+        if (clickArea) clickArea.removeAttribute('onclick');
         
-        let pressTimer = null;
-        let isLongPress = false;
-        let startX, startY;
+        let clickTimer = null;
+        let lastClickTime = 0;
 
         const handleSelectionToggle = (e) => {
-            e.preventDefault(); e.stopPropagation();
             if (!window.multiSelectState) window.multiSelectState = { selectedIds: new Set() };
 
             if (window.multiSelectState.selectedIds.has(id)) {
-                window.multiSelectState.selectedIds.clear();
+                window.multiSelectState.selectedIds.clear(); // Hủy chọn mảng nếu trúng item đang active
             } else {
                 window.multiSelectState.selectedIds.add(id);
+                navigator.vibrate && navigator.vibrate(40);
             }
             window.renderItems(currentDriveItems);
             window.updatePasteButtonState();
         };
 
-        const onTouchStart = (e) => {
-            if (e.touches.length > 1) return;
-            if (e.target.closest('.item-action-menu') || e.target.closest('button')) return;
-            
-            isLongPress = false;
-            startX = e.touches[0].clientX; startY = e.touches[0].clientY;
-            
-            pressTimer = setTimeout(() => {
-                isLongPress = true;
-                if (!window.multiSelectState) window.multiSelectState = { selectedIds: new Set() };
-                
-                if (window.multiSelectState.selectedIds.size === 0) {
-                    window.multiSelectState.selectedIds.add(id);
-                } else {
-                    if (window.multiSelectState.selectedIds.has(id)) window.multiSelectState.selectedIds.clear();
-                    else window.multiSelectState.selectedIds.add(id);
-                }
-                navigator.vibrate && navigator.vibrate(40);
-                window.renderItems(currentDriveItems);
-                window.updatePasteButtonState();
-            }, 500); // 500ms là mức kích hoạt an toàn trước khi trình duyệt nhận menu
-        };
-
-        const onTouchMove = (e) => {
-            if (Math.abs(e.touches[0].clientX - startX) > 10 || Math.abs(e.touches[0].clientY - startY) > 10) {
-                clearTimeout(pressTimer);
-            }
-        };
-
-        const onTouchEnd = (e) => {
-            clearTimeout(pressTimer);
-            if (isLongPress) {
-                e.preventDefault(); // Tránh kích hoạt click sau khi đã long-press
-            }
-        };
-
         const onClick = (e) => {
             if (e.target.closest('.item-action-menu') || e.target.closest('button') || e.target.closest('i.fa-play-circle')) return;
-            if (isLongPress) { e.preventDefault(); e.stopPropagation(); return; }
             
-            if (window.multiSelectState && window.multiSelectState.selectedIds.size > 0) {
+            e.preventDefault(); 
+            e.stopPropagation();
+
+            const currentTime = new Date().getTime();
+            const timeSinceLastClick = currentTime - lastClickTime;
+
+            // KIỂM TRA NHẤP ĐÚP (Thời gian giữa 2 lần click < 350ms)
+            if (timeSinceLastClick > 0 && timeSinceLastClick < 350) {
+                clearTimeout(clickTimer);
+                lastClickTime = 0; // Reset
+                
                 handleSelectionToggle(e);
+
             } else {
-                if (itemData) {
-                    if (itemData.type === 'folder') window.loadFolder(itemData.id, itemData.name, true);
-                    else {
-                        let fullUrl = itemData.tempUrl || `https://drive.google.com/thumbnail?id=${itemData.id}&sz=w2000`;
-                        window.openMedia(itemData.id, itemData.mimeType, itemData.name, fullUrl);
-                    }
+                // CHỈ LÀ NHẤP ĐƠN (Lần 1)
+                lastClickTime = currentTime;
+                
+                // Nếu đang tồn tại mảng được chọn -> Nhấp đơn cũng lập tức là thao tác chọn/huỷ (để chọn nhanh nhiều file)
+                if (window.multiSelectState && window.multiSelectState.selectedIds.size > 0) {
+                    handleSelectionToggle(e);
+                } else {
+                    // Nếu chưa có mảng -> Đợi 350ms xem có phải là nhấp đúp không, nếu không thì Mở File/Folder
+                    clickTimer = setTimeout(() => {
+                        if (itemData) {
+                            if (itemData.type === 'folder') window.loadFolder(itemData.id, itemData.name, true);
+                            else {
+                                let fullUrl = itemData.tempUrl || `https://drive.google.com/thumbnail?id=${itemData.id}&sz=w2000`;
+                                window.openMedia(itemData.id, itemData.mimeType, itemData.name, fullUrl);
+                            }
+                        }
+                        lastClickTime = 0;
+                    }, 350); 
                 }
             }
         };
 
-        el.addEventListener('touchstart', onTouchStart, { passive: false });
-        el.addEventListener('touchmove', onTouchMove, { passive: true });
-        el.addEventListener('touchend', onTouchEnd, { passive: false });
+        // Gắn thẳng vào sự kiện Click thay vì Touch cho ổn định đa nền tảng
         el.addEventListener('click', onClick);
     }
 })();
