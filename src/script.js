@@ -6438,14 +6438,14 @@ setTimeout(() => {
 
 })();
 // ==============================================================
-// PATCH 55: SAO CHÉP / DI CHUYỂN TOÀN CỤC VÀ ĐÍCH DÁN
+// PATCH 55: SAO CHÉP / DI CHUYỂN TOÀN CỤC VÀ ĐÍCH DÁN (ĐÃ SỬA LỖI NHÂN ĐÔI FILE MỜ)
 // ==============================================================
 setTimeout(() => {
     // 1. Chèn mục "Đích dán" vào Menu Header đảm bảo hiển thị đúng
     if (window.buildHeaderMenu && !window.buildHeaderMenu.isPatched55) {
         const originalBuildHeaderMenu = window.buildHeaderMenu;
         window.buildHeaderMenu = function() {
-            originalBuildHeaderMenu(); // Tạo danh sách Chọn lọc mặc định
+            originalBuildHeaderMenu(); 
             const headerDropdown = document.getElementById('headerDropdown');
             if (headerDropdown) {
                 const pasteDestHtml = `<div class="px-5 py-3 hover:bg-green-50 cursor-pointer flex items-center justify-between transition font-medium border-t border-gray-50" onclick="window.markPasteDestination()"><span><i class="fas fa-bullseye mr-2 text-green-600"></i> Đích dán</span></div>`;
@@ -6504,7 +6504,6 @@ setTimeout(() => {
             copyMoveModal.classList.remove('hidden');
             copyMoveModal.classList.add('flex');
             
-            // Hiệu ứng nhẹ khi mở modal
             const box = document.getElementById('copyMoveBox');
             if(box) {
                 box.style.transform = 'scale(0.95)';
@@ -6512,7 +6511,6 @@ setTimeout(() => {
             }
         });
 
-        // Click ra ngoài chỉ đóng Modal, không xóa đường dẫn
         copyMoveModal.addEventListener('click', (e) => {
             if (e.target === copyMoveModal) {
                 copyMoveModal.classList.add('hidden');
@@ -6520,15 +6518,13 @@ setTimeout(() => {
             }
         });
 
-        // Xóa đích dán (Dấu X trong Input)
         btnClearDest.addEventListener('click', () => {
             window.targetPasteFolderId = null;
             window.targetPasteFolderPath = '';
             destInput.value = '';
-            btnCopyCut.classList.add('hidden'); // Thu nút về
+            btnCopyCut.classList.add('hidden'); 
         });
 
-        // Bấm Xong: Dọn sạch mọi thứ và BỎ CHỌN file
         btnDoDone.addEventListener('click', () => {
             window.targetPasteFolderId = null;
             window.targetPasteFolderPath = '';
@@ -6540,17 +6536,15 @@ setTimeout(() => {
             if (window.multiSelectState) {
                 window.multiSelectState.selectedIds.clear();
             }
-            window.renderItems(currentDriveItems); // Ở lại vị trí cũ, không nhảy trang
+            window.renderItems(currentDriveItems); // Bỏ chọn, giữ nguyên vị trí
         });
 
-        // Lõi Xử lý Sao chép/Di chuyển gửi lên API
         const executeOp = async (mode) => {
             if (!window.targetPasteFolderId) return showToast("Chưa chọn đích dán!", true);
             if (!window.multiSelectState || window.multiSelectState.selectedIds.size === 0) {
                 return showToast("Chưa chọn file/folder nào để thao tác!", true);
             }
             
-            // Nhặt tất cả id đang chọn trên toàn root
             let idsToProcess = Array.from(window.multiSelectState.selectedIds);
             let itemsToProcess = [];
             const allItems = [...currentDriveItems, ...Object.values(folderDataCache).flat(), ...Object.values(subFolderCache).flat()];
@@ -6574,7 +6568,6 @@ setTimeout(() => {
             showToast(`<i class="fas fa-spinner fa-spin mr-2"></i> Đang ${mode === 'copy' ? 'sao chép' : 'di chuyển'}...`);
             
             // --- GIAO DIỆN LẠC QUAN ---
-            // 1. Tự động đắp file mờ "Đang up" vào folder đích dán
             let tempItems = [];
             itemsToProcess.forEach(obj => {
                 let tempItem = JSON.parse(JSON.stringify(obj.itemRef));
@@ -6582,7 +6575,6 @@ setTimeout(() => {
                 tempItem.isPending = true; 
                 if (mode === 'copy') tempItem.name = "Bản sao của " + tempItem.name;
                 
-                // Nếu là File, dùng ảnh Thumbnail gốc để mờ đè lên thay vì xóa đen
                 if (tempItem.type !== 'folder') {
                     tempItem.tempUrl = tempItem.tempUrl || `https://drive.google.com/thumbnail?id=${obj.itemRef.id}&sz=w400`;
                 }
@@ -6594,7 +6586,6 @@ setTimeout(() => {
                 folderDataCache[currentFolderId] = currentDriveItems;
                 window.renderItems(currentDriveItems);
                 
-                // Tiêm CSS làm mờ riêng cho các Folder đang up
                 tempItems.forEach(tempItem => {
                     if(tempItem.type === 'folder') {
                         let nameEl = document.querySelector(`.item-name-${tempItem.id}`);
@@ -6612,7 +6603,7 @@ setTimeout(() => {
                 folderDataCache[window.targetPasteFolderId] = [...tempItems, ...folderDataCache[window.targetPasteFolderId]];
             }
             
-            // 2. Nếu là Di Chuyển, dọn dẹp file lạc quan ở thư mục cũ
+            // Nếu di chuyển, ẩn file lạc quan ở thư mục cũ
             if (mode === 'move') {
                 Object.keys(folderDataCache).forEach(fId => {
                     if (fId !== window.targetPasteFolderId) {
@@ -6623,7 +6614,6 @@ setTimeout(() => {
                 if (currentFolderId !== window.targetPasteFolderId) window.renderItems(currentDriveItems);
             }
 
-            // Gửi lệnh lên Server (Google Script)
             try {
                 const payload = {
                     mode: mode,
@@ -6638,11 +6628,32 @@ setTimeout(() => {
                 
                 if (res && res.success) {
                     showToast(`<i class="fas fa-check mr-2 text-green-400"></i> ${mode === 'copy' ? 'Sao chép' : 'Di chuyển'} thành công ${numFolders} folder, ${numFiles} file`);
-                    // Không xóa multiSelectState ở đây, để user tiếp tục hành động nếu cần
-                    // MasterSync sẽ dọn dẹp sạch sẽ mảng ID temp mờ tự động.
+                    
+                    // ==========================================
+                    // SỬA LỖI TẠI ĐÂY: XÓA CÁC FILE MỜ TẠM THỜI
+                    // ==========================================
+                    let tempIds = tempItems.map(t => t.id);
+                    
+                    // Xóa trong cache đích đến
+                    if (folderDataCache[window.targetPasteFolderId]) {
+                        folderDataCache[window.targetPasteFolderId] = folderDataCache[window.targetPasteFolderId].filter(i => !tempIds.includes(i.id));
+                    }
+
+                    // Nếu user đang đứng ở đích đến, xóa trên UI luôn
+                    if (currentFolderId === window.targetPasteFolderId) {
+                        currentDriveItems = currentDriveItems.filter(i => !tempIds.includes(i.id));
+                        folderDataCache[currentFolderId] = currentDriveItems;
+                        window.renderItems(currentDriveItems);
+                    }
+
+                    // Gọi tải lại dữ liệu thật (không mờ) từ thư mục đích về
+                    if (window.fetchDriveData) {
+                        window.fetchDriveData(window.targetPasteFolderId, true);
+                    }
+
                 } else {
                     showToast(`Lỗi: ${res.message || 'Hệ thống gián đoạn'}`, true);
-                    // Rớt mạng thì Undo giao diện mờ
+                    // Rớt mạng thì Undo trả lại trạng thái
                     if (currentFolderId === window.targetPasteFolderId) {
                         currentDriveItems = currentDriveItems.filter(i => !i.id.startsWith('temp_'));
                         folderDataCache[currentFolderId] = currentDriveItems;
@@ -6656,7 +6667,13 @@ setTimeout(() => {
             }
         };
 
-        btnDoCopy.addEventListener('click', () => executeOp('copy'));
-        btnDoMove.addEventListener('click', () => executeOp('move'));
+        // Gỡ listener cũ nếu lỡ click nhiều lần (phòng ngừa)
+        const oldDoCopy = btnDoCopy.cloneNode(true);
+        const oldDoMove = btnDoMove.cloneNode(true);
+        btnDoCopy.parentNode.replaceChild(oldDoCopy, btnDoCopy);
+        btnDoMove.parentNode.replaceChild(oldDoMove, btnDoMove);
+
+        oldDoCopy.addEventListener('click', () => executeOp('copy'));
+        oldDoMove.addEventListener('click', () => executeOp('move'));
     }
-}, 1200); // Khởi tạo muộn để đảm bảo ghi đè các hàm menu
+}, 1200);
