@@ -6151,199 +6151,7 @@ setTimeout(() => {
     console.log("✅ PATCH 45: Đã cập nhật tính năng Chia sẻ nhiều mục & Đăng Facebook Đa phương tiện!");
 }, 29500); // Kích hoạt ở chu kỳ trễ nhất để tích hợp êm ái
 
-// ==============================================================
-// SUPER PATCH 48: KHẮC PHỤC CHỐNG TRÙNG LOGOUT & CHỐNG ĐƠ MENU
-// ==============================================================
-(function() {
-    console.log("🛠️ Khởi động Patch 48: Tối ưu hiệu năng Menu & Đăng xuất...");
 
-    // --- 1. SỬA LỖI 2 NÚT ĐĂNG XUẤT (CHỐNG TRÙNG LẶP) ---
-    if (window.buildHeaderMenu && !window.buildHeaderMenu.isLogoutHookedV48) {
-        const originalBuildHeaderMenuForLogout = window.buildHeaderMenu;
-        
-        window.buildHeaderMenu = function() {
-            // Chạy hàm gốc để dựng menu tiêu chuẩn
-            originalBuildHeaderMenuForLogout();
-            
-            const headerDropdown = document.getElementById('headerDropdown');
-            if (headerDropdown) {
-                // KIỂM TRA CHỐT CHẶN: Nếu đã có nút đăng xuất của Vĩnh Lộc thì bỏ qua, không chèn trùng
-                if (document.getElementById('vinhloc-logout-btn')) return;
-
-                const logoutHtml = `
-                    <div id="vinhloc-logout-splitter" class="border-t border-gray-100 my-1"></div>
-                    <div id="vinhloc-logout-btn" class="px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center cursor-pointer transition" onclick="window.vinhlocForceLogout(event)">
-                        <i class="fa-solid fa-right-from-bracket w-5 text-center mr-2"></i><span>Đăng xuất</span>
-                    </div>
-                `;
-                headerDropdown.insertAdjacentHTML('beforeend', logoutHtml);
-            }
-        };
-        window.buildHeaderMenu.isLogoutHookedV48 = true;
-    }
-
-    // Hàm xử lý đăng xuất an toàn giữ cache ngoại tuyến
-    window.vinhlocForceLogout = function(e) {
-        if (e) e.stopPropagation();
-        const headerDropdown = document.getElementById('headerDropdown');
-        if (headerDropdown) headerDropdown.classList.add('hidden');
-
-        const modalTitle = document.getElementById('modalTitle');
-        const modalDesc = document.getElementById('modalDesc');
-        const modalInput = document.getElementById('modalInput');
-        const confirmBtn = document.getElementById('modalConfirmBtn');
-        const customModal = document.getElementById('customModal');
-
-        if (customModal && modalTitle && modalDesc && confirmBtn) {
-            modalTitle.textContent = 'Xác nhận Đăng xuất';
-            modalDesc.textContent = 'Bạn có chắc chắn muốn quay ra màn hình đăng nhập? (Dữ liệu ngoại tuyến vẫn được giữ lại để lần sau vào app mở nhanh hơn)';
-            modalDesc.classList.remove('hidden');
-            if (modalInput) modalInput.classList.add('hidden');
-
-            confirmBtn.textContent = 'Đăng xuất';
-            confirmBtn.className = 'px-5 py-2 bg-red-600 text-white font-bold rounded-xl';
-
-            confirmBtn.onclick = () => {
-                if (typeof closeModal === 'function') closeModal();
-                localStorage.removeItem("vinhloc_authenticated_email");
-                window.location.reload();
-            };
-            customModal.classList.remove('hidden');
-            customModal.classList.add('flex');
-        } else {
-            if (confirm("Bạn có chắc chắn muốn đăng xuất không?")) {
-                localStorage.removeItem("vinhloc_authenticated_email");
-                window.location.reload();
-            }
-        }
-    };
-
-    // --- 2. SỬA LỖI MÀN HÌNH CHỜ (KẾT HỢP SMOOTH LOADING) ---
-    window.initSpiderLoaderFlow = function() {
-        const currentEmail = localStorage.getItem("vinhloc_authenticated_email");
-        if (!currentEmail) return;
-
-        let loadedAccounts = JSON.parse(localStorage.getItem("vinhloc_loaded_accounts") || "[]");
-        const isAccountLoaded = loadedAccounts.includes(currentEmail);
-        
-        const loader = document.getElementById("spider-brain-loader");
-        const textEl = document.getElementById("spider-brain-text");
-
-        if (!isAccountLoaded && loader && textEl) {
-            loader.style.display = "flex";
-            loader.classList.remove("fade-out-spider");
-            let percent = 1;
-            
-            const loadingInterval = setInterval(() => {
-                // Nếu "Não nhện nặng" chưa xử lý xong chuỗi dữ liệu JSON, ép thanh loading giữ ở 92% để đợi
-                if (window._isBrainLoading && percent >= 92) {
-                    textEl.innerText = `Đang đồng bộ cấu trúc mây ${percent}%...`;
-                    return;
-                }
-
-                percent += 4; 
-                textEl.innerText = `Đang giải nén bộ nhớ ${percent}%...`;
-
-                if (percent >= 100) {
-                    clearInterval(loadingInterval);
-                    loader.classList.add("fade-out-spider");
-                    
-                    loadedAccounts.push(currentEmail);
-                    localStorage.setItem("vinhloc_loaded_accounts", JSON.stringify(loadedAccounts));
-                    localStorage.setItem("vinhloc_device_patched", "true");
-
-                    setTimeout(() => { 
-                        loader.style.display = "none"; 
-                        // Não nạp xong là kích hoạt dựng lại toàn bộ giao diện và menu ngay lập tức
-                        if (window.currentFolderId && window.loadFolder) {
-                            window.loadFolder(window.currentFolderId, window.currentFolderName || "Thư mục gốc", false, true);
-                        }
-                    }, 800);
-                }
-            }, 80); 
-        } else {
-            if (loader) loader.style.display = "none";
-            localStorage.setItem("vinhloc_device_patched", "true"); 
-        }
-    };
-
-    // --- 3. SỬA LỖI ĐƠ APP: CHUYỂN TÁC VỤ NẶNG SANG LUỒNG CHẠY NỀN KHÔNG BLOCK UI ---
-    async function forceLoadBrainNow() {
-        try {
-            const lastBrainSync = await localforage.getItem('vinhloc_last_brain_sync') || 0;
-            const localFolderCache = await localforage.getItem('vinhloc_folder_cache') || {};
-            const isCacheEmpty = Object.keys(localFolderCache).length <= 1;
-            
-            if (isCacheEmpty || (Date.now() - lastBrainSync > 1800000)) { // 30 Phút
-                window._isBrainLoading = true; 
-                
-                const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'loadGlobalCache' }) }).then(r => r.json());
-
-                if (res && res.success && res.data) {
-                    // Dùng setTimeout(..., 0) để đẩy luồng Parse JSON nặng nề ra sau, giúp Menu HTML kịp hiển thị mượt mà, không bị chìm/đơ
-                    setTimeout(async () => {
-                        folderDataCache = { ...folderDataCache, ...(res.data.folderData || {}) };
-                        subFolderCache = { ...subFolderCache, ...(res.data.subData || {}) };
-                        
-                        if (res.data.spiderMemory) await localforage.setItem('vinhloc_crawled_set', res.data.spiderMemory);
-                        if (res.data.appMeta) {
-                            appMeta = { ...appMeta, ...res.data.appMeta };
-                            await localforage.setItem('vinhloc_meta', appMeta);
-                        }
-
-                        await localforage.setItem('vinhloc_folder_cache', folderDataCache);
-                        await localforage.setItem('vinhloc_subfolder_cache', subFolderCache);
-                        await localforage.setItem('vinhloc_last_brain_sync', Date.now());
-                        
-                        console.log("🕷️ [Patch 48] Bộ não khổng lồ đã nạp xong không gây đơ UI!");
-                        window._isBrainLoading = false; // Mở khóa thanh phần trăm
-
-                        // Buộc Menu và nội dung vẽ lại đồ mới ngay lập tức
-                        if (window.buildHeaderMenu) window.buildHeaderMenu();
-                        if (typeof currentDriveItems !== 'undefined' && window.renderItems) {
-                            const updatedItems = folderDataCache[currentFolderId];
-                            if (updatedItems) window.renderItems(updatedItems);
-                        }
-                    }, 50);
-                } else {
-                    window._isBrainLoading = false;
-                }
-            }
-        } catch(e) { 
-            window._isBrainLoading = false; 
-        }
-    }
-
-    // Tự động phát sóng đồng bộ dữ liệu định kỳ
-    setTimeout(() => {
-        setInterval(async () => {
-            if (window.vinhloc_cache_modified && Object.keys(folderDataCache).length > 0) {
-                try {
-                    window.vinhloc_cache_modified = false; 
-                    const crawledSet = await localforage.getItem('vinhloc_crawled_set') || {};
-                    const meta = await localforage.getItem('vinhloc_meta') || {};
-                    await fetch(SCRIPT_URL, {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            action: 'saveGlobalCache',
-                            cacheData: JSON.stringify({ 
-                                folderData: folderDataCache, 
-                                subData: subFolderCache,
-                                spiderMemory: crawledSet,
-                                appMeta: meta
-                            })
-                        })
-                    });
-                    console.log("📡 [Patch 48] Đã phát sóng sao lưu Não Nhện.");
-                } catch(e) { window.vinhloc_cache_modified = true; }
-            }
-        }, 180000);
-    }, 15000);
-    
-    // Thực thi nạp dữ liệu
-    forceLoadBrainNow();
-
-})();
 // ==============================================================
 // PATCH 47: TỰ ĐỘNG XÓA CHỌN KHI RỜI THƯ MỤC & BÁO CÁO SỐ LƯỢNG THỰC TẾ
 // ==============================================================
@@ -6404,3 +6212,201 @@ setTimeout(() => {
 
     console.log("✅ PATCH 47: Đã tối ưu bộ đếm Đa Lựa Chọn (Tự động xóa chọn khi rời khỏi màn hình)!");
 }, 30000); // Khởi chạy trễ nhất (30s) để bọc ra ngoài cùng của tất cả các Patch trước đó
+// ==============================================================
+// SUPER PATCH 50: BẢN HOÀN THIỆN TỐI THƯỢNG (ALL-IN-ONE)
+// ==============================================================
+(function() {
+    console.log("🚀 Khởi động Super Patch 50: Tối ưu UI & Kích hoạt Não Nhện...");
+
+    // --- 1. ÉP HIỂN THỊ NÚT 3 CHẤM NGAY TỨC THÌ ---
+    function forceInjectMenu() {
+        const loadingDiv = document.getElementById('loading');
+        if (loadingDiv && !document.getElementById('headerDropdownContainer')) {
+            const menuHtml = `
+            <div class="relative shrink-0 ml-2" id="headerDropdownContainer" style="z-index: 9999999;">
+                <button onclick="window.toggleHeaderMenu(event)" class="text-white p-1 text-xl active:bg-blue-700 rounded-full transition w-8 h-8 flex items-center justify-center"><i class="fas fa-ellipsis-v"></i></button>
+                <div id="headerDropdown" class="hidden absolute right-0 mt-3 w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 text-sm text-gray-700 z-[9999999] overflow-hidden"></div>
+            </div>`;
+            loadingDiv.insertAdjacentHTML('afterend', menuHtml);
+        }
+    }
+    forceInjectMenu();
+
+    // --- 2. CỖ MÁY DỌN RÁC: CHỈ GIỮ 1 NÚT ĐĂNG XUẤT ---
+    if (window.buildHeaderMenu) {
+        const originalBuildMenuForClean = window.buildHeaderMenu;
+        window.buildHeaderMenu = function() {
+            originalBuildMenuForClean();
+            const headerDropdown = document.getElementById('headerDropdown');
+            if (headerDropdown) {
+                const allItems = Array.from(headerDropdown.children);
+                allItems.forEach(item => {
+                    if ((item.innerText && item.innerText.includes('Đăng xuất')) || 
+                        (item.innerHTML && item.innerHTML.includes('fa-right-from-bracket')) ||
+                        item.id === 'vinhloc-logout-splitter' || item.id === 'vinhloc-logout-btn') {
+                        item.remove();
+                    }
+                });
+                const logoutHtml = `
+                    <div id="vinhloc-logout-splitter" class="border-t border-gray-100 my-1"></div>
+                    <div id="vinhloc-logout-btn" class="px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center cursor-pointer transition font-bold" onclick="window.vinhlocForceLogout(event)">
+                        <i class="fa-solid fa-right-from-bracket w-5 text-center mr-2"></i><span>Đăng xuất</span>
+                    </div>
+                `;
+                headerDropdown.insertAdjacentHTML('beforeend', logoutHtml);
+            }
+        };
+    }
+
+    // --- 3. ĐĂNG XUẤT AN TOÀN (KHÔNG XÓA DỮ LIỆU) ---
+    window.vinhlocForceLogout = function(e) {
+        if (e) e.stopPropagation();
+        const headerDropdown = document.getElementById('headerDropdown');
+        if (headerDropdown) headerDropdown.classList.add('hidden');
+
+        const modalTitle = document.getElementById('modalTitle');
+        const modalDesc = document.getElementById('modalDesc');
+        const modalInput = document.getElementById('modalInput');
+        const confirmBtn = document.getElementById('modalConfirmBtn');
+        const customModal = document.getElementById('customModal');
+
+        if (customModal && modalTitle && modalDesc && confirmBtn) {
+            modalTitle.textContent = 'Xác nhận Đăng xuất';
+            modalDesc.textContent = 'Bạn có chắc chắn muốn quay ra màn hình đăng nhập? (Dữ liệu ngoại tuyến vẫn sẽ được giữ nguyên an toàn)';
+            modalDesc.classList.remove('hidden');
+            if (modalInput) modalInput.classList.add('hidden');
+
+            confirmBtn.textContent = 'Đăng xuất';
+            confirmBtn.className = 'px-5 py-2 bg-red-600 text-white font-bold rounded-xl';
+
+            confirmBtn.onclick = () => {
+                if (typeof closeModal === 'function') closeModal();
+                localStorage.removeItem("vinhloc_authenticated_email");
+                window.location.reload();
+            };
+            customModal.classList.remove('hidden');
+            customModal.classList.add('flex');
+        } else {
+            if (confirm("Bạn có chắc chắn muốn đăng xuất không?")) {
+                localStorage.removeItem("vinhloc_authenticated_email");
+                window.location.reload();
+            }
+        }
+    };
+
+    // --- 4. ÉP MÀN HÌNH CHỜ ĐỢI TẢI NÃO ---
+    window.initSpiderLoaderFlow = function() {
+        const currentEmail = localStorage.getItem("vinhloc_authenticated_email");
+        if (!currentEmail) return;
+
+        let loadedAccounts = JSON.parse(localStorage.getItem("vinhloc_loaded_accounts") || "[]");
+        const isAccountLoaded = loadedAccounts.includes(currentEmail);
+        
+        const loader = document.getElementById("spider-brain-loader");
+        const textEl = document.getElementById("spider-brain-text");
+
+        if (!isAccountLoaded && loader && textEl) {
+            loader.style.display = "flex";
+            loader.classList.remove("fade-out-spider");
+            let percent = 1;
+            
+            const loadingInterval = setInterval(() => {
+                if (window._isBrainLoading && percent >= 92) {
+                    textEl.innerText = `Đang đồng bộ mây ${percent}%...`;
+                    return;
+                }
+                percent += 3;
+                textEl.innerText = `Đang nạp ${percent}%...`;
+
+                if (percent >= 100) {
+                    clearInterval(loadingInterval);
+                    loader.classList.add("fade-out-spider");
+                    loadedAccounts.push(currentEmail);
+                    localStorage.setItem("vinhloc_loaded_accounts", JSON.stringify(loadedAccounts));
+                    localStorage.setItem("vinhloc_device_patched", "true");
+                    setTimeout(() => { loader.style.display = "none"; }, 1000);
+                    
+                    if (window.currentFolderId && window.loadFolder) {
+                        window.loadFolder(window.currentFolderId, window.currentFolderName || "Thư mục gốc", false, true);
+                    }
+                }
+            }, 80); 
+        } else {
+            if (loader) loader.style.display = "none";
+            localStorage.setItem("vinhloc_device_patched", "true"); 
+        }
+    };
+
+    // --- 5. TRẠM PHÁT SÓNG ĐỒNG BỘ LÊN MÂY ---
+    setTimeout(() => {
+        setInterval(async () => {
+            if (window.vinhloc_cache_modified && Object.keys(folderDataCache).length > 0) {
+                try {
+                    window.vinhloc_cache_modified = false; 
+                    const crawledSet = await localforage.getItem('vinhloc_crawled_set') || {};
+                    const meta = await localforage.getItem('vinhloc_meta') || {};
+                    await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            action: 'saveGlobalCache',
+                            cacheData: JSON.stringify({ 
+                                folderData: folderDataCache, 
+                                subData: subFolderCache,
+                                spiderMemory: crawledSet,
+                                appMeta: meta
+                            })
+                        })
+                    });
+                    console.log("📡 [Patch 50] Đã phát sóng Não Nhện TOÀN DIỆN!");
+                } catch(e) { window.vinhloc_cache_modified = true; }
+            }
+        }, 180000);
+    }, 15000);
+
+    // --- 6. CỖ MÁY BẮT CÓC DỮ LIỆU TỪ MÂY NGAY LẬP TỨC ---
+    async function forceLoadBrainNow() {
+        try {
+            const lastBrainSync = await localforage.getItem('vinhloc_last_brain_sync') || 0;
+            const localFolderCache = await localforage.getItem('vinhloc_folder_cache') || {};
+            const isCacheEmpty = Object.keys(localFolderCache).length <= 1;
+            
+            if (isCacheEmpty || (Date.now() - lastBrainSync > 1800000)) { 
+                window._isBrainLoading = true; 
+                
+                const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'loadGlobalCache' }) }).then(r => r.json());
+
+                if (res && res.success && res.data) {
+                    setTimeout(async () => {
+                        folderDataCache = { ...folderDataCache, ...(res.data.folderData || {}) };
+                        subFolderCache = { ...subFolderCache, ...(res.data.subData || {}) };
+                        
+                        if (res.data.spiderMemory) await localforage.setItem('vinhloc_crawled_set', res.data.spiderMemory);
+                        if (res.data.appMeta) {
+                            appMeta = { ...appMeta, ...res.data.appMeta };
+                            await localforage.setItem('vinhloc_meta', appMeta);
+                        }
+
+                        await localforage.setItem('vinhloc_folder_cache', folderDataCache);
+                        await localforage.setItem('vinhloc_subfolder_cache', subFolderCache);
+                        await localforage.setItem('vinhloc_last_brain_sync', Date.now());
+                        
+                        console.log("🕷️ [Patch 50] Đã cấy ghép Não Nhện thành công!");
+                        window._isBrainLoading = false; 
+
+                        if (window.buildHeaderMenu) window.buildHeaderMenu();
+                        if (typeof currentDriveItems !== 'undefined' && window.renderItems) {
+                            currentDriveItems = folderDataCache[currentFolderId] || currentDriveItems;
+                            window.renderItems(currentDriveItems);
+                        }
+                    }, 50);
+                } else {
+                    window._isBrainLoading = false;
+                }
+            }
+        } catch(e) { 
+            window._isBrainLoading = false; 
+        }
+    }
+    forceLoadBrainNow(); // Bóp cò!
+
+})();
