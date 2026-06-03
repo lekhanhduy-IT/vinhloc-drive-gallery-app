@@ -6236,3 +6236,198 @@ setTimeout(() => {
     
     console.log("✅ PATCH 46: Đã tách riêng thành công luồng xử lý Video thô!");
 }, 29500); // Kích hoạt ở giây 29.5 để đảm bảo Patch 42 (giây 28.5) đã nạp xong và bị "bắt cóc" thành công
+
+// ==============================================================
+// SUPER PATCH 46: ĐỒNG BỘ MÀN HÌNH CHỜ & FULL BACKUP NÃO NHỆN
+// ==============================================================
+setTimeout(() => {
+
+    // 1. NÂNG CẤP TRẠM PHÁT SÓNG (Lưu cả trí nhớ của Nhện)
+    setInterval(async () => {
+        if (window.vinhloc_cache_modified && Object.keys(folderDataCache).length > 0) {
+            try {
+                window.vinhloc_cache_modified = false; 
+                
+                // Lấy thêm tiến trình của Nhện
+                const crawledSet = await localforage.getItem('vinhloc_crawled_set') || {};
+                const meta = await localforage.getItem('vinhloc_meta') || {};
+
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'saveGlobalCache',
+                        cacheData: JSON.stringify({ 
+                            folderData: folderDataCache, 
+                            subData: subFolderCache,
+                            spiderMemory: crawledSet, // Bơm trí nhớ nhện vào mây
+                            appMeta: meta             // Bơm luôn ảnh/tên vào mây
+                        })
+                    })
+                });
+                console.log("📡 [Patch 46] Đã phát sóng Não Nhện TOÀN DIỆN lên Drive!");
+            } catch(e) { window.vinhloc_cache_modified = true; }
+        }
+    }, 180000);
+
+    // 2. NÂNG CẤP HÀM NẠP NÃO (Phục hồi trí nhớ)
+    const originalInitDatabaseP46 = window.initDatabase;
+    window.initDatabase = async function() {
+        try {
+            const lastBrainSync = await localforage.getItem('vinhloc_last_brain_sync') || 0;
+            const localFolderCache = await localforage.getItem('vinhloc_folder_cache') || {};
+            const isCacheEmpty = Object.keys(localFolderCache).length <= 1;
+            
+            if (isCacheEmpty || (Date.now() - lastBrainSync > 1800000)) {
+                // Biến toàn cục báo hiệu đang tải não
+                window._isBrainLoading = true; 
+
+                const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'loadGlobalCache' }) }).then(r => r.json());
+
+                if (res && res.success && res.data) {
+                    folderDataCache = { ...folderDataCache, ...(res.data.folderData || {}) };
+                    subFolderCache = { ...subFolderCache, ...(res.data.subData || {}) };
+                    
+                    // Phục hồi trí nhớ nhện và Meta ảnh
+                    if (res.data.spiderMemory) await localforage.setItem('vinhloc_crawled_set', res.data.spiderMemory);
+                    if (res.data.appMeta) {
+                        appMeta = { ...appMeta, ...res.data.appMeta };
+                        await localforage.setItem('vinhloc_meta', appMeta);
+                    }
+
+                    await localforage.setItem('vinhloc_folder_cache', folderDataCache);
+                    await localforage.setItem('vinhloc_subfolder_cache', subFolderCache);
+                    await localforage.setItem('vinhloc_last_brain_sync', Date.now());
+                    
+                    console.log("🕷️ [Patch 46] Đã cấy ghép 100% Não Nhện toàn cầu!");
+                }
+                window._isBrainLoading = false; // Tải xong!
+            }
+        } catch(e) { 
+            window._isBrainLoading = false; 
+            console.error("Lỗi cấy ghép Não Nhện:", e); 
+        }
+
+        // Khởi động UI
+        if (originalInitDatabaseP46) await originalInitDatabaseP46();
+    };
+
+    // 3. SỬA LẠI MÀN HÌNH CHỜ: THỰC SỰ ĐỢI NÃO TẢI XONG
+    if (window.initSpiderLoaderFlow) {
+        window.initSpiderLoaderFlow = function() {
+            const currentEmail = localStorage.getItem("vinhloc_authenticated_email");
+            if (!currentEmail) return;
+
+            let loadedAccounts = JSON.parse(localStorage.getItem("vinhloc_loaded_accounts") || "[]");
+            const isAccountLoaded = loadedAccounts.includes(currentEmail);
+            
+            const loader = document.getElementById("spider-brain-loader");
+            const textEl = document.getElementById("spider-brain-text");
+
+            if (!isAccountLoaded && loader && textEl) {
+                loader.style.display = "flex";
+                loader.classList.remove("fade-out-spider");
+                let percent = 1;
+                
+                const loadingInterval = setInterval(() => {
+                    // Nếu "Não" vẫn đang tải (do initDatabase gọi), thì giữ ở 90% không cho vào
+                    if (window._isBrainLoading && percent >= 90) {
+                        textEl.innerText = `Đang đồng bộ mây ${percent}%...`;
+                        return; // Dừng tăng %
+                    }
+
+                    percent += 2; // Tăng tốc độ hiển thị UI
+                    textEl.innerText = `Đang nạp ${percent}%...`;
+
+                    if (percent >= 100) {
+                        clearInterval(loadingInterval);
+                        loader.classList.add("fade-out-spider");
+                        
+                        loadedAccounts.push(currentEmail);
+                        localStorage.setItem("vinhloc_loaded_accounts", JSON.stringify(loadedAccounts));
+                        localStorage.setItem("vinhloc_device_patched", "true");
+
+                        // Xóa luôn UI loader
+                        setTimeout(() => { loader.style.display = "none"; }, 1000);
+                        
+                        // F5 lại giao diện 1 lần để chắc chắn dữ liệu Não đã ập vào
+                        if (typeof currentDriveItems !== 'undefined') window.renderItems(currentDriveItems);
+                    }
+                }, 200); // Rút ngắn vòng lặp
+            } else {
+                if (loader) loader.style.display = "none";
+                localStorage.setItem("vinhloc_device_patched", "true"); 
+            }
+        };
+    }
+
+}, 32000); // Chạy trễ nhất để đè mọi cấu hình cũ
+// ==============================================================
+// PATCH 44 (BẢN UPDATE SAFE LOGOUT): ĐĂNG XUẤT AN TOÀN - GIỮ NGUYÊN CACHE
+// ==============================================================
+setTimeout(() => {
+    if (window.buildHeaderMenu && !window.buildHeaderMenu.isLogoutHooked) {
+        const originalBuildHeaderMenuForLogout = window.buildHeaderMenu;
+        
+        window.buildHeaderMenu = function() {
+            originalBuildHeaderMenuForLogout();
+            
+            const headerDropdown = document.getElementById('headerDropdown');
+            if (headerDropdown) {
+                const logoutHtml = `
+                    <div class="border-t border-gray-100 my-1"></div>
+                    <div class="px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center cursor-pointer transition" onclick="window.vinhlocForceLogout(event)">
+                        <i class="fa-solid fa-right-from-bracket w-5 text-center mr-2"></i><span>Đăng xuất</span>
+                    </div>
+                `;
+                headerDropdown.insertAdjacentHTML('beforeend', logoutHtml);
+            }
+        };
+        window.buildHeaderMenu.isLogoutHooked = true;
+    }
+
+    // HÀM XỬ LÝ SỰ KIỆN ĐĂNG XUẤT "BẤT TỬ" DỮ LIỆU
+    window.vinhlocForceLogout = function(e) {
+        if (e) e.stopPropagation();
+        
+        const headerDropdown = document.getElementById('headerDropdown');
+        if (headerDropdown) headerDropdown.classList.add('hidden');
+
+        const modalTitle = document.getElementById('modalTitle');
+        const modalDesc = document.getElementById('modalDesc');
+        const modalInput = document.getElementById('modalInput');
+        const confirmBtn = document.getElementById('modalConfirmBtn');
+        const customModal = document.getElementById('customModal');
+
+        if (customModal && modalTitle && modalDesc && confirmBtn) {
+            modalTitle.textContent = 'Xác nhận Đăng xuất';
+            modalDesc.textContent = 'Bạn có chắc chắn muốn quay ra màn hình đăng nhập? (Dữ liệu ngoại tuyến vẫn sẽ được giữ nguyên)';
+            modalDesc.classList.remove('hidden');
+            if (modalInput) modalInput.classList.add('hidden');
+
+            confirmBtn.textContent = 'Đăng xuất';
+            confirmBtn.className = 'px-5 py-2 bg-red-600 text-white font-bold rounded-xl';
+
+            confirmBtn.onclick = () => {
+                if (typeof closeModal === 'function') closeModal();
+                
+                // Chỉ xóa phiên đăng nhập để kích hoạt lại khung Google Sign-In
+                localStorage.removeItem("vinhloc_authenticated_email");
+                
+                // KHÔNG xóa localforage.clear(), KHÔNG xóa loaded_accounts
+                // Ép tải lại trang để hiển thị màn hình khóa Auth Overlay
+                window.location.reload();
+            };
+
+            customModal.classList.remove('hidden');
+            customModal.classList.add('flex');
+        } else {
+            // Fallback phòng trường hợp lỗi DOM
+            if (confirm("Bạn có chắc chắn muốn đăng xuất không?")) {
+                localStorage.removeItem("vinhloc_authenticated_email");
+                window.location.reload();
+            }
+        }
+    };
+    
+    console.log("✅ PATCH 44: Đã cập nhật Đăng xuất an toàn (Không xóa dữ liệu ngầm)!");
+}, 29000);
