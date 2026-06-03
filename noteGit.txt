@@ -7,6 +7,7 @@ git push origin main
 4. Sau đó commit lại
 git add .
 git commit -m "split js from html"
+
 5. Push lên GitHub
 git push origin main
 

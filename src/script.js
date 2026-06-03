@@ -5966,29 +5966,6 @@ setTimeout(() => {
     
     console.log("✅ PATCH 44: Đã gắn Nút Đăng xuất (Custom UI) vào Menu Header!");
 }, 29000);
-// TẢI NGẦM THƯ VIỆN LOGO
-setTimeout(async () => {
-    if (typeof state !== 'undefined' && state.savedWatermarks.length === 0) {
-        try {
-            console.log("🕷️ Nhện đang nạp ngầm Thư viện Logo...");
-            let res = await fetch(SCRIPT_URL, { 
-                method: 'POST', 
-                body: JSON.stringify({ action: 'list', folderId: WM_FOLDER_ID }) 
-            }).then(r => r.json());
-            
-            if (res && res.success) {
-                const files = res.data.filter(i => i.type === 'file'); 
-                state.savedWatermarks = files.map(f => ({ 
-                    id: f.id, 
-                    src: `https://drive.google.com/thumbnail?id=${f.id}&sz=w800` 
-                }));
-                console.log("✅ Đã nạp xong Thư viện Logo ngầm!");
-            }
-        } catch (e) {
-            console.warn("🕷️ Nhện nạp Logo thất bại, sẽ tải khi người dùng bấm nút.");
-        }
-    }
-}, 5000); // Khởi chạy nhẹ nhàng sau 5 giây mở app
 // ==============================================================
 // PATCH BỔ SUNG: ƯU TIÊN TẢI THƯ MỤC VỪA CLICK & NẠP NGẦM LOGO
 // ==============================================================
@@ -6046,3 +6023,130 @@ setTimeout(() => {
     }, 10000);
 
 }, 18000); // Kích hoạt sau khi các hệ thống khác ổn định
+// ==============================================================
+// PATCH 45: CHIA SẺ NHIỀU FILE & TÍCH HỢP FACEBOOK CHO MENU HEADER
+// ==============================================================
+setTimeout(() => {
+    // 1. Tối ưu nút Chia sẻ trên Menu Header để hiển thị linh động số lượng
+    if (window.buildHeaderMenu && !window.buildHeaderMenu.isMultiShareHooked) {
+        const originalBuildHeaderMenuForMulti = window.buildHeaderMenu;
+        
+        window.buildHeaderMenu = function() {
+            originalBuildHeaderMenuForMulti();
+            
+            const headerDropdown = document.getElementById('headerDropdown');
+            if (headerDropdown && folderStack.length > 1) {
+                // Tìm nút chia sẻ đã được tạo từ các Patch trước
+                const buttons = Array.from(headerDropdown.querySelectorAll('div'));
+                let shareBtn = buttons.find(b => b.innerHTML.includes('fa-share-nodes') && (b.getAttribute('onclick') === 'window.shareCurrentFolder(event)' || b.innerHTML.includes('Chia sẻ')));
+                
+                const selectedCount = window.multiSelectState ? window.multiSelectState.selectedIds.size : 0;
+                let btnText = selectedCount > 0 ? `Chia sẻ ${selectedCount} mục chọn` : 'Chia sẻ thư mục';
+
+                if (shareBtn) {
+                    shareBtn.innerHTML = `<span><i class="fas fa-share-nodes mr-2 text-green-500"></i>${btnText}</span>`;
+                }
+            }
+        };
+        window.buildHeaderMenu.isMultiShareHooked = true;
+    }
+
+    // 2. Ghi đè hàm shareCurrentFolder để xử lý đóng gói đa phương tiện
+    window.shareCurrentFolder = async function(e) {
+        if (e) e.stopPropagation();
+        
+        const headerDropdown = document.getElementById('headerDropdown');
+        if (headerDropdown) headerDropdown.classList.add('hidden');
+
+        const selectedCount = window.multiSelectState ? window.multiSelectState.selectedIds.size : 0;
+        const currentFolder = folderStack[folderStack.length - 1];
+
+        // TRƯỜNG HỢP 1: KHÔNG CHỌN GÌ -> CHIA SẺ THƯ MỤC
+        if (selectedCount === 0) {
+            if (currentFolderId && window.shareItem) {
+                window.shareItem(currentFolderId, 'folder', currentFolder.name, e);
+            }
+            return;
+        }
+
+        const selectedIds = Array.from(window.multiSelectState.selectedIds);
+
+        // TRƯỜNG HỢP 2: CHỈ CHỌN 1 FILE -> CHUYỂN CHO HÀM SHARE ĐƠN (PATCH 42)
+        if (selectedCount === 1) {
+            const item = currentDriveItems.find(i => i.id === selectedIds[0]);
+            if (item && window.shareItem) {
+                window.shareItem(item.id, item.type, item.name, e);
+            }
+            return;
+        }
+
+        // TRƯỜNG HỢP 3: CHỌN NHIỀU FILE -> TẠO GÓI ĐA PHƯƠNG TIỆN CHO FACEBOOK
+        const itemsToShare = currentDriveItems.filter(i => selectedIds.includes(i.id) && i.type === 'file');
+        
+        if (itemsToShare.length === 0) {
+             if (window.shareItem) window.shareItem(currentFolderId, 'folder', currentFolder.name, e);
+             return;
+        }
+
+        showToast(`<i class="fas fa-spinner fa-spin mr-2"></i> Đang nạp ${itemsToShare.length} mục để Share...`);
+
+        // Link chung: Là link dẫn thẳng vào thư mục chứa các file này
+        const shareUrl = `${window.location.origin}${window.location.pathname}?shareId=${currentFolder.id}&shareType=folder&shareName=${encodeURIComponent(currentFolder.name)}`;
+        const shareText = `Chia sẻ ${itemsToShare.length} mục từ "${currentFolder.name}":\n${shareUrl}`;
+
+        if (navigator.canShare) {
+            try {
+                // Dùng Promise.all để tải song song siêu tốc, tránh bị Facebook/Trình duyệt chặn do Timeout
+                const fetchBlob = async (item) => {
+                    let driveUrl = item.mimeType.includes('image') 
+                        ? `https://drive.google.com/thumbnail?id=${item.id}&sz=w2000`
+                        : `https://drive.google.com/uc?export=download&id=${item.id}`; // Ưu tiên kéo file gốc nếu là video
+                    
+                    const proxyUrls = [
+                        "https://wsrv.nl/?url=" + encodeURIComponent(driveUrl),
+                        "https://corsproxy.io/?" + encodeURIComponent(driveUrl),
+                        "https://api.allorigins.win/raw?url=" + encodeURIComponent(driveUrl)
+                    ];
+
+                    for (let proxyUrl of proxyUrls) {
+                        try {
+                            const response = await fetch(proxyUrl);
+                            if (response.ok) {
+                                const blob = await response.blob();
+                                return new File([blob], item.name, { type: item.mimeType || blob.type || 'application/octet-stream' });
+                            }
+                        } catch (err) {}
+                    }
+                    return null;
+                };
+
+                const filePromises = itemsToShare.map(item => fetchBlob(item));
+                const fileResults = await Promise.all(filePromises);
+                const fileObjects = fileResults.filter(f => f !== null);
+
+                // Gửi toàn bộ File vật lý (Ảnh/Video) + Link chung sang Bảng share của Hệ điều hành
+                if (fileObjects.length > 0 && navigator.canShare({ files: fileObjects })) {
+                    await navigator.share({ 
+                        files: fileObjects, 
+                        title: `Chia sẻ ${fileObjects.length} mục`, 
+                        text: shareText
+                    });
+                    return; // Giao dịch hoàn tất
+                }
+            } catch (err) {
+                console.warn("Tải gói đa phương tiện thất bại, lùi về chế độ share link thuần", err);
+            }
+        }
+
+        // FALLBACK BẢO MẬT: Nếu điện thoại không hỗ trợ gửi nhiều File cùng lúc, trả về Link Chung
+        if (navigator.share) {
+            try { 
+                await navigator.share({ title: `Chia sẻ ${itemsToShare.length} mục`, text: shareText, url: shareUrl }); 
+            } catch (err) { }
+        } else {
+            navigator.clipboard.writeText(shareText).then(() => showToast(`<i class="fas fa-link mr-2"></i> Đã copy link chung!`));
+        }
+    };
+    
+    console.log("✅ PATCH 45: Đã cập nhật tính năng Chia sẻ nhiều mục & Đăng Facebook Đa phương tiện!");
+}, 29500); // Kích hoạt ở chu kỳ trễ nhất để tích hợp êm ái
