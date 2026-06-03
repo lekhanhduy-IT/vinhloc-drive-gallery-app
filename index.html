@@ -103,7 +103,9 @@
         <button id="btn-open-design" title="Mở trình chỉnh sửa" class="w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition transform hover:scale-105 active:scale-95 hidden overflow-hidden bg-transparent border-none p-0">
             <img src="pendesign.png" class="w-full h-full object-cover" alt="Chỉnh sửa">
         </button>
-
+        <button id="btn-copy-cut" title="Dán/Di chuyển" class="w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition transform hover:scale-105 active:scale-95 hidden overflow-hidden bg-transparent border-none p-0">
+            <img src="coppyandcut.png" class="w-full h-full object-cover" alt="Sao chép/Di chuyển">
+        </button>
         <div id="fabMenu" class="hidden flex-col gap-3 items-end mb-2 transition-all">
             <button onclick="uiPromptFolder()" class="bg-white text-blue-600 p-3 rounded-full shadow-lg flex items-center gap-3 font-semibold active:bg-gray-50 border border-gray-100">
                 
@@ -395,6 +397,25 @@
             <button onclick="document.getElementById('save-options-modal').classList.add('hidden'); document.getElementById('save-options-modal').classList.remove('flex');" class="text-gray-400 font-semibold py-2 transition hover:text-gray-600">
                 Hủy bỏ
             </button>
+        </div>
+    </div>
+    <div id="copyMoveModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-[9999] transition-opacity backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6 flex flex-col gap-5 transform scale-95 transition-transform" id="copyMoveBox">
+            <h3 class="text-xl font-bold text-blue-600">Đích dán</h3>
+            
+            <div class="flex items-center bg-gray-50 rounded-xl border border-gray-300 overflow-hidden pr-2 shadow-inner">
+                <div class="p-3 text-blue-500 shrink-0">
+                    <i class="fas fa-folder-open text-xl"></i>
+                </div>
+                <input type="text" id="destPathInput" readonly class="w-full bg-transparent py-3 outline-none text-sm text-gray-700 font-bold" placeholder="Chưa chọn đích dán">
+                <button id="btnClearDest" class="p-2 text-gray-400 hover:text-red-500 shrink-0 transition"><i class="fas fa-times-circle text-lg"></i></button>
+            </div>
+
+            <div class="flex gap-3 justify-between mt-2">
+                <button id="btnDoCopy" class="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl active:bg-blue-700 transition shadow-md shadow-blue-600/30">Sao chép</button>
+                <button id="btnDoMove" class="flex-1 py-3 bg-orange-500 text-white font-bold rounded-xl active:bg-orange-600 transition shadow-md shadow-orange-500/30">Di chuyển</button>
+                <button id="btnDoDone" class="flex-1 py-3 bg-gray-200 text-gray-700 font-bold rounded-xl active:bg-gray-300 transition">Xong</button>
+            </div>
         </div>
     </div>
 
