@@ -5823,7 +5823,7 @@ setTimeout(() => {
         // NẾU LÀ ẢNH HOẶC VIDEO -> LẤY BLOB TRỰC TIẾP QUA PROXY PHÙ HỢP (CHỐNG ĐƠ RAM)
         if ((isImage || isVideo) && navigator.canShare) {
             const mediaTypeLabel = isImage ? 'ảnh' : 'video';
-            showToast(`<i class="fas fa-spinner fa-spin mr-2"></i> Đang nạp ${mediaTypeLabel} chuẩn để Share...`);
+            showToast(`<i class="fas fa-spinner fa-spin mr-2"></i> Đang nạp ${mediaTypeLabel} chuẩn để đăng Facebook...`);
             
             try {
                 // Xác định URL nguồn tối ưu cho từng loại định dạng
@@ -5847,6 +5847,12 @@ setTimeout(() => {
                     try {
                         const response = await fetch(proxyUrl);
                         if (response.ok) {
+                            // Kiểm tra phòng ngừa: Nếu dính trang chặn virus/dung lượng lớn của Google Drive trả về mã HTML
+                            const contentType = response.headers.get("content-type");
+                            if (contentType && contentType.includes("text/html") && isVideo) {
+                                console.warn("Dính trang xác nhận dung lượng của Drive, chuyển proxy tiếp theo...");
+                                continue;
+                            }
                             blob = await response.blob(); // Đổi trực tiếp luồng nhị phân thành Blob mượt mà
                             break;
                         }
@@ -5856,10 +5862,15 @@ setTimeout(() => {
                 }
 
                 if (blob) {
-                    // Đóng gói chính xác MIME Type gốc của file hoặc cấu hình dự phòng thông minh
-                    const finalMime = currentMimeType || blob.type || (isImage ? 'image/jpeg' : 'video/mp4');
+                    // Cấu hình MIME Type siêu sạch để hệ điều hành nhận diện đúng luồng đa phương tiện
+                    let finalMime = currentMimeType || blob.type;
+                    if (isVideo && (!finalMime || finalMime.includes('octet-stream') || finalMime.includes('html'))) {
+                        finalMime = 'video/mp4';
+                    } else if (isImage && (!finalMime || finalMime.includes('octet-stream'))) {
+                        finalMime = 'image/jpeg';
+                    }
                     
-                    // FIX QUAN TRỌNG 1: Ép đuôi file hệ thống (.mp4 hoặc .jpg) để điện thoại và Facebook nhận dạng đúng trình phát video
+                    // Ép đuôi file vật lý rõ ràng để hệ thống máy nhận dạng
                     let fixedFileName = name;
                     if (isVideo && !/\.(mp4|mov|m4v|3gp|avi)$/i.test(fixedFileName)) {
                         fixedFileName += '.mp4';
@@ -5871,12 +5882,12 @@ setTimeout(() => {
 
                     // Tiến hành chuyển tiếp dữ liệu đa phương tiện vật lý vào khay hệ thống
                     if (navigator.canShare({ files: [fileObj] })) {
-                        // FIX QUAN TRỌNG 2: Xóa bỏ liên kết link app khỏi thuộc tính text khi share file thực tế. 
-                        // Điều này ép ứng dụng Facebook bắt buộc phải mở màn hình "Đăng bài viết Video/Ảnh thiết bị" thay vì cào link.
+                        // TUYỆT CHIÊU FIX LỖI ICON APP: 
+                        // Bỏ hoàn toàn 'title', 'text', 'url'. Chỉ truyền duy nhất mảng [files].
+                        // Điều này ép Share Sheet của điện thoại chuyển sang luồng truyền dữ liệu File Thô (Stream Share),
+                        // buộc Facebook phải mở trình tạo bài viết Video/Ảnh trực tiếp thay vì thu thập link web.
                         await navigator.share({ 
-                            files: [fileObj], 
-                            title: name, 
-                            text: `${name}` // Chỉ gửi tiêu đề thuần làm caption, không đính kèm link chứa chữ http để tránh bị FB nuốt file video
+                            files: [fileObj]
                         });
                         return; // Hoàn tất luồng xử lý cao cấp
                     }
@@ -5888,7 +5899,7 @@ setTimeout(() => {
             }
         }
 
-        // FALLBACK TRUYỀN THỐNG: Trở về Share Link nếu thiết bị cũ không hỗ trợ share file hoặc đối tượng là Folder
+        // FALLBACK TRUYỀN THỐNG: Trở về Share Link nếu thiết bị cũ không hỗ trợ hoặc đối tượng là Folder
         const shareTextFallback = `Mở xem chi tiết "${name}" trong ứng dụng:\n${shareUrl}`;
         if (navigator.share) {
             try { 
