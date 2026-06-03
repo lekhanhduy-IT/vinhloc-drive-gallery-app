@@ -1,3 +1,5 @@
+XÓA PHÂN QUYỀN
+SAO LƯU DI CHUYỂN TẠI CHỔ
 sửa ảnh riêng
 design ảnh trên drive.
 git add .
