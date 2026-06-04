@@ -6438,12 +6438,12 @@ setTimeout(() => {
 
 })();
 // ==============================================================
-// SUPER PATCH 55 (V9): CHỐT HẠ LONG-PRESS MOBILE & FIX Z-INDEX TOAST
+// SUPER PATCH 55 (V10): FIX LỖI NHẤC TAY & FIX Z-INDEX TOAST
 // ==============================================================
 (function() {
     // 1. CHÈN CSS 
-    const style55v9 = document.createElement('style');
-    style55v9.innerHTML = `
+    const style55v10 = document.createElement('style');
+    style55v10.innerHTML = `
         /* Khóa chặn menu ngữ cảnh điện thoại */
         .prevent-mobile-context {
             -webkit-touch-callout: none !important;
@@ -6451,7 +6451,12 @@ setTimeout(() => {
             user-select: none !important;
         }
 
-        /* ÉP BUỘC MỌI THÔNG BÁO TOAST NỔI LÊN TRÊN CÙNG */
+        /* Khóa sự kiện chạm của các ảnh bên trong để tránh trình duyệt hiểu lầm là muốn lưu ảnh */
+        .prevent-mobile-context img {
+            pointer-events: none !important;
+        }
+
+        /* ÉP BUỘC MỌI THÔNG BÁO TOAST NỔI LÊN TRÊN CÙNG (Z-INDEX CAO NHẤT VŨ TRỤ) */
         #toast, .toast, [id*="toast"], #toast-container {
             z-index: 2147483647 !important; 
         }
@@ -6479,20 +6484,20 @@ setTimeout(() => {
         .ghost-paste { opacity: 0.45 !important; filter: grayscale(40%); pointer-events: none !important; animation: upload-ghost55 1.5s infinite; }
         @keyframes upload-ghost55 { 0% { opacity: 0.3; } 50% { opacity: 0.6; } 100% { opacity: 0.3; } }
         
-        /* Popup đích dán - Giảm z-index xuống dưới Toast */
+        /* Popup đích dán - Giảm z-index xuống 99999 để Toast đè lên được */
         #pastePopup {
             position: fixed; top: 85px; right: 10px; width: 350px; max-width: 92vw; max-height: 60vh;
             background: white; border-radius: 16px; box-shadow: 0 12px 50px rgba(0,0,0,0.3); border: 1px solid #e5e7eb;
-            z-index: 2147483640; display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95) translateY(-10px); opacity: 0; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: none;
+            z-index: 99999; display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95) translateY(-10px); opacity: 0; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: none;
         }
         #pastePopup.show { transform: scale(1) translateY(0); opacity: 1; pointer-events: auto; }
         
         .paste-target-btn.active { background-color: #dcfce7 !important; color: #16a34a !important; border-color: #86efac !important; animation: pulse-bullseye55 1.5s infinite; }
         @keyframes pulse-bullseye55 { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); } 70% { box-shadow: 0 0 0 8px rgba(34,197,94,0); } 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); } }
     `;
-    document.head.appendChild(style55v9);
+    document.head.appendChild(style55v10);
 
-    // 2. KHỞI TẠO GIAO DIỆN
+    // 2. KHỞI TẠO GIAO DIỆN NÚT VÀ CẤU TRÚC POPUP
     function initPasteTargetUI() {
         const searchContainer = document.querySelector('.sticky.top-0 > div.relative');
         if (!searchContainer) return;
@@ -6548,7 +6553,7 @@ setTimeout(() => {
     if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', initPasteTargetUI);
     else initPasteTargetUI();
 
-    // 3. ĐIỀU KHIỂN TRẠNG THÁI NÚT
+    // 3. ĐIỀU KHIỂN TRẠNG THÁI NÚT CHỨC NĂNG BÊN NGOÀI
     let lastActiveState = { count: -1, isShow: false };
     window.updatePasteButtonState = function() {
         const btn = document.getElementById('pasteDestBtn');
@@ -6660,7 +6665,6 @@ setTimeout(() => {
         const ids = Array.from(window.multiSelectState?.selectedIds || []);
         
         if (ids.length === 0) {
-            // Toast bây giờ sẽ nổi đè lên trên popup!
             showToast('Bạn chưa chọn thư mục/file nào để ' + (mode === 'copy' ? 'sao chép!' : 'di chuyển!'), true);
             return;
         }
@@ -6730,7 +6734,7 @@ setTimeout(() => {
     };
 
     // 6. GHI ĐÈ HÀM RENDER 
-    if (window.renderItems && !window.renderItems_patched55v9) {
+    if (window.renderItems && !window.renderItems_patched55v10) {
         const originalRenderItems = window.renderItems;
         window.renderItems = function(items, isSearchMode = false) {
             originalRenderItems(items, isSearchMode);
@@ -6745,6 +6749,7 @@ setTimeout(() => {
                 
                 if (isGhost) element.classList.add('ghost-paste');
 
+                // Bơm Animation Xanh Lá + Xanh Dương Lóe Sáng
                 if (isSelected) {
                     element.classList.remove('ring-blue-500', 'bg-blue-50', 'border-blue-200');
                     element.classList.add('selected-green');
@@ -6766,81 +6771,81 @@ setTimeout(() => {
                 if (idMatch) applySelectLogic(row, idMatch[1]);
             });
         };
-        window.renderItems_patched55v9 = true;
+        window.renderItems_patched55v10 = true;
     }
 
-    // 7. CƠ CHẾ LONG-PRESS VẬT LÝ SIÊU CỨNG (BỎ QUA DOUBLE CLICK)
+    // 7. CƠ CHẾ LONG-PRESS CÓ KHÓA CHỐNG "CLICK NHẦM" KHI NHẤC TAY
     function setupItemInteractions(el, id, itemData) {
-        // Tước quyền quản lý click của file gốc để tránh xung đột
         el.removeAttribute('onclick');
         el.classList.add('prevent-mobile-context'); 
-
-        // Khóa hẳn menu chuột phải / ảnh mặc định
+        
+        // Khóa menu chuột phải
         el.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); return false; });
 
         let pressTimer = null;
         let isLongPress = false;
+        let ignoreNextClick = false; // <<< BIẾN CỨU TINH Ở ĐÂY
         let startX = 0, startY = 0;
 
-        // Hành động Toggle Active Xanh Lá
         const handleSelectionToggle = () => {
             if (!window.multiSelectState) window.multiSelectState = { selectedIds: new Set() };
             if (window.multiSelectState.selectedIds.has(id)) {
-                window.multiSelectState.selectedIds.clear(); 
+                window.multiSelectState.selectedIds.clear(); // Hủy toàn bộ mảng nếu click vào item đang active
             } else {
-                window.multiSelectState.selectedIds.add(id);
-                if (navigator.vibrate) navigator.vibrate(50); // Rung báo hiệu đã nhận lệnh nhấn giữ
+                window.multiSelectState.selectedIds.add(id); // Thêm vào mảng xanh lá
+                if (navigator.vibrate) navigator.vibrate(50);
             }
             window.renderItems(currentDriveItems);
             window.updatePasteButtonState();
         };
 
-        // KHI NGÓN TAY CHẠM XUỐNG
         const onTouchStart = (e) => {
             if (e.touches.length > 1 || e.target.closest('.item-action-menu') || e.target.closest('button')) return;
             isLongPress = false;
+            ignoreNextClick = false;
             startX = e.touches[0].clientX;
             startY = e.touches[0].clientY;
 
-            // Đếm 450ms, nếu không bỏ tay ra -> Kích hoạt mảng!
+            // Bắt đầu đếm giờ Long-press
             pressTimer = setTimeout(() => {
                 isLongPress = true;
-                handleSelectionToggle();
-            }, 450); 
+                ignoreNextClick = true; // BẬT CỜ BÁO HIỆU: Đã long press thì CẤM click tự động
+                handleSelectionToggle(); // Gọi hàm tạo Xanh lá
+            }, 400); 
         };
 
-        // KHI NGÓN TAY DI CHUYỂN (Vuốt màn hình)
         const onTouchMove = (e) => {
             if (Math.abs(e.touches[0].clientX - startX) > 10 || Math.abs(e.touches[0].clientY - startY) > 10) {
-                clearTimeout(pressTimer); // Hủy lệnh nhấn giữ vì người dùng đang cuộn
+                clearTimeout(pressTimer);
             }
         };
 
-        // KHI NHẤC NGÓN TAY LÊN
         const onTouchEnd = (e) => {
             clearTimeout(pressTimer);
-            if (isLongPress) {
-                // Nếu đã là nhấn giữ thì chặn luôn click đằng sau nó
-                if (e.cancelable) e.preventDefault(); 
+            // Dù ngăn chặn ở đây, một số trình duyệt vẫn cố tình bắn ra sự kiện click, 
+            // nên ta phải dùng biến cờ 'ignoreNextClick' ở dưới để khóa hẳn.
+            if (isLongPress && e.cancelable) {
+                e.preventDefault(); 
             }
         };
 
-        // KHI CLICK (Dùng chung cho cả Máy tính và nhấp đơn trên điện thoại)
         const onClick = (e) => {
             if (e.target.closest('.item-action-menu') || e.target.closest('button') || e.target.closest('i.fa-play-circle')) return;
             
-            // Nếu đây là cú thả tay của Long-press thì dập tắt nó ngay
-            if (isLongPress) {
-                e.preventDefault(); e.stopPropagation(); return;
+            // NẾU LÀ CÚ CLICK SINH RA DO VỪA NHẤC TAY TỪ LONG-PRESS -> HỦY BỎ NGAY LẬP TỨC
+            if (ignoreNextClick) {
+                ignoreNextClick = false; // Reset lại cờ
+                e.preventDefault(); e.stopPropagation();
+                return; // Trả về luôn, không xử lý gì cả để bảo toàn màu Xanh lá!
             }
             
-            // NẾU ĐÃ CÓ MẢNG -> Nhấp đơn bất kỳ = Thêm/Xóa mảng (Kích hoạt Xanh lá)
+            // Logic click bình thường
             if (window.multiSelectState && window.multiSelectState.selectedIds.size > 0) {
+                // Đang có mảng -> Click đơn cũng là để Chọn mảng
                 e.preventDefault(); e.stopPropagation();
                 handleSelectionToggle();
-            } 
-            // NẾU CHƯA CÓ MẢNG -> Mở Folder / Xem File
-            else {
+            } else {
+                // Chưa có mảng -> Mở File/Folder
                 if (itemData) {
                     if (itemData.type === 'folder') window.loadFolder(itemData.id, itemData.name, true);
                     else {
@@ -6851,7 +6856,7 @@ setTimeout(() => {
             }
         };
 
-        // Gắn sự kiện (Dùng {passive: true} để không làm lag thao tác cuộn trang)
+        // Gắn sự kiện
         el.addEventListener('touchstart', onTouchStart, { passive: true });
         el.addEventListener('touchmove', onTouchMove, { passive: true });
         el.addEventListener('touchend', onTouchEnd, { passive: false });
