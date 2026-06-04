@@ -387,3 +387,20 @@ div.bottom-20.right-6 label {
         object-fit: cover !important;
     }
 }
+/* Chặn tải xuống, kéo thả, và popup lưu ảnh đối với các ảnh giao diện */
+img[src*="loaddata"],
+img[src*="pendesign"],
+img[src*="addfolder"],
+img[src*="vl_foot_sldebar"],
+img[src*="vl_right_header"],
+img[src*="vlimage"] {
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+    user-drag: none;
+    -webkit-touch-callout: none; /* Chặn popup Lưu ảnh khi nhấn giữ trên điện thoại */
+    -webkit-user-select: none;
+    user-select: none;
+    pointer-events: none; /* Vô hiệu hóa tương tác trực tiếp lên ảnh, click sẽ xuyên xuống nút bấm */
+}

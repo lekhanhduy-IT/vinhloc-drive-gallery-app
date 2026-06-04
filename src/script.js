@@ -127,6 +127,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Hàm khởi chạy và kết nối thư viện Google Sign-In định dạng nút bấm mặc định
 // Hàm khởi chạy và kết nối thư viện Google Sign-In định dạng nút bấm mặc định
+// Hàm khởi chạy và kết nối thư viện Google Sign-In
 function initGoogleAuth() {
     if (typeof google === 'undefined') {
         // Nếu thư viện tải chậm do mạng, thử lại sau mỗi 500ms
@@ -137,21 +138,20 @@ function initGoogleAuth() {
     // 1. BẮT BUỘC PHẢI KHỞI TẠO CLIENT ID TRƯỚC
     google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
-        callback: handleCredentialResponse
+        callback: handleCredentialResponse,
+        auto_select: false // Chặn tự động lấy/hiện danh sách email trên máy
     });
 
-    // 2. RENDER NÚT BẤM (Khai báo biến 1 lần duy nhất)
+    // 2. RENDER NÚT BẤM 
     const loginBtnEl = document.getElementById("google-login-btn");
     if (loginBtnEl) {
         google.accounts.id.renderButton(
             loginBtnEl,
             { 
+                type: "icon",       // Chỉ hiển thị cứng icon Google, không có text
                 theme: "outline", 
                 size: "large",  
-                width: "100%", 
-                text: "signin_with", 
-                shape: "pill",
-                locale: "vi" // Ép ngôn ngữ luôn là tiếng Việt
+                shape: "circle"     // Chuyển dáng nút thành hình tròn để bao quanh icon
             }
         );
     }
