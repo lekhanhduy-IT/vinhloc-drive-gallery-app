@@ -383,7 +383,7 @@ div.bottom-20.right-6 label {
     /* Đảm bảo ảnh bìa hoặc ảnh thumbnail phủ kín không gian vuông mà không bị méo */
     #fileList > div img {
         width: 100% !important;
-        height: 120% !important;
+        height: 100% !important;
         object-fit: cover !important;
     }
 }
