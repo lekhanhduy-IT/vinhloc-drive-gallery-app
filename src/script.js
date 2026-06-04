@@ -6438,21 +6438,25 @@ setTimeout(() => {
 
 })();
 // ==============================================================
-// SUPER PATCH 55 (V8.1): ULTIMATE MOBILE DOUBLE-TAP FIX & FLASH UI
+// SUPER PATCH 55 (V9): CHỐT HẠ LONG-PRESS MOBILE & FIX Z-INDEX TOAST
 // ==============================================================
 (function() {
-    // 1. CHÈN CSS
-    const style55v8 = document.createElement('style');
-    style55v8.innerHTML = `
-        .prevent-double-click-select,
-        .prevent-double-click-select * {
-            touch-action: manipulation !important;
-            -webkit-tap-highlight-color: transparent !important;
+    // 1. CHÈN CSS 
+    const style55v9 = document.createElement('style');
+    style55v9.innerHTML = `
+        /* Khóa chặn menu ngữ cảnh điện thoại */
+        .prevent-mobile-context {
             -webkit-touch-callout: none !important;
             -webkit-user-select: none !important;
             user-select: none !important;
         }
 
+        /* ÉP BUỘC MỌI THÔNG BÁO TOAST NỔI LÊN TRÊN CÙNG */
+        #toast, .toast, [id*="toast"], #toast-container {
+            z-index: 2147483647 !important; 
+        }
+
+        /* Hiệu ứng lóe sáng từ Xanh Dương sang Xanh Lá */
         @keyframes flashBlueToGreen {
             0% { border-color: #3b82f6 !important; background-color: rgba(59,130,246,0.3) !important; box-shadow: 0 0 20px rgba(59,130,246,0.8) inset; }
             50% { border-color: #22c55e !important; background-color: rgba(34,197,94,0.3) !important; box-shadow: 0 0 20px rgba(34,197,94,0.8) inset; }
@@ -6465,28 +6469,28 @@ setTimeout(() => {
             100% { border-color: rgba(34,197,94,0.6); } 
         }
 
-        .image-card.selected-green::after { animation: flashBlueToGreen 0.6s ease-out forwards, pulse-border55 1.5s infinite 0.6s; }
-        .subfolder-row.selected-green { animation: flashBlueToGreen 0.6s ease-out forwards, pulse-border55 1.5s infinite 0.6s; }
+        .image-card.selected-green::after { animation: flashBlueToGreen 0.5s ease-out forwards, pulse-border55 1.5s infinite 0.5s; }
+        .subfolder-row.selected-green { animation: flashBlueToGreen 0.5s ease-out forwards, pulse-border55 1.5s infinite 0.5s; }
         .subfolder-row.selected-green h4 { color: #166534 !important; }
-        .file-item-card.selected-green { animation: flashBlueToGreen 0.6s ease-out forwards, pulse-border55 1.5s infinite 0.6s; }
+        .file-item-card.selected-green { animation: flashBlueToGreen 0.5s ease-out forwards, pulse-border55 1.5s infinite 0.5s; }
         .file-item-card.selected-green .drive-img-name { color: #166534 !important; }
         .check-icon-green { background-color: #22c55e !important; color: white !important; }
 
         .ghost-paste { opacity: 0.45 !important; filter: grayscale(40%); pointer-events: none !important; animation: upload-ghost55 1.5s infinite; }
         @keyframes upload-ghost55 { 0% { opacity: 0.3; } 50% { opacity: 0.6; } 100% { opacity: 0.3; } }
         
-        /* FIX: Hạ z-index xuống 99999 để nhường chỗ cho Toast */
+        /* Popup đích dán - Giảm z-index xuống dưới Toast */
         #pastePopup {
             position: fixed; top: 85px; right: 10px; width: 350px; max-width: 92vw; max-height: 60vh;
             background: white; border-radius: 16px; box-shadow: 0 12px 50px rgba(0,0,0,0.3); border: 1px solid #e5e7eb;
-            z-index: 99999; display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95) translateY(-10px); opacity: 0; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: none;
+            z-index: 2147483640; display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95) translateY(-10px); opacity: 0; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: none;
         }
         #pastePopup.show { transform: scale(1) translateY(0); opacity: 1; pointer-events: auto; }
         
         .paste-target-btn.active { background-color: #dcfce7 !important; color: #16a34a !important; border-color: #86efac !important; animation: pulse-bullseye55 1.5s infinite; }
         @keyframes pulse-bullseye55 { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); } 70% { box-shadow: 0 0 0 8px rgba(34,197,94,0); } 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); } }
     `;
-    document.head.appendChild(style55v8);
+    document.head.appendChild(style55v9);
 
     // 2. KHỞI TẠO GIAO DIỆN
     function initPasteTargetUI() {
@@ -6544,20 +6548,24 @@ setTimeout(() => {
     if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', initPasteTargetUI);
     else initPasteTargetUI();
 
-    // 3. ĐIỀU KHIỂN TRẠNG THÁI NÚT CHỨC NĂNG
+    // 3. ĐIỀU KHIỂN TRẠNG THÁI NÚT
+    let lastActiveState = { count: -1, isShow: false };
     window.updatePasteButtonState = function() {
         const btn = document.getElementById('pasteDestBtn');
         if (!btn) return;
         const count = window.multiSelectState?.selectedIds?.size || 0;
         const popup = document.getElementById('pastePopup');
         const isShow = popup ? popup.classList.contains('show') : false;
+        
+        if (lastActiveState.count === count && lastActiveState.isShow === isShow) return;
+        lastActiveState.count = count;
+        lastActiveState.isShow = isShow;
 
         btn.innerHTML = isShow ? '<i class="fas fa-times text-xl"></i>' : '<i class="fas fa-bullseye text-xl"></i>';
         if (count > 0) btn.classList.add('active');
         else btn.classList.remove('active');
     };
-    // FIX LAG: Xóa bỏ setInterval (không cần thiết chạy ngầm quét DOM liên tục). 
-    // Các thao tác click đã tự gọi updatePasteButtonState() ở dưới rồi.
+    setInterval(window.updatePasteButtonState, 250);
 
     // 4. LOGIC HIỂN THỊ POPUP & CHỌN ĐÍCH
     window.miniExplorerHistory = [{ id: ROOT_FOLDER_ID, name: 'Root' }];
@@ -6580,9 +6588,7 @@ setTimeout(() => {
         const btn = document.getElementById('pasteDestBtn');
         if (popup && popup.classList.contains('show')) {
             if (!document.body.contains(e.target)) return;
-            if (!popup.contains(e.target) && btn && !btn.contains(e.target)) {
-                window.togglePastePopup();
-            }
+            if (!popup.contains(e.target) && btn && !btn.contains(e.target)) window.togglePastePopup();
         }
     });
 
@@ -6649,20 +6655,13 @@ setTimeout(() => {
         content.innerHTML = html;
     };
 
-    // 5. XỬ LÝ DÁN MẢNG LÊN GOOGLE DRIVE
+    // 5. XỬ LÝ DÁN MẢNG
     window.executeGhostPaste = async function(targetFldId, mode) {
         const ids = Array.from(window.multiSelectState?.selectedIds || []);
         
-        // FIX: Xử lý Toast nổi lên trên Popup
         if (ids.length === 0) {
+            // Toast bây giờ sẽ nổi đè lên trên popup!
             showToast('Bạn chưa chọn thư mục/file nào để ' + (mode === 'copy' ? 'sao chép!' : 'di chuyển!'), true);
-            
-            // Ép mọi phần tử Toast nhảy z-index lên đỉnh (vượt qua 99999 của popup)
-            setTimeout(() => {
-                document.querySelectorAll('.toast, #toast, [class*="toast"], [id*="toast"]').forEach(t => {
-                    t.style.zIndex = '2147483647';
-                });
-            }, 10);
             return;
         }
         
@@ -6730,8 +6729,8 @@ setTimeout(() => {
         }
     };
 
-    // 6. GHI ĐÈ HÀM RENDER ĐỂ GẮN SỰ KIỆN DOUBLE-CLICK
-    if (window.renderItems && !window.renderItems_patched55v8) {
+    // 6. GHI ĐÈ HÀM RENDER 
+    if (window.renderItems && !window.renderItems_patched55v9) {
         const originalRenderItems = window.renderItems;
         window.renderItems = function(items, isSearchMode = false) {
             originalRenderItems(items, isSearchMode);
@@ -6767,94 +6766,95 @@ setTimeout(() => {
                 if (idMatch) applySelectLogic(row, idMatch[1]);
             });
         };
-        window.renderItems_patched55v8 = true;
+        window.renderItems_patched55v9 = true;
     }
 
-    // 7. NHẤP ĐÚP (DOUBLE TAP) SIÊU NHẠY
+    // 7. CƠ CHẾ LONG-PRESS VẬT LÝ SIÊU CỨNG (BỎ QUA DOUBLE CLICK)
     function setupItemInteractions(el, id, itemData) {
+        // Tước quyền quản lý click của file gốc để tránh xung đột
         el.removeAttribute('onclick');
-        el.classList.add('prevent-double-click-select'); 
+        el.classList.add('prevent-mobile-context'); 
 
-        const clickArea = el.querySelector('.flex-1.cursor-pointer') || el.querySelector('.flex-1.overflow-hidden');
-        if (clickArea) clickArea.removeAttribute('onclick');
-        
-        let clickTimer = null;
-        let lastClickTime = 0;
-        let isScrolling = false;
-        let startX, startY;
-        let isTouchMode = false;
+        // Khóa hẳn menu chuột phải / ảnh mặc định
+        el.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); return false; });
 
+        let pressTimer = null;
+        let isLongPress = false;
+        let startX = 0, startY = 0;
+
+        // Hành động Toggle Active Xanh Lá
         const handleSelectionToggle = () => {
             if (!window.multiSelectState) window.multiSelectState = { selectedIds: new Set() };
             if (window.multiSelectState.selectedIds.has(id)) {
                 window.multiSelectState.selectedIds.clear(); 
             } else {
                 window.multiSelectState.selectedIds.add(id);
-                if(navigator.vibrate) navigator.vibrate(40);
+                if (navigator.vibrate) navigator.vibrate(50); // Rung báo hiệu đã nhận lệnh nhấn giữ
             }
             window.renderItems(currentDriveItems);
             window.updatePasteButtonState();
         };
 
-        const processInteraction = (e) => {
-            if (e.target.closest('.item-action-menu') || e.target.closest('button') || e.target.closest('i.fa-play-circle')) return;
-            
-            const currentTime = new Date().getTime();
-            const timeSinceLastClick = currentTime - lastClickTime;
+        // KHI NGÓN TAY CHẠM XUỐNG
+        const onTouchStart = (e) => {
+            if (e.touches.length > 1 || e.target.closest('.item-action-menu') || e.target.closest('button')) return;
+            isLongPress = false;
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
 
-            if (window.multiSelectState && window.multiSelectState.selectedIds.size > 0) {
+            // Đếm 450ms, nếu không bỏ tay ra -> Kích hoạt mảng!
+            pressTimer = setTimeout(() => {
+                isLongPress = true;
                 handleSelectionToggle();
-                lastClickTime = 0;
-                return;
-            }
+            }, 450); 
+        };
 
-            if (timeSinceLastClick > 0 && timeSinceLastClick < 400) {
-                clearTimeout(clickTimer);
-                lastClickTime = 0;
-                handleSelectionToggle(); 
-            } else {
-                lastClickTime = currentTime;
-                clickTimer = setTimeout(() => {
-                    if (itemData) {
-                        if (itemData.type === 'folder') window.loadFolder(itemData.id, itemData.name, true);
-                        else {
-                            let fullUrl = itemData.tempUrl || `https://drive.google.com/thumbnail?id=${itemData.id}&sz=w2000`;
-                            window.openMedia(itemData.id, itemData.mimeType, itemData.name, fullUrl);
-                        }
-                    }
-                    lastClickTime = 0;
-                }, 400); 
+        // KHI NGÓN TAY DI CHUYỂN (Vuốt màn hình)
+        const onTouchMove = (e) => {
+            if (Math.abs(e.touches[0].clientX - startX) > 10 || Math.abs(e.touches[0].clientY - startY) > 10) {
+                clearTimeout(pressTimer); // Hủy lệnh nhấn giữ vì người dùng đang cuộn
             }
         };
 
-        el.addEventListener('touchstart', (e) => {
-            if (e.touches.length > 1) return;
-            isTouchMode = true;
-            isScrolling = false;
-            startX = e.touches[0].clientX;
-            startY = e.touches[0].clientY;
-        }, { passive: true });
-
-        el.addEventListener('touchmove', (e) => {
-            if (!isTouchMode) return;
-            if (Math.abs(e.touches[0].clientX - startX) > 10 || Math.abs(e.touches[0].clientY - startY) > 10) {
-                isScrolling = true;
+        // KHI NHẤC NGÓN TAY LÊN
+        const onTouchEnd = (e) => {
+            clearTimeout(pressTimer);
+            if (isLongPress) {
+                // Nếu đã là nhấn giữ thì chặn luôn click đằng sau nó
+                if (e.cancelable) e.preventDefault(); 
             }
-        }, { passive: true });
+        };
 
-        el.addEventListener('touchend', (e) => {
-            if (!isTouchMode || isScrolling) return; 
-            if (e.cancelable) e.preventDefault(); 
-            processInteraction(e);
-        }, { passive: false });
-
-        el.addEventListener('click', (e) => {
-            if (isTouchMode) {
-                setTimeout(() => isTouchMode = false, 300);
-                return;
+        // KHI CLICK (Dùng chung cho cả Máy tính và nhấp đơn trên điện thoại)
+        const onClick = (e) => {
+            if (e.target.closest('.item-action-menu') || e.target.closest('button') || e.target.closest('i.fa-play-circle')) return;
+            
+            // Nếu đây là cú thả tay của Long-press thì dập tắt nó ngay
+            if (isLongPress) {
+                e.preventDefault(); e.stopPropagation(); return;
             }
-            e.preventDefault();
-            processInteraction(e);
-        });
+            
+            // NẾU ĐÃ CÓ MẢNG -> Nhấp đơn bất kỳ = Thêm/Xóa mảng (Kích hoạt Xanh lá)
+            if (window.multiSelectState && window.multiSelectState.selectedIds.size > 0) {
+                e.preventDefault(); e.stopPropagation();
+                handleSelectionToggle();
+            } 
+            // NẾU CHƯA CÓ MẢNG -> Mở Folder / Xem File
+            else {
+                if (itemData) {
+                    if (itemData.type === 'folder') window.loadFolder(itemData.id, itemData.name, true);
+                    else {
+                        let fullUrl = itemData.tempUrl || `https://drive.google.com/thumbnail?id=${itemData.id}&sz=w2000`;
+                        window.openMedia(itemData.id, itemData.mimeType, itemData.name, fullUrl);
+                    }
+                }
+            }
+        };
+
+        // Gắn sự kiện (Dùng {passive: true} để không làm lag thao tác cuộn trang)
+        el.addEventListener('touchstart', onTouchStart, { passive: true });
+        el.addEventListener('touchmove', onTouchMove, { passive: true });
+        el.addEventListener('touchend', onTouchEnd, { passive: false });
+        el.addEventListener('click', onClick);
     }
 })();
