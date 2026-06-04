@@ -6528,7 +6528,7 @@ setTimeout(() => {
     document.head.appendChild(style55v10);
 
     // 2. KHỞI TẠO GIAO DIỆN NÚT VÀ CẤU TRÚC POPUP
-    function initPasteTargetUI() {
+   async function initPasteTargetUI() {
         const searchContainer = document.querySelector('.sticky.top-0 > div.relative');
         if (!searchContainer) return;
         const parent = searchContainer.parentElement;
