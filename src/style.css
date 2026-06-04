@@ -361,29 +361,52 @@ div.bottom-20.right-6 label {
 
 }
 /* =========================================================
-   TÙY CHỈNH LƯỚI HIỂN THỊ FILE CHO DESKTOP (6 CỘT, Ô VUÔNG)
+   TÙY CHỈNH LƯỚI HIỂN THỊ FILE CHO DESKTOP (6 CỘT, Ô VUÔNG) - FIX KHOẢNG TRỐNG
    ========================================================= */
 @media (min-width: 1024px) {
-    /* Ép lưới hiển thị thành 6 cột đều nhau, ghi đè class của Tailwind */
+    /* Ép lưới hiển thị thành 6 cột */
     #fileList {
         grid-template-columns: repeat(6, 1fr) !important;
+        gap: 12px !important; /* Căn chỉnh lại khoảng cách giữa các ô cho đẹp */
     }
 
-    /* Ép các thẻ chứa item bên trong lưới thành hình vuông (tỷ lệ 1:1) */
+    /* Thẻ bọc ngoài cùng: Ép hình vuông và dùng flex cột */
     #fileList > div {
         aspect-ratio: 1 / 1 !important;
-        height: auto !important; /* Hủy chiều cao cố định nếu có trong JS */
+        height: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
         overflow: hidden !important;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
+        padding: 0 !important; /* Xóa khoảng trắng thừa xung quanh nếu có */
     }
 
-    /* Đảm bảo ảnh bìa hoặc ảnh thumbnail phủ kín không gian vuông mà không bị méo */
+    /* Bắt ép ảnh nở to ra chiếm toàn bộ không gian phía trên */
+    #fileList > div img.base-img,
     #fileList > div img {
+        flex-grow: 1 !important;
         width: 100% !important;
-        height: 100% !important;
+        height: 0 !important; /* Trick để flex-grow tự động lấp đầy phần diện tích còn lại */
+        min-height: 0 !important;
         object-fit: cover !important;
+        border-radius: 0 !important; /* Bỏ bo góc dưới để khớp với ô vuông */
+    }
+
+    /* Thu hẹp tối đa khoảng trống của phần tên file ở dưới */
+    #fileList > div > div:last-child {
+        flex-grow: 0 !important;
+        flex-shrink: 0 !important;
+        height: auto !important;
+        min-height: 35px !important; /* Độ cao vừa đủ cho text */
+        padding: 6px 8px !important; /* Giảm padding để thu hẹp khoảng trắng */
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: white !important; /* Đảm bảo tên file có nền rõ ràng */
+    }
+    
+    /* Căn giữa text và chống tràn */
+    #fileList > div > div:last-child > span {
+        text-align: center !important;
+        width: 100% !important;
     }
 }
