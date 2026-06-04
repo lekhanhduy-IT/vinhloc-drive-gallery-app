@@ -6895,12 +6895,12 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 // ==============================================================
-// LÕI HỦY DIỆT 49 (V2): XÓA CUỐN CHIẾU & HIỂN THỊ VÒNG XOAY LOADER
+// LÕI HỦY DIỆT 49 (V3): XÓA TUẦN TỰ LẦN LƯỢT + VÒNG XOAY ĐỎ
 // ==============================================================
 setTimeout(() => {
-    console.log("⚡ Kích hoạt Lõi Hủy Diệt 49 (V2) - Hiển thị trạng thái xóa cuốn chiếu!");
+    console.log("⚡ Kích hoạt Lõi Hủy Diệt 49 (V3) - Xóa hiển thị mượt mà từng file!");
 
-    // 1. CHẶN ĐỨNG BỘ ĐẾM NGAY KHI CÓ Ý ĐỊNH RỜI THƯ MỤC
+    // 1. CHẶN BỘ ĐẾM KHI RỜI THƯ MỤC
     const oldLoadFolder = window.loadFolder;
     window.loadFolder = function(folderId, folderName, isNewNavigation, isPopState) {
         if (window.currentFolderId !== folderId && window.multiSelectState) {
@@ -6911,7 +6911,7 @@ setTimeout(() => {
         return oldLoadFolder.apply(this, arguments);
     };
 
-    // 2. KHÓA CHẶT RENDER: CHỈ ĐẾM CÁC FILE ĐANG HIỂN THỊ TRÊN MÀN HÌNH
+    // 2. KHÓA RENDER: CHỈ ĐẾM ITEM CÓ MẶT
     const oldRenderItems = window.renderItems;
     window.renderItems = function(items, isSearchMode = false) {
         if (window.multiSelectState && window.multiSelectState.selectedIds && items) {
@@ -6921,26 +6921,25 @@ setTimeout(() => {
             }
         }
         let result = oldRenderItems.apply(this, arguments);
-        
         if (typeof window.buildHeaderMenu === 'function') window.buildHeaderMenu();
         return result;
     };
 
-    // 3. CHIÊU CUỐI: XÓA CUỐN CHIẾU, CÁI NÀO XÓA XONG THÌ BAY MÀU CÁI ĐÓ
+    // 3. CHIÊU CUỐI: XÓA CUỐN CHIẾU TUẦN TỰ (TỪNG CÁI MỘT)
     window.deleteSelectedItems = async function() {
         if (!window.multiSelectState || window.multiSelectState.selectedIds.size === 0) {
             return typeof showToast === 'function' ? showToast("Vui lòng chọn mục cần xóa!", true) : alert("Chưa chọn mục!");
         }
 
+        const customModal = document.getElementById('customModal');
         const modalTitle = document.getElementById('modalTitle');
         const modalDesc = document.getElementById('modalDesc');
-        const customModal = document.getElementById('customModal');
         const btn = document.getElementById('modalConfirmBtn');
 
         if (!customModal || !btn) return;
 
         modalTitle.textContent = 'Đang xóa...';
-        modalDesc.textContent = `Xác nhận xóa ${window.multiSelectState.selectedIds.size} mục? Quá trình này sẽ diễn ra từng bước một.`;
+        modalDesc.textContent = `Hệ thống sẽ tiến hành xóa lần lượt ${window.multiSelectState.selectedIds.size} mục đã chọn.`;
         modalDesc.classList.remove('hidden');
 
         btn.textContent = 'Xóa tất cả';
@@ -6952,40 +6951,47 @@ setTimeout(() => {
             let idsToDelete = Array.from(window.multiSelectState.selectedIds);
             let allItems = [...(typeof currentDriveItems !== 'undefined' ? currentDriveItems : []), ...Object.values(typeof subFolderCache !== 'undefined' ? subFolderCache : {}).flat()];
 
-            // A. PHỦ LỚP MỜ VÀ VÒNG XOAY LOADER LÊN CÁC ITEM ĐANG BỊ XÓA
+            // A. PHỦ LỚP MỜ VÀ VÒNG XOAY LOADER ĐỎ LÊN TẤT CẢ CÁC ITEM
             idsToDelete.forEach(id => {
-                // Tìm DOM element của mục đang chọn (Tùy thuộc cấu trúc HTML, thường là thẻ div có id hoặc data-id)
-                let itemEl = document.getElementById(id) || document.querySelector(`[data-id="${id}"]`) || document.getElementById(`item-${id}`);
+                // Định vị chính xác thẻ bằng class chứa tên file, sau đó leo ngược lên thẻ cha
+                let nameEl = document.querySelector(`.item-name-${id}`);
+                let itemEl = nameEl ? (nameEl.closest('.rounded-2xl') || nameEl.closest('.subfolder-row') || nameEl.closest('.mega-row')) : null;
+                
                 if (itemEl) {
                     itemEl.style.position = 'relative';
                     itemEl.style.pointerEvents = 'none'; // Khóa không cho bấm vào nữa
                     
-                    // Tạo lớp phủ xám + vòng xoay loader
                     let overlay = document.createElement('div');
                     overlay.id = `del-overlay-${id}`;
-                    overlay.className = 'absolute inset-0 flex items-center justify-center bg-white/70 z-50 rounded-lg transition-opacity duration-300';
-                    overlay.innerHTML = `<div class="loader"></div>`; 
+                    
+                    // Render vòng xoay màu đỏ quay tít (css inline thủ công để không bị ghi đè)
+                    if (itemEl.classList.contains('subfolder-row') || itemEl.classList.contains('mega-row')) {
+                        overlay.className = 'absolute inset-0 flex items-center justify-end pr-5 bg-white/70 z-50 transition-opacity duration-300 rounded-lg backdrop-blur-[1px]';
+                        overlay.innerHTML = `<div style="border: 2px solid #fecaca; border-top: 2px solid #ef4444; border-radius: 50%; width: 18px; height: 18px; animation: spin 1s linear infinite;" class="mr-2"></div><span class="text-xs font-bold text-red-600">Đang xóa...</span>`;
+                    } else {
+                        overlay.className = 'absolute inset-0 flex flex-col items-center justify-center bg-white/80 z-50 rounded-2xl transition-opacity duration-300 backdrop-blur-[2px]';
+                        overlay.innerHTML = `<div style="border: 3px solid #fecaca; border-top: 3px solid #ef4444; border-radius: 50%; width: 26px; height: 26px; animation: spin 1s linear infinite;" class="mb-2"></div><span class="text-xs font-bold text-red-600">Đang xóa...</span>`; 
+                    }
                     
                     itemEl.appendChild(overlay);
                 }
             });
 
-            // B. GỬI LỆNH XÓA TỪNG FILE ĐỘC LẬP
-            let deletePromises = idsToDelete.map(async (id) => {
+            // B. GỬI LỆNH XÓA TUẦN TỰ (ĐỢI CÁI NÀY XONG MỚI ĐẾN CÁI KIA)
+            for (let id of idsToDelete) {
                 let itemType = 'file'; 
                 let foundItem = allItems.find(i => i.id === id);
-                
                 if (foundItem && foundItem.type) itemType = foundItem.type;
                 else if (typeof appMeta !== 'undefined' && appMeta[id]) itemType = 'folder'; 
 
                 try {
-                    // Gửi API lên Drive
+                    // Chờ Drive xóa xong
                     await fetch(SCRIPT_URL, {
                         method: 'POST',
                         body: JSON.stringify({ action: 'delete', id: id, type: itemType })
                     });
 
-                    // XÓA THÀNH CÔNG TRÊN DRIVE -> RÚT ITEM KHỎI MẢNG DỮ LIỆU
+                    // Drive báo OK -> Cập nhật RAM
                     if (typeof currentDriveItems !== 'undefined') {
                         currentDriveItems = currentDriveItems.filter(i => i.id !== id);
                         if (typeof folderDataCache !== 'undefined' && folderDataCache[currentFolderId]) {
@@ -6993,50 +6999,49 @@ setTimeout(() => {
                         }
                     }
 
-                    // HIỆU ỨNG: CHO DOM ELEMENT BAY MÀU NGAY TỨC KHẮC
-                    let itemEl = document.getElementById(id) || document.querySelector(`[data-id="${id}"]`) || document.getElementById(`item-${id}`);
+                    // TÌM LẠI DOM ELEMENT ĐỂ CHO NÓ BAY MÀU (THU NHỎ -> BIẾN MẤT)
+                    let nameEl = document.querySelector(`.item-name-${id}`);
+                    let itemEl = nameEl ? (nameEl.closest('.rounded-2xl') || nameEl.closest('.subfolder-row') || nameEl.closest('.mega-row')) : null;
                     if (itemEl) {
                         itemEl.style.transition = 'all 0.3s ease';
                         itemEl.style.transform = 'scale(0.8)';
                         itemEl.style.opacity = '0';
-                        setTimeout(() => itemEl.remove(), 300); // Đợi hiệu ứng kết thúc rồi gỡ thẻ HTML
+                        setTimeout(() => itemEl.remove(), 300); // Gỡ khỏi giao diện
                     }
                     
-                    // Tự động trừ dần số lượng trên Menu Header
+                    // Giảm số lượng trên bộ đếm ngay lập tức
                     window.multiSelectState.selectedIds.delete(id);
                     if (typeof window.buildHeaderMenu === 'function') window.buildHeaderMenu();
-                    
                     if (window.purgeDeletedItem) window.purgeDeletedItem(id);
 
                 } catch (e) {
                     console.log(`Lỗi khi xóa ${id}:`, e);
-                    // Nếu lỗi (rớt mạng), gỡ vòng xoay để người dùng thử lại
+                    // Lỗi rớt mạng thì gỡ vòng xoay để thử lại
                     let overlay = document.getElementById(`del-overlay-${id}`);
                     if (overlay) overlay.remove();
-                    let itemEl = document.getElementById(id) || document.querySelector(`[data-id="${id}"]`) || document.getElementById(`item-${id}`);
+                    let nameEl = document.querySelector(`.item-name-${id}`);
+                    let itemEl = nameEl ? (nameEl.closest('.rounded-2xl') || nameEl.closest('.subfolder-row') || nameEl.closest('.mega-row')) : null;
                     if (itemEl) itemEl.style.pointerEvents = 'auto'; 
                 }
-            });
+            }
 
-            // C. KHI TẤT CẢ CÁC TIẾN TRÌNH XÓA HOÀN TẤT
-            await Promise.allSettled(deletePromises);
-            
-            // Xóa sạch bộ đếm và giấu Menu Header
+            // C. SAU KHI XÓA XONG HẾT LƯỢT
             window.multiSelectState.selectedIds.clear();
             let hd = document.getElementById('headerDropdown');
             if (hd) hd.classList.add('hidden');
 
-            // Gọi đồng bộ (Bây giờ masterSync mới chạy, đảm bảo Drive đã sạch sẽ, không còn zombie)
+            // Ép khung lưới căn chỉnh lại chỗ trống cho đều đẹp
+            if (typeof window.renderItems === 'function') window.renderItems(currentDriveItems); 
             if (typeof masterSync === 'function') masterSync();
             
-            if (typeof showToast === 'function') showToast(`<i class="fas fa-check mr-2"></i> Hoàn tất xóa dữ liệu!`);
+            if (typeof showToast === 'function') showToast(`<i class="fas fa-check mr-2"></i> Đã xóa lần lượt thành công!`);
         };
 
         customModal.classList.remove('hidden');
         customModal.classList.add('flex');
     };
 
-    // Khóa vật lý hàm, ngăn chặn ghi đè
+    // Khóa vật lý, bất khả xâm phạm
     Object.defineProperty(window, 'deleteSelectedItems', { writable: false, configurable: false });
 
 }, 35000);
