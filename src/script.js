@@ -5188,7 +5188,7 @@ setTimeout(() => {
     // ---------------------------------------------------------
     // 2. FIX THỨ TỰ SẮP XẾP KHI TẠO THƯ MỤC MỚI (CHỐNG LỖI NHÂN BẢN)
     // ---------------------------------------------------------
-    window.uiPromptFolder = function (targetParentId = null, e = null) {
+    window.uiPromptFolder = async function (targetParentId = null, e = null) {
         if (e) { e.stopPropagation(); document.querySelectorAll('.item-action-menu').forEach(menu => menu.classList.add('hidden')); }
         if (typeof closeFab === 'function') closeFab();
 
