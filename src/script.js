@@ -6438,67 +6438,57 @@ setTimeout(() => {
 
 })();
 // ==============================================================
-// SUPER PATCH 55 (V7): DOUBLE CLICK SELECT & FLASH ANIMATION & UI
+// SUPER PATCH 55 (V8.1): ULTIMATE MOBILE DOUBLE-TAP FIX & FLASH UI
 // ==============================================================
 (function() {
-    // 1. CHÈN CSS (HIỆU ỨNG LÓE SÁNG XANH DƯƠNG -> XANH LÁ)
-    const style55v7 = document.createElement('style');
-    style55v7.innerHTML = `
-        /* Khóa text selection để khi click đúp không bị bôi đen văn bản/hình ảnh */
-        .prevent-double-click-select {
+    // 1. CHÈN CSS
+    const style55v8 = document.createElement('style');
+    style55v8.innerHTML = `
+        .prevent-double-click-select,
+        .prevent-double-click-select * {
+            touch-action: manipulation !important;
+            -webkit-tap-highlight-color: transparent !important;
             -webkit-touch-callout: none !important;
             -webkit-user-select: none !important;
             user-select: none !important;
         }
 
-        /* Hiệu ứng lóe sáng từ Xanh Dương sang Xanh Lá */
         @keyframes flashBlueToGreen {
             0% { border-color: #3b82f6 !important; background-color: rgba(59,130,246,0.3) !important; box-shadow: 0 0 20px rgba(59,130,246,0.8) inset; }
             50% { border-color: #22c55e !important; background-color: rgba(34,197,94,0.3) !important; box-shadow: 0 0 20px rgba(34,197,94,0.8) inset; }
             100% { border-color: #22c55e !important; background-color: rgba(34,197,94,0.15) !important; box-shadow: 0 0 15px rgba(34,197,94,0.6) inset; }
         }
 
-        /* Vòng lặp nhịp đập Xanh lá duy trì sau khi lóe sáng */
         @keyframes pulse-border55 { 
             0% { border-color: rgba(34,197,94,0.6); } 
             50% { border-color: rgba(34,197,94,1); } 
             100% { border-color: rgba(34,197,94,0.6); } 
         }
 
-        /* Áp dụng chuỗi Animation cho các item được chọn */
-        .image-card.selected-green::after { 
-            animation: flashBlueToGreen 0.6s ease-out forwards, pulse-border55 1.5s infinite 0.6s; 
-        }
-        .subfolder-row.selected-green { 
-            animation: flashBlueToGreen 0.6s ease-out forwards, pulse-border55 1.5s infinite 0.6s;
-        }
+        .image-card.selected-green::after { animation: flashBlueToGreen 0.6s ease-out forwards, pulse-border55 1.5s infinite 0.6s; }
+        .subfolder-row.selected-green { animation: flashBlueToGreen 0.6s ease-out forwards, pulse-border55 1.5s infinite 0.6s; }
         .subfolder-row.selected-green h4 { color: #166534 !important; }
-        
-        .file-item-card.selected-green { 
-            animation: flashBlueToGreen 0.6s ease-out forwards, pulse-border55 1.5s infinite 0.6s;
-        }
+        .file-item-card.selected-green { animation: flashBlueToGreen 0.6s ease-out forwards, pulse-border55 1.5s infinite 0.6s; }
         .file-item-card.selected-green .drive-img-name { color: #166534 !important; }
         .check-icon-green { background-color: #22c55e !important; color: white !important; }
 
-        /* Hiệu ứng Ghost */
         .ghost-paste { opacity: 0.45 !important; filter: grayscale(40%); pointer-events: none !important; animation: upload-ghost55 1.5s infinite; }
         @keyframes upload-ghost55 { 0% { opacity: 0.3; } 50% { opacity: 0.6; } 100% { opacity: 0.3; } }
         
-        /* Popup đích dán */
+        /* FIX: Hạ z-index xuống 99999 để nhường chỗ cho Toast */
         #pastePopup {
             position: fixed; top: 85px; right: 10px; width: 350px; max-width: 92vw; max-height: 60vh;
             background: white; border-radius: 16px; box-shadow: 0 12px 50px rgba(0,0,0,0.3); border: 1px solid #e5e7eb;
-            z-index: 2147483647; display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95) translateY(-10px); opacity: 0; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: none;
+            z-index: 99999; display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95) translateY(-10px); opacity: 0; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: none;
         }
         #pastePopup.show { transform: scale(1) translateY(0); opacity: 1; pointer-events: auto; }
         
-        /* Nút Tấm Bia Xanh Lá */
         .paste-target-btn.active { background-color: #dcfce7 !important; color: #16a34a !important; border-color: #86efac !important; animation: pulse-bullseye55 1.5s infinite; }
         @keyframes pulse-bullseye55 { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); } 70% { box-shadow: 0 0 0 8px rgba(34,197,94,0); } 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); } }
     `;
-    document.head.appendChild(style55v7);
+    document.head.appendChild(style55v8);
 
-    // 2. KHỞI TẠO GIAO DIỆN (CĂN CHỈNH NÚT X VÀ THANH URL NGANG NHAU)
+    // 2. KHỞI TẠO GIAO DIỆN
     function initPasteTargetUI() {
         const searchContainer = document.querySelector('.sticky.top-0 > div.relative');
         if (!searchContainer) return;
@@ -6551,48 +6541,31 @@ setTimeout(() => {
         }
     }
 
-    if (document.readyState === 'loading') {
-        window.addEventListener('DOMContentLoaded', initPasteTargetUI);
-    } else {
-        initPasteTargetUI();
-    }
+    if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', initPasteTargetUI);
+    else initPasteTargetUI();
 
-    // 3. ĐIỀU KHIỂN TRẠNG THÁI NÚT CHỨC NĂNG BÊN NGOÀI
-    let lastActiveState = { count: -1, isShow: false };
+    // 3. ĐIỀU KHIỂN TRẠNG THÁI NÚT CHỨC NĂNG
     window.updatePasteButtonState = function() {
         const btn = document.getElementById('pasteDestBtn');
         if (!btn) return;
-        
         const count = window.multiSelectState?.selectedIds?.size || 0;
         const popup = document.getElementById('pastePopup');
         const isShow = popup ? popup.classList.contains('show') : false;
-        
-        if (lastActiveState.count === count && lastActiveState.isShow === isShow) return;
-        lastActiveState.count = count;
-        lastActiveState.isShow = isShow;
 
-        if (isShow) {
-            btn.innerHTML = '<i class="fas fa-times text-xl"></i>';
-        } else {
-            btn.innerHTML = '<i class="fas fa-bullseye text-xl"></i>';
-        }
-
-        if (count > 0) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
+        btn.innerHTML = isShow ? '<i class="fas fa-times text-xl"></i>' : '<i class="fas fa-bullseye text-xl"></i>';
+        if (count > 0) btn.classList.add('active');
+        else btn.classList.remove('active');
     };
-    setInterval(window.updatePasteButtonState, 250);
+    // FIX LAG: Xóa bỏ setInterval (không cần thiết chạy ngầm quét DOM liên tục). 
+    // Các thao tác click đã tự gọi updatePasteButtonState() ở dưới rồi.
 
-    // 4. LOGIC HIỂN THỊ POPUP
+    // 4. LOGIC HIỂN THỊ POPUP & CHỌN ĐÍCH
     window.miniExplorerHistory = [{ id: ROOT_FOLDER_ID, name: 'Root' }];
     window.currentMiniFolderId = ROOT_FOLDER_ID;
 
     window.togglePastePopup = function() {
         const popup = document.getElementById('pastePopup');
         if (!popup) return;
-        
         if (popup.classList.contains('show')) {
             popup.classList.remove('show');
         } else {
@@ -6638,10 +6611,8 @@ setTimeout(() => {
         if (!items) {
             try {
                 const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'list', folderId: folderId }) }).then(r => r.json());
-                if (res && res.success) {
-                    items = res.data;
-                    folderDataCache[folderId] = items;
-                } else items = [];
+                if (res && res.success) { items = res.data; folderDataCache[folderId] = items; } 
+                else items = [];
             } catch (e) { items = []; }
         }
 
@@ -6678,12 +6649,20 @@ setTimeout(() => {
         content.innerHTML = html;
     };
 
-    // 5. XỬ LÝ DÁN MẢNG
+    // 5. XỬ LÝ DÁN MẢNG LÊN GOOGLE DRIVE
     window.executeGhostPaste = async function(targetFldId, mode) {
         const ids = Array.from(window.multiSelectState?.selectedIds || []);
         
+        // FIX: Xử lý Toast nổi lên trên Popup
         if (ids.length === 0) {
             showToast('Bạn chưa chọn thư mục/file nào để ' + (mode === 'copy' ? 'sao chép!' : 'di chuyển!'), true);
+            
+            // Ép mọi phần tử Toast nhảy z-index lên đỉnh (vượt qua 99999 của popup)
+            setTimeout(() => {
+                document.querySelectorAll('.toast, #toast, [class*="toast"], [id*="toast"]').forEach(t => {
+                    t.style.zIndex = '2147483647';
+                });
+            }, 10);
             return;
         }
         
@@ -6704,23 +6683,14 @@ setTimeout(() => {
         showToast(`<i class="fas fa-spinner fa-spin mr-1.5"></i> Đang chuẩn bị xử lý dán mảng...`);
 
         let ghosts = itemsToProcess.map(it => ({
-            ...it,
-            id: 'ghost_' + Date.now() + '_' + it.id,
-            name: (mode === 'copy' ? 'Bản sao của ' : '') + it.name,
-            isGhostPaste: true,
-            isPending: true     
+            ...it, id: 'ghost_' + Date.now() + '_' + it.id, name: (mode === 'copy' ? 'Bản sao của ' : '') + it.name, isGhostPaste: true, isPending: true     
         }));
 
         if (!folderDataCache[targetFldId]) folderDataCache[targetFldId] = [];
         folderDataCache[targetFldId] = [...ghosts, ...folderDataCache[targetFldId]];
 
-        if (mode === 'move') {
-            currentDriveItems.forEach(i => { if (ids.includes(i.id)) i.isGhostPaste = true; });
-        }
-
-        if (currentFolderId === targetFldId) {
-            currentDriveItems = folderDataCache[targetFldId];
-        }
+        if (mode === 'move') currentDriveItems.forEach(i => { if (ids.includes(i.id)) i.isGhostPaste = true; });
+        if (currentFolderId === targetFldId) currentDriveItems = folderDataCache[targetFldId];
         
         window.multiSelectState.selectedIds.clear();
         window.renderItems(currentDriveItems);
@@ -6738,22 +6708,17 @@ setTimeout(() => {
 
             if (res && res.success) {
                 showToast(`<i class="fas fa-check-circle text-green-500 mr-1.5"></i> Xử lý ${mode === 'copy' ? 'sao chép' : 'di chuyển'} hoàn tất!`);
-                
                 let newTargetRes = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'list', folderId: targetFldId }) }).then(r => r.json());
                 if (newTargetRes && newTargetRes.success) {
                     folderDataCache[targetFldId] = newTargetRes.data;
-                    if (currentFolderId === targetFldId) {
-                        currentDriveItems = folderDataCache[targetFldId];
-                        window.renderItems(currentDriveItems);
-                    }
+                    if (currentFolderId === targetFldId) { currentDriveItems = folderDataCache[targetFldId]; window.renderItems(currentDriveItems); }
                 }
-                
                 if (mode === 'move' && currentFolderId !== targetFldId) {
                     currentDriveItems = currentDriveItems.filter(i => !ids.includes(i.id));
                     folderDataCache[currentFolderId] = currentDriveItems;
                     window.renderItems(currentDriveItems);
                 }
-            } else { throw new Error(res.message); }
+            } else throw new Error(res.message);
         } catch (e) {
             showToast(`Lỗi đồng bộ dán: ${e.message}`, true);
             folderDataCache[targetFldId] = folderDataCache[targetFldId].filter(i => !i.isGhostPaste);
@@ -6765,8 +6730,8 @@ setTimeout(() => {
         }
     };
 
-    // 6. GHI ĐÈ HÀM RENDER
-    if (window.renderItems && !window.renderItems_patched55v7) {
+    // 6. GHI ĐÈ HÀM RENDER ĐỂ GẮN SỰ KIỆN DOUBLE-CLICK
+    if (window.renderItems && !window.renderItems_patched55v8) {
         const originalRenderItems = window.renderItems;
         window.renderItems = function(items, isSearchMode = false) {
             originalRenderItems(items, isSearchMode);
@@ -6781,7 +6746,6 @@ setTimeout(() => {
                 
                 if (isGhost) element.classList.add('ghost-paste');
 
-                // Khi isSelected là true, CSS class này sẽ tự động chạy Animation lóe sáng Xanh Dương -> Xanh Lá
                 if (isSelected) {
                     element.classList.remove('ring-blue-500', 'bg-blue-50', 'border-blue-200');
                     element.classList.add('selected-green');
@@ -6803,73 +6767,94 @@ setTimeout(() => {
                 if (idMatch) applySelectLogic(row, idMatch[1]);
             });
         };
-        window.renderItems_patched55v7 = true;
+        window.renderItems_patched55v8 = true;
     }
 
-    // 7. THIẾT LẬP CƠ CHẾ DOUBLE CLICK (NHẤP ĐÚP) THAY CHO LONG PRESS
+    // 7. NHẤP ĐÚP (DOUBLE TAP) SIÊU NHẠY
     function setupItemInteractions(el, id, itemData) {
         el.removeAttribute('onclick');
-        el.classList.add('prevent-double-click-select'); // Chống bôi đen khi nhấp đúp
+        el.classList.add('prevent-double-click-select'); 
 
         const clickArea = el.querySelector('.flex-1.cursor-pointer') || el.querySelector('.flex-1.overflow-hidden');
         if (clickArea) clickArea.removeAttribute('onclick');
         
         let clickTimer = null;
         let lastClickTime = 0;
+        let isScrolling = false;
+        let startX, startY;
+        let isTouchMode = false;
 
-        const handleSelectionToggle = (e) => {
+        const handleSelectionToggle = () => {
             if (!window.multiSelectState) window.multiSelectState = { selectedIds: new Set() };
-
             if (window.multiSelectState.selectedIds.has(id)) {
-                window.multiSelectState.selectedIds.clear(); // Hủy chọn mảng nếu trúng item đang active
+                window.multiSelectState.selectedIds.clear(); 
             } else {
                 window.multiSelectState.selectedIds.add(id);
-                navigator.vibrate && navigator.vibrate(40);
+                if(navigator.vibrate) navigator.vibrate(40);
             }
             window.renderItems(currentDriveItems);
             window.updatePasteButtonState();
         };
 
-        const onClick = (e) => {
+        const processInteraction = (e) => {
             if (e.target.closest('.item-action-menu') || e.target.closest('button') || e.target.closest('i.fa-play-circle')) return;
             
-            e.preventDefault(); 
-            e.stopPropagation();
-
             const currentTime = new Date().getTime();
             const timeSinceLastClick = currentTime - lastClickTime;
 
-            // KIỂM TRA NHẤP ĐÚP (Thời gian giữa 2 lần click < 350ms)
-            if (timeSinceLastClick > 0 && timeSinceLastClick < 350) {
-                clearTimeout(clickTimer);
-                lastClickTime = 0; // Reset
-                
-                handleSelectionToggle(e);
+            if (window.multiSelectState && window.multiSelectState.selectedIds.size > 0) {
+                handleSelectionToggle();
+                lastClickTime = 0;
+                return;
+            }
 
+            if (timeSinceLastClick > 0 && timeSinceLastClick < 400) {
+                clearTimeout(clickTimer);
+                lastClickTime = 0;
+                handleSelectionToggle(); 
             } else {
-                // CHỈ LÀ NHẤP ĐƠN (Lần 1)
                 lastClickTime = currentTime;
-                
-                // Nếu đang tồn tại mảng được chọn -> Nhấp đơn cũng lập tức là thao tác chọn/huỷ (để chọn nhanh nhiều file)
-                if (window.multiSelectState && window.multiSelectState.selectedIds.size > 0) {
-                    handleSelectionToggle(e);
-                } else {
-                    // Nếu chưa có mảng -> Đợi 350ms xem có phải là nhấp đúp không, nếu không thì Mở File/Folder
-                    clickTimer = setTimeout(() => {
-                        if (itemData) {
-                            if (itemData.type === 'folder') window.loadFolder(itemData.id, itemData.name, true);
-                            else {
-                                let fullUrl = itemData.tempUrl || `https://drive.google.com/thumbnail?id=${itemData.id}&sz=w2000`;
-                                window.openMedia(itemData.id, itemData.mimeType, itemData.name, fullUrl);
-                            }
+                clickTimer = setTimeout(() => {
+                    if (itemData) {
+                        if (itemData.type === 'folder') window.loadFolder(itemData.id, itemData.name, true);
+                        else {
+                            let fullUrl = itemData.tempUrl || `https://drive.google.com/thumbnail?id=${itemData.id}&sz=w2000`;
+                            window.openMedia(itemData.id, itemData.mimeType, itemData.name, fullUrl);
                         }
-                        lastClickTime = 0;
-                    }, 350); 
-                }
+                    }
+                    lastClickTime = 0;
+                }, 400); 
             }
         };
 
-        // Gắn thẳng vào sự kiện Click thay vì Touch cho ổn định đa nền tảng
-        el.addEventListener('click', onClick);
+        el.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 1) return;
+            isTouchMode = true;
+            isScrolling = false;
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        }, { passive: true });
+
+        el.addEventListener('touchmove', (e) => {
+            if (!isTouchMode) return;
+            if (Math.abs(e.touches[0].clientX - startX) > 10 || Math.abs(e.touches[0].clientY - startY) > 10) {
+                isScrolling = true;
+            }
+        }, { passive: true });
+
+        el.addEventListener('touchend', (e) => {
+            if (!isTouchMode || isScrolling) return; 
+            if (e.cancelable) e.preventDefault(); 
+            processInteraction(e);
+        }, { passive: false });
+
+        el.addEventListener('click', (e) => {
+            if (isTouchMode) {
+                setTimeout(() => isTouchMode = false, 300);
+                return;
+            }
+            e.preventDefault();
+            processInteraction(e);
+        });
     }
 })();
