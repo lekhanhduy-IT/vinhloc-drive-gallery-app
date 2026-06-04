@@ -5321,7 +5321,7 @@ setTimeout(() => {
     }
 
     // 2. GHI SỔ ĐEN KHI BẤM XÓA ĐƠN
-    window.handleDelete = function(id, type, e) {
+    window.handleDelete = async function(id, type, e) {
         // Bạn cần đổi tên biến 'currentFolderId', 'ROOT_FOLDER_ID' và 'selectedItems' sao cho khớp với biến trong file hiện tại của bạn
 const isMegaRowAction = (currentFolderId === ROOT_FOLDER_ID); 
 
