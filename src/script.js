@@ -1562,6 +1562,125 @@ window.handleCoverUpload = function (event) {
 })();
 
 // Ghi đè hàm vẽ Item (Có hiển thị chọn lựa)
+window.renderItems = function (items, isSearchMode = false) {
+    let metaChanged = false;
+    items.forEach(item => {
+        if (item.type === 'folder') {
+            if (!appMeta[item.id]) { appMeta[item.id] = { type: 'Triển khai', desc: '', cover: '' }; metaChanged = true; }
+            let descStr = item.description || "";
+            if (descStr) {
+                let parsedType = null;
+                if (descStr.includes('[Ý tưởng]') || descStr === 'Ý tưởng') parsedType = 'Ý tưởng';
+                else if (descStr.includes('[Triển khai]') || descStr === 'Triển khai') parsedType = 'Triển khai';
+                if (parsedType && appMeta[item.id].type !== parsedType) { appMeta[item.id].type = parsedType; metaChanged = true; }
+                let coverMatch = descStr.match(/\[Cover:(.*?)\]/);
+                if (coverMatch) {
+                    let extractedCover = coverMatch[1] === 'NONE' ? '' : coverMatch[1].trim();
+                    if (appMeta[item.id].cover !== extractedCover) { appMeta[item.id].cover = extractedCover; metaChanged = true; }
+                }
+                let rawDesc = descStr.replace(/\[(Ý tưởng|Triển khai)\]/g, '').replace(/\[Cover:.*?\]/g, '').trim();
+                if (appMeta[item.id].desc !== rawDesc) { appMeta[item.id].desc = rawDesc; metaChanged = true; }
+            }
+        }
+    });
+
+    if (metaChanged) localforage.setItem('vinhloc_meta', appMeta);
+
+    const folderListEl = document.getElementById('folderList'); const fileListEl = document.getElementById('fileList');
+    folderListEl.innerHTML = ''; fileListEl.innerHTML = '';
+
+    if (items.length === 0) { folderListEl.innerHTML = '<div class="text-center text-gray-400 mt-8 w-full italic">Không có dữ liệu.</div>'; return; }
+
+    if (folderStack.length === 1 && !isSearchMode) {
+        const megaRows = items.filter(i => i.type === 'folder' && getMeta(i.id).type === currentCategory);
+        if (megaRows.length === 0) { folderListEl.innerHTML = `<div class="text-center text-gray-400 mt-8 w-full italic">Chưa có dữ liệu trong mục ${currentCategory}</div>`; return; }
+
+        folderListEl.innerHTML = megaRows.map(item => {
+            const meta = getMeta(item.id);
+            return `
+            <div class="mega-row">
+                <div class="mega-header" onclick="window.toggleAccordion('${item.id}')">
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <i id="icon-${item.id}" class="fas fa-chevron-right text-gray-400 text-sm transition-transform duration-200 w-4 text-center"></i>
+                        <div class="flex flex-col overflow-hidden">
+                            <span class="truncate uppercase text-blue-800 item-name-${item.id}">${item.name}</span>
+                            <span class="text-[11px] font-normal text-gray-500 truncate mt-1 item-desc-${item.id} ${meta.desc ? '' : 'hidden'}">${meta.desc || ''}</span>
+                        </div>
+                    </div>
+                    <div class="relative flex-shrink-0" onclick="event.stopPropagation()">
+                        <button onclick="window.toggleItemMenu('${item.id}', event)" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-600 bg-gray-50 rounded-full transition"><i class="fas fa-ellipsis-v"></i></button>
+                        <div id="menu-${item.id}" class="hidden absolute right-0 mt-2 w-44 bg-white rounded-2xl shadow-xl border border-gray-100 z-500 py-1.5 text-sm item-action-menu overflow-hidden">
+                            <div class="px-5 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold transition flex items-center" onclick="window.openInfo('${item.id}', '${item.name}', '${item.type}', 'mega', event)"><i class="fas fa-info-circle mr-3 text-blue-500 w-4"></i>Thông tin</div>
+                            <div class="px-5 py-3 hover:bg-gray-50 cursor-pointer text-green-600 font-semibold transition border-t border-gray-50 flex items-center" onclick="window.uiPromptFolder('${item.id}', event)"><i class="fas fa-folder-plus mr-3 w-4"></i>Thư mục</div>
+                            <div class="px-5 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold transition flex items-center" onclick="window.shareItem('${item.id}', '${item.type}', '${item.name}', event)"><i class="fas fa-share-nodes mr-3 text-green-500 w-4"></i>Chia sẻ</div>
+                            <div class="px-5 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold transition border-t border-gray-50 flex items-center" onclick="window.downloadItem('${item.id}', '${item.type}', '${item.name}', event)"><i class="fas fa-download mr-3 text-blue-500 w-4"></i>Tải xuống</div>
+                            <div class="px-5 py-3 hover:bg-red-50 cursor-pointer text-red-600 font-semibold transition border-t border-gray-50 flex items-center" onclick="window.handleDelete('${item.id}', '${item.type}', event)"><i class="fas fa-trash mr-3 w-4"></i>Xóa</div>
+                        </div>
+                    </div>
+                </div>
+                <div id="acc-${item.id}" class="hidden bg-white border-t border-gray-100"></div>
+            </div>`;
+        }).join('');
+        megaRows.forEach(row => { if (expandedMegas.includes(row.id)) window.toggleAccordion(row.id, true); });
+    }
+    else {
+        const folders = items.filter(i => i.type === 'folder'); const files = items.filter(i => i.type !== 'folder');
+        if (folders.length > 0) {
+            folderListEl.innerHTML = folders.map(item => {
+                const meta = getMeta(item.id); let isSelected = window.multiSelectState && window.multiSelectState.selectedIds.has(item.id);
+                const imgHtml = `<img src="${meta.cover || ''}" class="w-12 h-12 rounded-lg object-cover flex-shrink-0 shadow-sm item-cover-img-${item.id} ${meta.cover ? '' : 'hidden'}"><div class="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0 text-blue-500 text-xl item-cover-icon-${item.id} ${meta.cover ? 'hidden' : ''}"><i class="fas fa-folder"></i></div>`;
+                let checkUi = isSelected ? `<div class="absolute top-1/2 -translate-y-1/2 right-12 bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow"><i class="fas fa-check text-[10px]"></i></div>` : '';
+                let bgClass = isSelected ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:bg-gray-50';
+
+                return `
+                <div class="subfolder-row group relative border-b transition ${bgClass}" onclick="loadFolder('${item.id}', '${item.name}', true)">
+                    ${checkUi} ${imgHtml}
+                    <div class="flex-1 overflow-hidden" onclick="window.toggleFileSelection ? window.toggleFileSelection('${item.id}', event) : null">
+                        <h4 class="text-sm font-bold ${isSelected ? 'text-blue-800' : 'text-gray-800'} truncate item-name-${item.id}">${item.name}</h4>
+                        <p class="text-[11px] text-gray-500 truncate mt-0.5 item-desc-${item.id} ${meta.desc ? '' : 'hidden'}">${meta.desc || 'Chưa có mô tả'}</p>
+                    </div>
+                    <div class="relative" onclick="event.stopPropagation()">
+                        <button onclick="window.toggleItemMenu('${item.id}', event)" class="px-3 py-2 text-gray-400"><i class="fas fa-ellipsis-v"></i></button>
+                        <div id="menu-${item.id}" class="hidden absolute right-0 mt-1 w-36 bg-white rounded-xl shadow-lg border z-[500] py-1 text-sm item-action-menu">
+                            <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer font-semibold text-gray-700 flex items-center" onclick="window.shareItem('${item.id}', '${item.type}', '${item.name}', event)"><i class="fas fa-share-nodes mr-3 text-green-500 w-4"></i>Chia sẻ</div>
+                            <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer font-semibold text-gray-700 flex items-center" onclick="window.openInfo('${item.id}', '${item.name}', '${item.type}', 'sub', event)"><i class="fas fa-pen mr-3 text-blue-500 w-4"></i>Sửa</div>
+                            <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer font-semibold text-gray-700 border-t flex items-center" onclick="window.downloadItem('${item.id}', '${item.type}', '${item.name}', event)"><i class="fas fa-download mr-3 text-blue-500 w-4"></i>Tải xuống</div>
+                            <div class="px-4 py-3 hover:bg-red-50 text-red-600 cursor-pointer font-semibold border-t flex items-center" onclick="window.handleDelete('${item.id}', '${item.type}', event)"><i class="fas fa-trash mr-3 w-4"></i>Xóa</div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        fileListEl.innerHTML = files.map(item => {
+            let isImage = item.mimeType.includes('image'); let isSelected = window.multiSelectState && window.multiSelectState.selectedIds.has(item.id);
+            let imgUrl = item.tempUrl ? item.tempUrl : `https://drive.google.com/thumbnail?id=${item.id}&sz=w400`; let fullImgUrl = item.tempUrl ? item.tempUrl : `https://drive.google.com/thumbnail?id=${item.id}&sz=w2000`;
+            let visualEl = isImage ? `<img src="${imgUrl}" data-url="${fullImgUrl}" class="w-full h-full object-cover drive-img-item" loading="lazy">` : `<div class="w-full h-full flex items-center justify-center bg-gray-50"><i class="fas fa-play-circle text-gray-400 text-4xl"></i></div>`;
+            let isTemp = item.tempUrl ? `<div class="absolute inset-0 bg-white/60 flex flex-col items-center justify-center backdrop-blur-[2px] z-10 rounded-2xl"><div class="loader mb-2 border-blue-600"></div><span class="text-[10px] font-bold text-blue-600">Đang Up...</span></div>` : '';
+            let checkUi = isSelected ? `<div class="absolute top-2 left-2 z-20 bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-md"><i class="fas fa-check text-xs"></i></div>` : '';
+            let borderClass = isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : 'border-gray-100 bg-white';
+
+            return `
+            <div class="p-2.5 rounded-2xl shadow-sm border flex flex-col relative transition ${borderClass}">
+                ${checkUi} ${isTemp}
+                <div class="absolute top-2 right-2 z-20">
+                    <button onclick="window.toggleItemMenu('${item.id}', event)" class="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-blue-600 bg-white/90 backdrop-blur-md rounded-full shadow-sm"><i class="fas fa-ellipsis-v"></i></button>
+                    <div id="menu-${item.id}" class="hidden absolute right-0 mt-1 w-40 bg-white rounded-2xl shadow-xl border border-gray-100 z-[500] py-1 text-sm item-action-menu overflow-hidden">
+                        <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold flex items-center" onclick="window.shareItem('${item.id}', '${item.type}', '${item.name}', event)"><i class="fas fa-share-nodes mr-3 text-green-500 w-4"></i>Chia sẻ</div>
+                        <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold flex items-center" onclick="window.downloadItem('${item.id}', '${item.type}', '${item.name}', event)"><i class="fas fa-download mr-3 text-blue-500 w-4"></i>Tải xuống</div>
+                        <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold border-t flex items-center" onclick="window.openInfo('${item.id}', '${item.name}', '${item.type}', 'file', event)"><i class="fas fa-pen mr-3 text-blue-500 w-4"></i>Sửa</div>
+                        <div class="px-4 py-3 hover:bg-red-50 cursor-pointer text-red-600 font-semibold border-t flex items-center" onclick="window.handleDelete('${item.id}', '${item.type}', event)"><i class="fas fa-trash mr-3 w-4"></i>Xóa</div>
+                    </div>
+                </div>
+                <div class="w-full h-32 flex items-center justify-center bg-gray-100 rounded-xl overflow-hidden cursor-pointer mb-3" onclick="openMedia('${item.id}', '${item.mimeType}', '${item.name}', '${fullImgUrl}')">${visualEl}</div>
+                <div class="px-1 flex flex-col justify-center flex-1 cursor-pointer" onclick="window.toggleFileSelection ? window.toggleFileSelection('${item.id}', event) : null">
+                    <span class="text-[13px] font-bold ${isSelected ? 'text-blue-700' : 'text-gray-800'} line-clamp-2 leading-tight drive-img-name item-name-${item.id}" title="${item.name}">${item.name}</span>
+                    <span class="text-[10px] text-gray-400 mt-1 uppercase font-semibold">${item.mimeType.split('/')[1] || 'FILE'}</span>
+                </div>
+            </div>`;
+        }).join('');
+    }
+};
 
 (function () {
     let currentCols = parseInt(localStorage.getItem('vinhloc_grid_cols')) || 2;
@@ -3630,7 +3749,164 @@ setTimeout(() => {
         }
     }
 
-    
+    // 2. GHI ĐÈ HÀM RENDER ITEMS (ĐẢO NGƯỢC LOGIC CLICK + SAFE MODE)
+    window.renderItems = function (items, isSearchMode = false) {
+        const tempSmooth = window.smoothUpdateUI; 
+        window.smoothUpdateUI = function(){};
+        
+        try {
+            let metaChanged = false;
+            items.forEach(item => {
+                if (item.type === 'folder') {
+                    if (!appMeta[item.id]) { appMeta[item.id] = { type: 'Triển khai', desc: '', cover: '' }; metaChanged = true; }
+                    let descStr = item.description || "";
+                    if (descStr) {
+                        let parsedType = null;
+                        if (descStr.includes('[Ý tưởng]') || descStr === 'Ý tưởng') parsedType = 'Ý tưởng';
+                        else if (descStr.includes('[Triển khai]') || descStr === 'Triển khai') parsedType = 'Triển khai';
+                        if (parsedType && appMeta[item.id].type !== parsedType) { appMeta[item.id].type = parsedType; metaChanged = true; }
+                        let coverMatch = descStr.match(/\[Cover:(.*?)\]/);
+                        if (coverMatch) {
+                            let extractedCover = coverMatch[1] === 'NONE' ? '' : coverMatch[1].trim();
+                            if (appMeta[item.id].cover !== extractedCover) { appMeta[item.id].cover = extractedCover; metaChanged = true; }
+                        }
+                        let rawDesc = descStr.replace(/\[(Ý tưởng|Triển khai)\]/g, '').replace(/\[Cover:.*?\]/g, '').trim();
+                        if (appMeta[item.id].desc !== rawDesc) { appMeta[item.id].desc = rawDesc; metaChanged = true; }
+                    }
+                    if (appMeta[item.id] && appMeta[item.id].name) { item.name = appMeta[item.id].name; }
+                }
+            });
+
+            if (metaChanged) localforage.setItem('vinhloc_meta', appMeta).catch(e=>{});
+
+            const folderListEl = document.getElementById('folderList'); 
+            const fileListEl = document.getElementById('fileList');
+            if(folderListEl) folderListEl.innerHTML = ''; 
+            if(fileListEl) fileListEl.innerHTML = '';
+
+            if (items.length === 0) { 
+                if(folderListEl) folderListEl.innerHTML = '<div class="text-center text-gray-400 mt-8 w-full italic">Không có dữ liệu.</div>'; 
+                return; 
+            }
+
+            const escapeHTML = (str) => { return str ? String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;') : ''; };
+            const getMetaSafe = (id) => { return appMeta[id] || { desc: '', cover: '', type: 'Triển khai' }; };
+
+            if (folderStack.length === 1 && !isSearchMode) {
+                const megaRows = items.filter(i => i.type === 'folder' && getMetaSafe(i.id).type === currentCategory);
+                if (megaRows.length === 0) { 
+                    if(folderListEl) folderListEl.innerHTML = `<div class="text-center text-gray-400 mt-8 w-full italic">Chưa có dữ liệu trong mục ${currentCategory}</div>`; 
+                    return; 
+                }
+
+                if(folderListEl) folderListEl.innerHTML = megaRows.map(item => {
+                    const meta = getMetaSafe(item.id); const safeName = escapeHTML(item.name); 
+                    return `
+                    <div class="mega-row">
+                        <div class="mega-header" onclick="window.toggleAccordion('${item.id}')">
+                            <div class="flex items-center gap-3 overflow-hidden">
+                                <i id="icon-${item.id}" class="fas fa-chevron-right text-gray-400 text-sm transition-transform duration-200 w-4 text-center"></i>
+                                <div class="flex flex-col overflow-hidden">
+                                    <span class="truncate uppercase text-blue-800 item-name-${item.id}">${item.name}</span>
+                                    <span class="text-[11px] font-normal text-gray-500 truncate mt-1 item-desc-${item.id} ${meta.desc ? '' : 'hidden'}">${meta.desc || ''}</span>
+                                </div>
+                            </div>
+                            <div class="relative flex-shrink-0" onclick="event.stopPropagation()">
+                                <button onclick="window.toggleItemMenu('${item.id}', event)" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-600 bg-gray-50 rounded-full transition"><i class="fas fa-ellipsis-v"></i></button>
+                                <div id="menu-${item.id}" class="hidden absolute right-0 mt-2 w-44 bg-white rounded-2xl shadow-xl border border-gray-100 z-[500] py-1.5 text-sm item-action-menu overflow-hidden">
+                                    <div class="px-5 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold transition flex items-center" onclick="window.openInfo('${item.id}', '${safeName}', '${item.type}', 'mega', event)"><i class="fas fa-info-circle mr-3 text-blue-500 w-4"></i>Thông tin</div>
+                                    <div class="px-5 py-3 hover:bg-gray-50 cursor-pointer text-green-600 font-semibold transition border-t border-gray-50 flex items-center" onclick="window.uiPromptFolder('${item.id}', event)"><i class="fas fa-folder-plus mr-3 w-4"></i>Thư mục</div>
+                                    <div class="px-5 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold transition flex items-center" onclick="window.shareItem('${item.id}', '${item.type}', '${safeName}', event)"><i class="fas fa-share-nodes mr-3 text-green-500 w-4"></i>Chia sẻ</div>
+                                    <div class="px-5 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold transition border-t border-gray-50 flex items-center" onclick="window.downloadItem('${item.id}', '${item.type}', '${safeName}', event)"><i class="fas fa-download mr-3 text-blue-500 w-4"></i>Tải xuống</div>
+                                    <div class="px-5 py-3 hover:bg-red-50 cursor-pointer text-red-600 font-semibold transition border-t border-gray-50 flex items-center" onclick="window.handleDelete('${item.id}', '${item.type}', event)"><i class="fas fa-trash mr-3 w-4"></i>Xóa</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="acc-${item.id}" class="hidden bg-white border-t border-gray-100"></div>
+                    </div>`;
+                }).join('');
+                megaRows.forEach(row => { if (typeof expandedMegas !== 'undefined' && expandedMegas.includes(row.id) && window.toggleAccordion) window.toggleAccordion(row.id, true); });
+            }
+            else {
+                const folders = items.filter(i => i.type === 'folder'); const files = items.filter(i => i.type !== 'folder');
+                
+                if (folders.length > 0 && folderListEl) {
+                    folderListEl.innerHTML = folders.map(item => {
+                        const meta = getMetaSafe(item.id); 
+                        let isSelected = window.multiSelectState && window.multiSelectState.selectedIds.has(item.id);
+                        const checkUi = isSelected ? `<div class="absolute -top-1 -right-1 z-20 bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-md"><i class="fas fa-check text-[10px]"></i></div>` : '';
+                        let bgClass = isSelected ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:bg-gray-50';
+                        const safeName = escapeHTML(item.name); 
+                        
+                        const clickFolderAction = isSearchMode ? `window.openSearchResult('${item.id}', '${safeName}', 'folder', null, null)` : `window.loadFolder('${item.id}', '${safeName}', true)`;
+
+                        return `
+                        <div class="subfolder-row group relative border-b transition ${bgClass}" style="display: flex !important;" onclick="${clickFolderAction}">
+                            <div class="relative shrink-0 cursor-pointer" onclick="event.stopPropagation(); window.toggleFileSelection ? window.toggleFileSelection('${item.id}', event) : null">
+                                ${checkUi}
+                                <img src="${meta.cover || ''}" class="w-12 h-12 rounded-lg object-cover shadow-sm item-cover-img-${item.id} ${meta.cover ? '' : 'hidden'}">
+                                <div class="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center text-blue-500 text-xl item-cover-icon-${item.id} ${meta.cover ? 'hidden' : ''}"><i class="fas fa-folder"></i></div>
+                            </div>
+                            <div class="flex-1 overflow-hidden">
+                                <h4 class="text-sm font-bold ${isSelected ? 'text-blue-800' : 'text-gray-800'} truncate item-name-${item.id}">${item.name}</h4>
+                                <p class="text-[11px] text-gray-500 truncate mt-0.5 item-desc-${item.id} ${meta.desc ? '' : 'hidden'}">${meta.desc || 'Chưa có mô tả'}</p>
+                            </div>
+                            <div class="relative shrink-0" onclick="event.stopPropagation()">
+                                <button onclick="window.toggleItemMenu('${item.id}', event)" class="px-3 py-2 text-gray-400 hover:text-blue-600 transition"><i class="fas fa-ellipsis-v"></i></button>
+                                <div id="menu-${item.id}" class="hidden absolute right-0 mt-1 w-36 bg-white rounded-xl shadow-lg border z-[500] py-1 text-sm item-action-menu">
+                                    <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer font-semibold text-gray-700 flex items-center" onclick="window.shareItem('${item.id}', '${item.type}', '${safeName}', event)"><i class="fas fa-share-nodes mr-3 text-green-500 w-4"></i>Chia sẻ</div>
+                                    <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer font-semibold text-gray-700 flex items-center" onclick="window.openInfo('${item.id}', '${safeName}', '${item.type}', 'sub', event)"><i class="fas fa-pen mr-3 text-blue-500 w-4"></i>Sửa</div>
+                                    <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer font-semibold text-gray-700 border-t flex items-center" onclick="window.downloadItem('${item.id}', '${item.type}', '${safeName}', event)"><i class="fas fa-download mr-3 text-blue-500 w-4"></i>Tải xuống</div>
+                                    <div class="px-4 py-3 hover:bg-red-50 text-red-600 cursor-pointer font-semibold border-t flex items-center" onclick="window.handleDelete('${item.id}', '${item.type}', event)"><i class="fas fa-trash mr-3 w-4"></i>Xóa</div>
+                                </div>
+                            </div>
+                        </div>`;
+                    }).join('');
+                }
+
+                if (files.length > 0 && fileListEl) {
+                    fileListEl.innerHTML = files.map(item => {
+                        let isImage = item.mimeType.includes('image'); let isSelected = window.multiSelectState && window.multiSelectState.selectedIds.has(item.id);
+                        let imgUrl = item.tempUrl ? item.tempUrl : `https://drive.google.com/thumbnail?id=${item.id}&sz=w400`; let fullImgUrl = item.tempUrl ? item.tempUrl : `https://drive.google.com/thumbnail?id=${item.id}&sz=w2000`;
+                        let visualEl = isImage ? `<img src="${imgUrl}" data-url="${fullImgUrl}" class="w-full h-full object-cover drive-img-item" loading="lazy">` : `<div class="w-full h-full flex items-center justify-center bg-gray-50"><i class="fas fa-play-circle text-gray-400 text-4xl"></i></div>`;
+                        let isTemp = item.tempUrl ? `<div class="absolute inset-0 bg-white/60 flex flex-col items-center justify-center backdrop-blur-[2px] z-10 rounded-2xl"><div class="loader mb-2 border-blue-600"></div><span class="text-[10px] font-bold text-blue-600">Đang Up...</span></div>` : '';
+                        let checkUi = isSelected ? `<div class="absolute top-2 left-2 z-20 bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-md"><i class="fas fa-check text-xs"></i></div>` : '';
+                        let borderClass = isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : 'border-gray-100 bg-white hover:bg-gray-50';
+                        const safeName = escapeHTML(item.name); 
+
+                        const fileClickAction = isSearchMode ? `window.openSearchResult('${item.id}', '${safeName}', 'file', '${item.mimeType}', '${fullImgUrl}')` : `window.openMedia('${item.id}', '${item.mimeType}', '${safeName}', '${fullImgUrl}')`;
+
+                        return `
+                        <div class="p-2.5 rounded-2xl shadow-sm border flex flex-col relative transition ${borderClass}">
+                            ${checkUi} ${isTemp}
+                            <div class="absolute top-2 right-2 z-30">
+                                <button onclick="window.toggleItemMenu('${item.id}', event)" class="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-blue-600 bg-white/90 backdrop-blur-md rounded-full shadow-sm"><i class="fas fa-ellipsis-v"></i></button>
+                                <div id="menu-${item.id}" class="hidden absolute right-0 mt-1 w-40 bg-white rounded-2xl shadow-xl border border-gray-100 z-[500] py-1 text-sm item-action-menu overflow-hidden">
+                                    <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold flex items-center" onclick="window.shareItem('${item.id}', '${item.type}', '${safeName}', event)"><i class="fas fa-share-nodes mr-3 text-green-500 w-4"></i>Chia sẻ</div>
+                                    <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold flex items-center" onclick="window.downloadItem('${item.id}', '${item.type}', '${safeName}', event)"><i class="fas fa-download mr-3 text-blue-500 w-4"></i>Tải xuống</div>
+                                    <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold border-t flex items-center" onclick="window.openInfo('${item.id}', '${safeName}', '${item.type}', 'file', event)"><i class="fas fa-pen mr-3 text-blue-500 w-4"></i>Sửa</div>
+                                    <div class="px-4 py-3 hover:bg-red-50 cursor-pointer text-red-600 font-semibold border-t flex items-center" onclick="window.handleDelete('${item.id}', '${item.type}', event)"><i class="fas fa-trash mr-3 w-4"></i>Xóa</div>
+                                </div>
+                            </div>
+                            <div class="w-full h-32 flex items-center justify-center bg-gray-100 rounded-xl overflow-hidden cursor-pointer mb-3" onclick="${fileClickAction}">${visualEl}</div>
+                            <div class="px-1 flex flex-col justify-center flex-1 cursor-pointer" onclick="window.toggleFileSelection ? window.toggleFileSelection('${item.id}', event) : null">
+                                <span class="text-[13px] font-bold ${isSelected ? 'text-blue-700' : 'text-gray-800'} line-clamp-2 leading-tight drive-img-name item-name-${item.id}" title="${item.name}">${item.name}</span>
+                                <span class="text-[10px] text-gray-400 mt-1 uppercase font-semibold">${item.mimeType.split('/')[1] || 'FILE'}</span>
+                            </div>
+                        </div>`;
+                    }).join('');
+                }
+            }
+        } catch(err) {
+            console.error("LỖI RENDER_ITEMS:", err);
+        } finally {
+            window.smoothUpdateUI = tempSmooth; 
+            if(window.smoothUpdateUI) window.smoothUpdateUI(appMeta);
+            if (!isSearchMode && typeof currentFolderId !== 'undefined' && currentFolderId !== 'dummy_design_state') { 
+                localforage.setItem('vinhloc_folder_cache', folderDataCache).catch(e=>{}); 
+            }
+        }
+    };
 
     if (currentDriveItems && currentDriveItems.length > 0 && window.renderItems) window.renderItems(currentDriveItems);
     console.log("✅ PATCH 21 SAFE V2: Nút Back đã hoạt động chuẩn xác 100%!");
@@ -6161,519 +6437,282 @@ setTimeout(() => {
     window.initDatabase();
 
 })();
-// =========================================================================
-// HỆ THỐNG VẼ GIAO DIỆN & CẢM BIẾN CHẠM VẬT LÝ MỚI TỪ A ĐẾN Z
-// =========================================================================
-
-// 1. TỰ ĐỘNG CHÈN CSS CHUẨN XÁC CHỐNG NHIỄU MOBILE (Không cần đụng vào file .css)
-(function injectPerfectCSS() {
-    if (document.getElementById('perfect-touch-css')) return;
+// ==============================================================
+// GOD MODE PATCH: ĐOẠT QUYỀN HỆ THỐNG - GIẢI QUYẾT MỌI XUNG ĐỘT
+// ==============================================================
+(function GodMode() {
+    // 1. BƠM CSS XANH LÁ THẦN THÁNH (Ép ghi đè vĩnh viễn màu xanh dương)
     const style = document.createElement('style');
-    style.id = 'perfect-touch-css';
     style.innerHTML = `
-        .prevent-mobile-context, .prevent-mobile-context * {
-            -webkit-touch-callout: none !important;
-            -webkit-user-select: none !important;
-            user-select: none !important;
-            -webkit-user-drag: none !important;
+        .super-green-active {
+            border-color: #22c55e !important;
+            background-color: #f0fdf4 !important;
+            box-shadow: 0 0 20px rgba(34,197,94,0.5) inset !important;
+            animation: superPulse 1.5s infinite !important;
         }
-        .prevent-mobile-context img { pointer-events: none !important; }
-
-        @keyframes flashBlueToGreen {
-            0% { border-color: #3b82f6 !important; background-color: rgba(59,130,246,0.3) !important; box-shadow: 0 0 20px rgba(59,130,246,0.8) inset; }
-            50% { border-color: #22c55e !important; background-color: rgba(34,197,94,0.3) !important; box-shadow: 0 0 20px rgba(34,197,94,0.8) inset; }
-            100% { border-color: #22c55e !important; background-color: rgba(34,197,94,0.15) !important; box-shadow: 0 0 15px rgba(34,197,94,0.6) inset; }
+        .super-green-active *, .super-green-active h4, .super-green-active span.drive-img-name {
+            color: #166534 !important;
         }
-        @keyframes pulse-border-green { 
-            0% { border-color: rgba(34,197,94,0.6); } 
-            50% { border-color: rgba(34,197,94,1); } 
-            100% { border-color: rgba(34,197,94,0.6); } 
+        @keyframes superPulse {
+            0% { box-shadow: 0 0 15px rgba(34,197,94,0.4) inset; }
+            50% { box-shadow: 0 0 30px rgba(34,197,94,0.7) inset; }
+            100% { box-shadow: 0 0 15px rgba(34,197,94,0.4) inset; }
         }
-
-        /* Lớp học màu Xanh Lá dành riêng cho Mảng chọn */
-        .perfect-selected {
-            animation: flashBlueToGreen 0.5s ease-out forwards, pulse-border-green 1.5s infinite 0.5s !important;
+        .ghost-paste { opacity: 0.45 !important; filter: grayscale(40%); pointer-events: none !important; animation: upload-ghost 1.5s infinite; }
+        @keyframes upload-ghost { 0% { opacity: 0.3; } 50% { opacity: 0.6; } 100% { opacity: 0.3; } }
+        
+        /* Chặn menu tải ảnh trên điện thoại */
+        .super-touch-lock img { pointer-events: none !important; }
+        
+        /* Popup đích dán chống đè */
+        #superPastePopup {
+            position: fixed; top: 85px; right: 10px; width: 350px; max-width: 92vw; max-height: 60vh;
+            background: white; border-radius: 16px; box-shadow: 0 15px 50px rgba(0,0,0,0.3); border: 1px solid #e5e7eb;
+            z-index: 99999; display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95) translateY(-10px); opacity: 0; transition: all 0.2s; pointer-events: none;
         }
-        .perfect-selected h4, .perfect-selected span.drive-img-name { color: #166534 !important; }
-        .perfect-selected .check-icon-bg { background-color: #22c55e !important; color: white !important; }
+        #superPastePopup.show { transform: scale(1) translateY(0); opacity: 1; pointer-events: auto; }
+        .super-btn-active { background-color: #dcfce7 !important; color: #16a34a !important; border-color: #86efac !important; animation: superBullseye 1.5s infinite; }
+        @keyframes superBullseye { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); } 70% { box-shadow: 0 0 0 8px rgba(34,197,94,0); } 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); } }
     `;
     document.head.appendChild(style);
-})();
 
-// 2. HỆ THỐNG CẢM BIẾN CHẠM VẬT LÝ TUYỆT ĐỐI (TRỊ BỆNH NHẤC NGÓN TAY)
-window.setupPerfectTouch = function(element, id, itemData, fullImgUrl) {
-    element.classList.add('prevent-mobile-context');
-    element.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); return false; });
-
-    let pressTimer = null;
+    // 2. MẢNG LƯU TRỮ VÀ BIẾN ĐẾM BẤT KHẢ XÂM PHẠM
+    window.superSelectionIds = new Set();
+    let longPressTimer = null;
     let startX = 0, startY = 0;
+    let blockNextClick = false;
 
-    const toggleSelect = () => {
-        if (!window.multiSelectState) window.multiSelectState = { selectedIds: new Set() };
-        if (window.multiSelectState.selectedIds.has(id)) {
-            window.multiSelectState.selectedIds.clear(); 
-        } else {
-            window.multiSelectState.selectedIds.add(id);
-            if (navigator.vibrate) navigator.vibrate(50);
+    // 3. HÀM CẬP NHẬT UI (Dọn dẹp xanh dương, đẩy xanh lá lên)
+    window.updateSuperUI = function() {
+        document.querySelectorAll('[id^="ui-card-"]').forEach(card => {
+            const id = card.id.replace('ui-card-', '');
+            if (window.superSelectionIds.has(id)) {
+                // Xé bỏ các class màu xanh dương từ code gốc
+                card.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50', 'border-blue-200');
+                card.classList.add('super-green-active');
+                
+                // Gắn cục check màu xanh lá đè lên
+                if (!card.querySelector('.super-check')) {
+                    const checkHTML = `<div class="super-check absolute top-2 left-2 z-20 bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-md"><i class="fas fa-check text-xs"></i></div>`;
+                    card.insertAdjacentHTML('afterbegin', checkHTML);
+                }
+            } else {
+                // Tháo xanh lá trả về mặc định
+                card.classList.remove('super-green-active');
+                const check = card.querySelector('.super-check');
+                if (check) check.remove();
+            }
+        });
+
+        // Quản lý icon Nút Đích Dán
+        const btn = document.getElementById('superPasteDestBtn');
+        const popup = document.getElementById('superPastePopup');
+        if (btn) {
+            const isShow = popup && popup.classList.contains('show');
+            btn.innerHTML = isShow ? '<i class="fas fa-times text-xl"></i>' : '<i class="fas fa-bullseye text-xl"></i>';
+            if (window.superSelectionIds.size > 0) btn.classList.add('super-btn-active');
+            else btn.classList.remove('super-btn-active');
         }
-        window.renderItems(currentDriveItems);
-        if (window.updatePasteButtonState) window.updatePasteButtonState();
     };
 
-    const openItem = () => {
-        if (itemData.type === 'folder') window.loadFolder(itemData.id, itemData.name, true);
-        else window.openMedia(itemData.id, itemData.mimeType, itemData.name, fullImgUrl || itemData.tempUrl);
-    };
+    // Theo dõi DOM ngầm để luôn khóa xanh lá mỗi khi hệ thống gốc vô tình Render lại file
+    const observer = new MutationObserver(() => {
+        if (window.superSelectionIds.size > 0) window.updateSuperUI();
+        document.querySelectorAll('[id^="ui-card-"]').forEach(c => c.classList.add('super-touch-lock'));
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
 
-    element.addEventListener('touchstart', (e) => {
-        if (e.touches.length > 1 || e.target.closest('button') || e.target.closest('.item-action-menu')) return;
+    // ==============================================================
+    // 4. KHIÊN BẢO VỆ CAPTURE PHASE (ĐÁNH CHẶN LỆNH CLICK CỦA APP)
+    // ==============================================================
+    document.addEventListener('contextmenu', (e) => {
+        if (e.target.closest('[id^="ui-card-"]')) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
+
+    document.addEventListener('touchstart', (e) => {
+        const card = e.target.closest('[id^="ui-card-"]');
+        if (!card || e.touches.length > 1 || e.target.closest('button') || e.target.closest('.item-action-menu')) return;
+        
         startX = e.touches[0].clientX; startY = e.touches[0].clientY;
         
-        // Đếm chính xác 400ms để khóa click rác và kích hoạt xanh lá
-        pressTimer = setTimeout(() => {
-            window._isLongPressActive = true; 
-            window._ignoreClickUntil = Date.now() + 600; // Tấm khiên chống click ảo tồn tại 0.6 giây
-            toggleSelect();
-        }, 400);
-    }, { passive: true });
+        longPressTimer = setTimeout(() => {
+            // HẾT 400MS -> KÍCH HOẠT NHẤN GIỮ THÀNH CÔNG!
+            const id = card.id.replace('ui-card-', '');
+            
+            // Nếu file/folder đã active -> Xóa trắng mảng
+            if (window.superSelectionIds.has(id)) {
+                window.superSelectionIds.clear(); 
+            } else {
+                // Thêm vào mảng xanh lá
+                window.superSelectionIds.add(id); 
+                if (navigator.vibrate) navigator.vibrate(50);
+            }
+            
+            blockNextClick = true; // Khóa cú nhấc tay
+            window.updateSuperUI(); // Nhuộm màu
+        }, 400); 
+    }, { capture: true, passive: true });
 
-    element.addEventListener('touchmove', (e) => {
+    document.addEventListener('touchmove', (e) => {
         if (Math.abs(e.touches[0].clientX - startX) > 10 || Math.abs(e.touches[0].clientY - startY) > 10) {
-            clearTimeout(pressTimer);
+            clearTimeout(longPressTimer); // Trượt tay thì hủy nhấn giữ
         }
-    }, { passive: true });
+    }, { capture: true, passive: true });
 
-    element.addEventListener('touchend', (e) => {
-        clearTimeout(pressTimer);
-        if (window._isLongPressActive && e.cancelable) e.preventDefault(); 
-        setTimeout(() => { window._isLongPressActive = false; }, 50);
-    }, { passive: false });
+    document.addEventListener('touchend', (e) => {
+        clearTimeout(longPressTimer);
+        setTimeout(() => blockNextClick = false, 300); 
+    }, { capture: true, passive: true });
 
-    element.addEventListener('click', (e) => {
-        if (e.target.closest('button') || e.target.closest('.item-action-menu')) return;
-        
-        // NẾU TẤM KHIÊN CÒN HIỆU LỰC HOẶC ĐANG NHẤN GIỮ -> CHẶN ĐỨNG GHOST CLICK!
-        if (Date.now() < window._ignoreClickUntil || window._isLongPressActive) {
+    // TẤM KHIÊN CHẶN ĐỨNG CLICK MẶC ĐỊNH (TỐI QUAN TRỌNG)
+    document.addEventListener('click', (e) => {
+        const card = e.target.closest('[id^="ui-card-"]');
+        if (!card || e.target.closest('button') || e.target.closest('.item-action-menu')) return;
+
+        // Bị khóa bởi nhấc tay nhấn giữ -> Đánh chặn!
+        if (blockNextClick) {
             e.preventDefault(); e.stopPropagation();
             return;
         }
 
-        if (window.multiSelectState && window.multiSelectState.selectedIds.size > 0) {
-            e.preventDefault(); e.stopPropagation();
-            toggleSelect();
-        } else {
-            openItem();
-        }
-    });
-};
-
-// 3. HÀM VẼ GIAO DIỆN CHÍNH THỨC (ĐÃ LỘT SẠCH CÁC MÃ RÁC GÂY XUNG ĐỘT)
-window.renderItems = function (items, isSearchMode = false) {
-    let metaChanged = false;
-    items.forEach(item => {
-        if (item.type === 'folder') {
-            if (!appMeta[item.id]) { appMeta[item.id] = { type: 'Triển khai', desc: '', cover: '' }; metaChanged = true; }
-            let descStr = item.description || "";
-            if (descStr) {
-                let parsedType = null;
-                if (descStr.includes('[Ý tưởng]') || descStr === 'Ý tưởng') parsedType = 'Ý tưởng';
-                else if (descStr.includes('[Triển khai]') || descStr === 'Triển khai') parsedType = 'Triển khai';
-                if (parsedType && appMeta[item.id].type !== parsedType) { appMeta[item.id].type = parsedType; metaChanged = true; }
-                let coverMatch = descStr.match(/\[Cover:(.*?)\]/);
-                if (coverMatch) {
-                    let extractedCover = coverMatch[1] === 'NONE' ? '' : coverMatch[1].trim();
-                    if (appMeta[item.id].cover !== extractedCover) { appMeta[item.id].cover = extractedCover; metaChanged = true; }
-                }
-                let rawDesc = descStr.replace(/\[(Ý tưởng|Triển khai)\]/g, '').replace(/\[Cover:.*?\]/g, '').trim();
-                if (appMeta[item.id].desc !== rawDesc) { appMeta[item.id].desc = rawDesc; metaChanged = true; }
-            }
-            if (appMeta[item.id] && appMeta[item.id].name) item.name = appMeta[item.id].name;
-        }
-    });
-
-    if (metaChanged) localforage.setItem('vinhloc_meta', appMeta).catch(e=>{});
-
-    const folderListEl = document.getElementById('folderList'); 
-    const fileListEl = document.getElementById('fileList');
-    if(folderListEl) folderListEl.innerHTML = ''; 
-    if(fileListEl) fileListEl.innerHTML = '';
-
-    if (items.length === 0) { 
-        if(folderListEl) folderListEl.innerHTML = '<div class="text-center text-gray-400 mt-8 w-full italic">Không có dữ liệu.</div>'; 
-        return; 
-    }
-
-    const escapeHTML = (str) => str ? String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;') : '';
-    const getMetaSafe = (id) => appMeta[id] || { desc: '', cover: '', type: 'Triển khai' };
-
-    // --- MEGA ROWS (Trang chủ) ---
-    if (folderStack.length === 1 && !isSearchMode) {
-        const megaRows = items.filter(i => i.type === 'folder' && getMetaSafe(i.id).type === currentCategory);
-        if (megaRows.length === 0) { 
-            if(folderListEl) folderListEl.innerHTML = `<div class="text-center text-gray-400 mt-8 w-full italic">Chưa có dữ liệu trong mục ${currentCategory}</div>`; 
-            return; 
-        }
-        if(folderListEl) folderListEl.innerHTML = megaRows.map(item => {
-            const meta = getMetaSafe(item.id); const safeName = escapeHTML(item.name);
-            return `
-            <div class="mega-row">
-                <div class="mega-header" onclick="window.toggleAccordion('${item.id}')">
-                    <div class="flex items-center gap-3 overflow-hidden">
-                        <i id="icon-${item.id}" class="fas fa-chevron-right text-gray-400 text-sm transition-transform duration-200 w-4 text-center"></i>
-                        <div class="flex flex-col overflow-hidden">
-                            <span class="truncate uppercase text-blue-800 item-name-${item.id}">${item.name}</span>
-                            <span class="text-[11px] font-normal text-gray-500 truncate mt-1 item-desc-${item.id} ${meta.desc ? '' : 'hidden'}">${meta.desc || ''}</span>
-                        </div>
-                    </div>
-                    <div class="relative flex-shrink-0" onclick="event.stopPropagation()">
-                        <button onclick="window.toggleItemMenu('${item.id}', event)" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-600 bg-gray-50 rounded-full transition"><i class="fas fa-ellipsis-v"></i></button>
-                        <div id="menu-${item.id}" class="hidden absolute right-0 mt-2 w-44 bg-white rounded-2xl shadow-xl border border-gray-100 z-[500] py-1.5 text-sm item-action-menu overflow-hidden">
-                            <div class="px-5 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold transition flex items-center" onclick="window.openInfo('${item.id}', '${safeName}', '${item.type}', 'mega', event)"><i class="fas fa-info-circle mr-3 text-blue-500 w-4"></i>Thông tin</div>
-                            <div class="px-5 py-3 hover:bg-gray-50 cursor-pointer text-green-600 font-semibold transition border-t border-gray-50 flex items-center" onclick="window.uiPromptFolder('${item.id}', event)"><i class="fas fa-folder-plus mr-3 w-4"></i>Thư mục</div>
-                            <div class="px-5 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold transition flex items-center" onclick="window.shareItem('${item.id}', '${item.type}', '${safeName}', event)"><i class="fas fa-share-nodes mr-3 text-green-500 w-4"></i>Chia sẻ</div>
-                            <div class="px-5 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold transition border-t border-gray-50 flex items-center" onclick="window.downloadItem('${item.id}', '${item.type}', '${safeName}', event)"><i class="fas fa-download mr-3 text-blue-500 w-4"></i>Tải xuống</div>
-                            <div class="px-5 py-3 hover:bg-red-50 cursor-pointer text-red-600 font-semibold transition border-t border-gray-50 flex items-center" onclick="window.handleDelete('${item.id}', '${item.type}', event)"><i class="fas fa-trash mr-3 w-4"></i>Xóa</div>
-                        </div>
-                    </div>
-                </div>
-                <div id="acc-${item.id}" class="hidden bg-white border-t border-gray-100"></div>
-            </div>`;
-        }).join('');
-        megaRows.forEach(row => { if (typeof expandedMegas !== 'undefined' && expandedMegas.includes(row.id) && window.toggleAccordion) window.toggleAccordion(row.id, true); });
-    } 
-    // --- THƯ MỤC CON & FILE ---
-    else {
-        const folders = items.filter(i => i.type === 'folder'); 
-        const files = items.filter(i => i.type !== 'folder');
-
-        if (folders.length > 0 && folderListEl) {
-            folderListEl.innerHTML = folders.map(item => {
-                const meta = getMetaSafe(item.id); const safeName = escapeHTML(item.name);
-                let isSelected = window.multiSelectState && window.multiSelectState.selectedIds.has(item.id);
-                
-                // MÀU SẮC CSS CHUẨN XÁC
-                let activeClass = isSelected ? 'perfect-selected' : 'bg-white border-gray-200 hover:bg-gray-50';
-                let checkUi = isSelected ? `<div class="absolute -top-1 -right-1 z-20 check-icon-bg rounded-full w-5 h-5 flex items-center justify-center shadow-md"><i class="fas fa-check text-[10px]"></i></div>` : '';
-
-                return `
-                <div id="ui-card-${item.id}" class="subfolder-row group relative border-b transition ${activeClass}" style="display: flex !important; cursor: pointer;">
-                    <div class="relative shrink-0 pointer-events-none">
-                        ${checkUi}
-                        <img src="${meta.cover || ''}" class="w-12 h-12 rounded-lg object-cover shadow-sm item-cover-img-${item.id} ${meta.cover ? '' : 'hidden'}">
-                        <div class="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center text-blue-500 text-xl item-cover-icon-${item.id} ${meta.cover ? 'hidden' : ''}"><i class="fas fa-folder"></i></div>
-                    </div>
-                    <div class="flex-1 overflow-hidden pointer-events-none ml-3">
-                        <h4 class="text-sm font-bold ${isSelected ? 'text-blue-800' : 'text-gray-800'} truncate item-name-${item.id}">${item.name}</h4>
-                        <p class="text-[11px] text-gray-500 truncate mt-0.5 item-desc-${item.id} ${meta.desc ? '' : 'hidden'}">${meta.desc || 'Chưa có mô tả'}</p>
-                    </div>
-                    <div class="relative shrink-0">
-                        <button onclick="window.toggleItemMenu('${item.id}', event)" class="px-3 py-2 text-gray-400 hover:text-blue-600 transition"><i class="fas fa-ellipsis-v"></i></button>
-                        <div id="menu-${item.id}" class="hidden absolute right-0 mt-1 w-36 bg-white rounded-xl shadow-lg border z-[500] py-1 text-sm item-action-menu">
-                            <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer font-semibold text-gray-700 flex items-center" onclick="window.shareItem('${item.id}', '${item.type}', '${safeName}', event)"><i class="fas fa-share-nodes mr-3 text-green-500 w-4"></i>Chia sẻ</div>
-                            <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer font-semibold text-gray-700 flex items-center" onclick="window.openInfo('${item.id}', '${safeName}', '${item.type}', 'sub', event)"><i class="fas fa-pen mr-3 text-blue-500 w-4"></i>Sửa</div>
-                            <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer font-semibold text-gray-700 border-t flex items-center" onclick="window.downloadItem('${item.id}', '${item.type}', '${safeName}', event)"><i class="fas fa-download mr-3 text-blue-500 w-4"></i>Tải xuống</div>
-                            <div class="px-4 py-3 hover:bg-red-50 text-red-600 cursor-pointer font-semibold border-t flex items-center" onclick="window.handleDelete('${item.id}', '${item.type}', event)"><i class="fas fa-trash mr-3 w-4"></i>Xóa</div>
-                        </div>
-                    </div>
-                </div>`;
-            }).join('');
-        }
-
-        if (files.length > 0 && fileListEl) {
-            fileListEl.innerHTML = files.map(item => {
-                let isImage = item.mimeType.includes('image'); 
-                let isSelected = window.multiSelectState && window.multiSelectState.selectedIds.has(item.id);
-                let imgUrl = item.tempUrl ? item.tempUrl : `https://drive.google.com/thumbnail?id=${item.id}&sz=w400`; 
-                let fullImgUrl = item.tempUrl ? item.tempUrl : `https://drive.google.com/thumbnail?id=${item.id}&sz=w2000`;
-                let visualEl = isImage ? `<img src="${imgUrl}" class="w-full h-full object-cover drive-img-item" loading="lazy">` : `<div class="w-full h-full flex items-center justify-center bg-gray-50"><i class="fas fa-play-circle text-gray-400 text-4xl"></i></div>`;
-                let isTemp = item.tempUrl ? `<div class="absolute inset-0 bg-white/60 flex flex-col items-center justify-center backdrop-blur-[2px] z-10 rounded-2xl"><div class="loader mb-2 border-blue-600"></div><span class="text-[10px] font-bold text-blue-600">Đang Up...</span></div>` : '';
-                
-                const safeName = escapeHTML(item.name);
-                
-                // MÀU SẮC CSS CHUẨN XÁC
-                let activeClass = isSelected ? 'perfect-selected' : 'bg-white border-gray-100 hover:bg-gray-50';
-                let checkUi = isSelected ? `<div class="absolute top-2 left-2 z-20 check-icon-bg rounded-full w-6 h-6 flex items-center justify-center shadow-md"><i class="fas fa-check text-xs"></i></div>` : '';
-
-                return `
-                <div id="ui-card-${item.id}" class="p-2.5 rounded-2xl shadow-sm border flex flex-col relative transition ${activeClass}" style="cursor: pointer;">
-                    ${checkUi} ${isTemp}
-                    <div class="absolute top-2 right-2 z-30">
-                        <button onclick="window.toggleItemMenu('${item.id}', event)" class="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-blue-600 bg-white/90 backdrop-blur-md rounded-full shadow-sm"><i class="fas fa-ellipsis-v"></i></button>
-                        <div id="menu-${item.id}" class="hidden absolute right-0 mt-1 w-40 bg-white rounded-2xl shadow-xl border border-gray-100 z-[500] py-1 text-sm item-action-menu overflow-hidden">
-                            <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold flex items-center" onclick="window.shareItem('${item.id}', '${item.type}', '${safeName}', event)"><i class="fas fa-share-nodes mr-3 text-green-500 w-4"></i>Chia sẻ</div>
-                            <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold flex items-center" onclick="window.downloadItem('${item.id}', '${item.type}', '${safeName}', event)"><i class="fas fa-download mr-3 text-blue-500 w-4"></i>Tải xuống</div>
-                            <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold border-t flex items-center" onclick="window.openInfo('${item.id}', '${safeName}', '${item.type}', 'file', event)"><i class="fas fa-pen mr-3 text-blue-500 w-4"></i>Sửa</div>
-                            <div class="px-4 py-3 hover:bg-red-50 cursor-pointer text-red-600 font-semibold border-t flex items-center" onclick="window.handleDelete('${item.id}', '${item.type}', event)"><i class="fas fa-trash mr-3 w-4"></i>Xóa</div>
-                        </div>
-                    </div>
-                    <div class="w-full h-32 flex items-center justify-center bg-gray-100 rounded-xl overflow-hidden mb-3 pointer-events-none">${visualEl}</div>
-                    <div class="px-1 flex flex-col justify-center flex-1 pointer-events-none">
-                        <span class="text-[13px] font-bold ${isSelected ? 'text-blue-700' : 'text-gray-800'} line-clamp-2 leading-tight drive-img-name item-name-${item.id}" title="${item.name}">${item.name}</span>
-                        <span class="text-[10px] text-gray-400 mt-1 uppercase font-semibold">${item.mimeType.split('/')[1] || 'FILE'}</span>
-                    </div>
-                </div>`;
-            }).join('');
-        }
-
-        // BƯỚC QUAN TRỌNG NHẤT: BƠM "BỘ NÃO CẢM BIẾN VẬT LÝ" VÀO GIAO DIỆN
-        setTimeout(() => {
-            items.forEach(item => {
-                if (item.type === 'folder' && folderStack.length === 1 && !isSearchMode) return; 
-                const el = document.getElementById(`ui-card-${item.id}`);
-                if (el) {
-                    let fullImgUrl = item.tempUrl ? item.tempUrl : `https://drive.google.com/thumbnail?id=${item.id}&sz=w2000`;
-                    window.setupPerfectTouch(el, item.id, item, fullImgUrl);
-                }
-            });
-        }, 30); // Độ trễ 30ms giúp tránh dội hệ thống khi vẽ hàng chục file cùng lúc
-    }
-};
-// =========================================================================
-// MODULE ĐỘC LẬP: TÍNH NĂNG ĐÍCH DÁN & GIAO DIỆN THU NHỎ
-// =========================================================================
-(function initPasteModule() {
-    // 1. CSS DÀNH RIÊNG CHO ĐÍCH DÁN
-    if (!document.getElementById('paste-module-css')) {
-        const style = document.createElement('style');
-        style.id = 'paste-module-css';
-        style.innerHTML = `
-            .ghost-paste { opacity: 0.45 !important; filter: grayscale(40%); pointer-events: none !important; animation: upload-ghost 1.5s infinite; }
-            @keyframes upload-ghost { 0% { opacity: 0.3; } 50% { opacity: 0.6; } 100% { opacity: 0.3; } }
+        // ĐANG TRONG CHẾ ĐỘ MẢNG CHỌN (SUPER SELECTION CÓ NGƯỜI)
+        if (window.superSelectionIds.size > 0) {
+            e.preventDefault(); e.stopPropagation(); // CẮT ĐỨT HÀM GỐC CỦA HỆ THỐNG
             
-            #pastePopup {
-                position: fixed; top: 85px; right: 10px; width: 350px; max-width: 92vw; max-height: 60vh;
-                background: white; border-radius: 16px; box-shadow: 0 12px 50px rgba(0,0,0,0.3); border: 1px solid #e5e7eb;
-                z-index: 99999; display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95) translateY(-10px); opacity: 0; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: none;
+            const id = card.id.replace('ui-card-', '');
+            // Yêu cầu: Click trúng file đã active -> Hủy mảng
+            if (window.superSelectionIds.has(id)) {
+                window.superSelectionIds.clear();
+            } else {
+                window.superSelectionIds.add(id); // Chọn file mới
             }
-            #pastePopup.show { transform: scale(1) translateY(0); opacity: 1; pointer-events: auto; }
-            
-            .paste-target-btn.active { background-color: #dcfce7 !important; color: #16a34a !important; border-color: #86efac !important; animation: pulse-bullseye 1.5s infinite; }
-            @keyframes pulse-bullseye { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); } 70% { box-shadow: 0 0 0 8px rgba(34,197,94,0); } 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); } }
-        `;
-        document.head.appendChild(style);
-    }
+            window.updateSuperUI();
+        }
+        // Nếu mảng rỗng -> Bỏ qua, cho phép hàm gốc mở file bình thường
+    }, true); // "true" nghĩa là đánh chặn ở cấp cao nhất trước khi chạm tới code HTML!
 
-    // 2. KHỞI TẠO NÚT BẤM VÀ POPUP
-    function buildUI() {
+    // ==============================================================
+    // 5. RÁP GIAO DIỆN ĐÍCH DÁN & MEGA-ROW THU NHỎ
+    // ==============================================================
+    window.addEventListener('DOMContentLoaded', buildSuperUI);
+    setTimeout(buildSuperUI, 1000); 
+
+    function buildSuperUI() {
+        if (document.getElementById('superPasteDestBtn')) return;
         const searchContainer = document.querySelector('.sticky.top-0 > div.relative');
         if (!searchContainer) return;
-        const parent = searchContainer.parentElement;
 
-        if (!document.getElementById('pasteDestBtn')) {
-            const btn = document.createElement('button');
-            btn.id = 'pasteDestBtn';
-            btn.className = 'w-11 h-11 shrink-0 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-400 flex items-center justify-center transition shadow-sm border border-gray-200 paste-target-btn';
-            btn.innerHTML = '<i class="fas fa-bullseye text-xl"></i>';
-            btn.onclick = window.togglePastePopup;
-            
-            const viewBtn = document.getElementById('viewToggleBtn');
-            if (viewBtn) viewBtn.after(btn); else parent.appendChild(btn);
-        }
+        const btn = document.createElement('button');
+        btn.id = 'superPasteDestBtn';
+        btn.className = 'w-11 h-11 shrink-0 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-400 flex items-center justify-center transition shadow-sm border border-gray-200';
+        btn.innerHTML = '<i class="fas fa-bullseye text-xl"></i>';
+        btn.onclick = window.toggleSuperPopup;
+        searchContainer.parentElement.appendChild(btn);
 
-        if (!document.getElementById('pastePopup')) {
-            const popup = document.createElement('div');
-            popup.id = 'pastePopup';
-            popup.innerHTML = `
-                <div class="p-3 bg-gray-50 border-b flex flex-col gap-2 shadow-sm z-10 relative">
-                    <h3 class="font-bold text-xs text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <i class="fas fa-bullseye text-green-600 text-sm"></i> Thư mục đích dán
-                    </h3>
-                    <div class="flex items-center gap-2 mt-0.5">
-                        <div id="pastePopupPath" class="flex-1 text-[12px] font-bold text-blue-600 truncate bg-blue-50 px-3 border border-blue-100 flex items-center rounded-lg" style="height: 36px;">
-                            drive.vinhloc/Root
-                        </div>
-                        <button onclick="window.togglePastePopup()" class="shrink-0 bg-gray-200 text-gray-600 hover:bg-gray-300 transition active:scale-95 border border-gray-300 flex items-center justify-center rounded-lg" style="height: 36px; width: 36px;">
-                            <i class="fas fa-times text-base"></i>
-                        </button>
+        const popup = document.createElement('div');
+        popup.id = 'superPastePopup';
+        popup.innerHTML = `
+            <div class="p-3 bg-gray-50 border-b flex flex-col gap-2 shadow-sm z-10 relative">
+                <h3 class="font-bold text-xs text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <i class="fas fa-bullseye text-green-600 text-sm"></i> Thư mục đích dán
+                </h3>
+                <div class="flex items-center gap-2 mt-0.5">
+                    <div id="superPastePath" class="flex-1 text-[12px] font-bold text-blue-600 truncate bg-blue-50 px-3 border border-blue-100 flex items-center rounded-lg" style="height: 36px;">
+                        drive.vinhloc/Root
                     </div>
-                    <div class="flex gap-2 mt-1">
-                        <button id="miniBtnCopy" class="flex-1 py-2 px-3 bg-blue-600 text-white text-xs font-bold rounded-xl active:scale-95 transition shadow-sm flex items-center justify-center gap-1.5 hover:bg-blue-700">
-                            <i class="fas fa-copy"></i> Sao chép vào đây
-                        </button>
-                        <button id="miniBtnMove" class="flex-1 py-2 px-3 bg-orange-500 text-white text-xs font-bold rounded-xl active:scale-95 transition shadow-sm flex items-center justify-center gap-1.5 hover:bg-orange-600">
-                            <i class="fas fa-arrow-right"></i> Di chuyển vào đây
-                        </button>
-                    </div>
+                    <button onclick="window.toggleSuperPopup()" class="shrink-0 bg-gray-200 text-gray-600 hover:bg-gray-300 transition active:scale-95 border border-gray-300 flex items-center justify-center rounded-lg" style="height: 36px; width: 36px;">
+                        <i class="fas fa-times text-base"></i>
+                    </button>
                 </div>
-                <div id="pastePopupContent" class="flex-1 overflow-y-auto p-2 bg-white relative no-scrollbar"></div>
-            `;
-            document.body.appendChild(popup);
+                <div class="flex gap-2 mt-1">
+                    <button id="superBtnCopy" class="flex-1 py-2 px-3 bg-blue-600 text-white text-xs font-bold rounded-xl active:scale-95 transition shadow-sm hover:bg-blue-700"><i class="fas fa-copy"></i> Sao chép</button>
+                    <button id="superBtnMove" class="flex-1 py-2 px-3 bg-orange-500 text-white text-xs font-bold rounded-xl active:scale-95 transition shadow-sm hover:bg-orange-600"><i class="fas fa-arrow-right"></i> Di chuyển</button>
+                </div>
+            </div>
+            <div id="superPasteContent" class="flex-1 overflow-y-auto p-2 bg-white relative no-scrollbar"></div>
+        `;
+        document.body.appendChild(popup);
 
-            document.getElementById('miniBtnCopy').onclick = () => window.executeGhostPaste(window.currentMiniFolderId, 'copy');
-            document.getElementById('miniBtnMove').onclick = () => window.executeGhostPaste(window.currentMiniFolderId, 'move');
-        }
+        document.getElementById('superBtnCopy').onclick = () => window.executeSuperPaste('copy');
+        document.getElementById('superBtnMove').onclick = () => window.executeSuperPaste('move');
     }
 
-    if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', buildUI);
-    else buildUI();
-
-    // 3. ĐIỀU KHIỂN TRẠNG THÁI NÚT VÀ LỊCH SỬ DUYỆT
-    let lastActiveState = { count: -1, isShow: false };
-    window.updatePasteButtonState = function() {
-        const btn = document.getElementById('pasteDestBtn');
-        if (!btn) return;
-        const count = window.multiSelectState?.selectedIds?.size || 0;
-        const popup = document.getElementById('pastePopup');
-        const isShow = popup ? popup.classList.contains('show') : false;
-        
-        if (lastActiveState.count === count && lastActiveState.isShow === isShow) return;
-        lastActiveState.count = count; lastActiveState.isShow = isShow;
-
-        btn.innerHTML = isShow ? '<i class="fas fa-times text-xl"></i>' : '<i class="fas fa-bullseye text-xl"></i>';
-        if (count > 0) btn.classList.add('active'); else btn.classList.remove('active');
-    };
-    setInterval(window.updatePasteButtonState, 250);
-
-    window.miniExplorerHistory = [{ id: (typeof ROOT_FOLDER_ID !== 'undefined' ? ROOT_FOLDER_ID : ''), name: 'Root' }];
-    window.currentMiniFolderId = window.miniExplorerHistory[0].id;
-
-    window.togglePastePopup = function() {
-        const popup = document.getElementById('pastePopup');
-        if (!popup) return;
-        if (popup.classList.contains('show')) {
-            popup.classList.remove('show');
-        } else {
-            popup.classList.add('show');
-            window.renderMiniExplorer(window.miniExplorerHistory[window.miniExplorerHistory.length - 1].id);
-        }
-        window.updatePasteButtonState();
+    window.superMiniHistory = [{ id: (typeof ROOT_FOLDER_ID !== 'undefined' ? ROOT_FOLDER_ID : ''), name: 'Root' }];
+    
+    window.toggleSuperPopup = function() {
+        const popup = document.getElementById('superPastePopup');
+        if (popup.classList.contains('show')) popup.classList.remove('show');
+        else { popup.classList.add('show'); window.renderSuperMini(window.superMiniHistory[window.superMiniHistory.length - 1].id); }
+        window.updateSuperUI();
     };
 
-    document.addEventListener('click', (e) => {
-        const popup = document.getElementById('pastePopup');
-        const btn = document.getElementById('pasteDestBtn');
-        if (popup && popup.classList.contains('show') && document.body.contains(e.target)) {
-            if (!popup.contains(e.target) && btn && !btn.contains(e.target)) window.togglePastePopup();
-        }
-    });
-
-    window.miniExplorerBack = function() {
-        if (window.miniExplorerHistory.length > 1) {
-            window.miniExplorerHistory.pop();
-            window.renderMiniExplorer(window.miniExplorerHistory[window.miniExplorerHistory.length - 1].id);
-        }
-    };
-
-    window.navigateMiniExplorer = function(id, name) {
-        window.miniExplorerHistory.push({ id: id, name: name });
-        window.renderMiniExplorer(id);
-    };
-
-    window.renderMiniExplorer = async function(folderId) {
-        window.currentMiniFolderId = folderId;
-        const content = document.getElementById('pastePopupContent');
-        const pathEl = document.getElementById('pastePopupPath');
-        if (!content || !pathEl) return;
-
+    window.renderSuperMini = async function(folderId) {
+        const content = document.getElementById('superPasteContent');
         content.innerHTML = '<div class="flex justify-center py-6"><div class="loader border-green-500"></div></div>';
-        pathEl.textContent = 'drive.vinhloc/' + window.miniExplorerHistory.map(h => h.name).join('/');
+        document.getElementById('superPastePath').textContent = 'drive.vinhloc/' + window.superMiniHistory.map(h => h.name).join('/');
 
         let items = (typeof folderDataCache !== 'undefined') ? folderDataCache[folderId] : null;
-        if (!items && typeof SCRIPT_URL !== 'undefined') {
+        if (!items) {
             try {
                 const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'list', folderId: folderId }) }).then(r => r.json());
-                if (res && res.success) { items = res.data; folderDataCache[folderId] = items; } 
+                if (res && res.success) { items = res.data; if(typeof folderDataCache!=='undefined') folderDataCache[folderId] = items; } 
                 else items = [];
-            } catch (e) { items = []; }
+            } catch(e) { items = []; }
         }
 
-        const folders = (items || []).filter(i => i.type === 'folder' && !(window.multiSelectState?.selectedIds || new Set()).has(i.id)); 
+        const folders = (items||[]).filter(i => i.type === 'folder' && !window.superSelectionIds.has(i.id));
         let html = '';
-        if (window.miniExplorerHistory.length > 1) {
-            html += `
-                <div class="flex items-center gap-3 p-2.5 border-b border-gray-100 hover:bg-gray-50 rounded-xl cursor-pointer mb-2 transition text-blue-600 font-bold text-xs" onclick="window.miniExplorerBack()">
-                    <div class="w-7 h-7 rounded-full bg-blue-50 flex items-center justify-center text-blue-500"><i class="fas fa-level-up-alt"></i></div>
-                    Quay lại cấp trên
-                </div>`;
+        if (window.superMiniHistory.length > 1) {
+            html += `<div class="flex items-center gap-3 p-2.5 border-b border-gray-100 hover:bg-gray-50 rounded-xl cursor-pointer mb-2 text-blue-600 font-bold text-xs" onclick="window.superMiniHistory.pop(); window.renderSuperMini(window.superMiniHistory[window.superMiniHistory.length-1].id)"><div class="w-7 h-7 rounded-full bg-blue-50 flex items-center justify-center text-blue-500"><i class="fas fa-level-up-alt"></i></div> Quay lại cấp trên</div>`;
         }
-
-        if (folders.length === 0) {
-            html += '<div class="text-center py-8 text-gray-400 text-xs italic font-medium">Không có thư mục con nào bên trong.</div>';
-        } else {
+        if (folders.length === 0) html += '<div class="text-center py-8 text-gray-400 text-xs italic">Không có thư mục con.</div>';
+        else {
             html += folders.map(f => {
                 const meta = (typeof appMeta !== 'undefined') ? (appMeta[f.id] || {}) : {};
-                const visual = meta.cover ? `<img src="${meta.cover}" class="w-9 h-9 rounded-lg object-cover shadow-sm">` : `<div class="w-9 h-9 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center shadow-sm"><i class="fas fa-folder text-base"></i></div>`;
-                return `
-                <div class="flex items-center p-2.5 hover:bg-gray-50 rounded-xl border border-transparent hover:border-gray-100 transition cursor-pointer mb-1" onclick="window.navigateMiniExplorer('${f.id}', '${f.name.replace(/'/g, "\\'")}')">
-                    <div class="flex items-center gap-3 flex-1 overflow-hidden">
-                        ${visual}
-                        <span class="text-[13px] font-bold text-gray-700 truncate block">${f.name}</span>
-                    </div>
-                    <div class="text-gray-300"><i class="fas fa-chevron-right text-[10px]"></i></div>
-                </div>`;
+                const visual = meta.cover ? `<img src="${meta.cover}" class="w-9 h-9 rounded-lg object-cover">` : `<div class="w-9 h-9 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center"><i class="fas fa-folder"></i></div>`;
+                return `<div class="flex items-center p-2.5 hover:bg-gray-50 rounded-xl border border-transparent hover:border-gray-100 cursor-pointer mb-1" onclick="window.superMiniHistory.push({id:'${f.id}', name:'${f.name.replace(/'/g, "\\'")}'}); window.renderSuperMini('${f.id}')"><div class="flex items-center gap-3 flex-1 overflow-hidden">${visual}<span class="text-[13px] font-bold text-gray-700 truncate">${f.name}</span></div><i class="fas fa-chevron-right text-[10px] text-gray-300"></i></div>`;
             }).join('');
         }
         content.innerHTML = html;
     };
 
-    // 4. XỬ LÝ DÁN & HIỆU ỨNG GHOSTING KHÔNG LÀM HỎNG HÀM RENDER GỐC
-    if (!window._ghostPasteHooked) {
-        const originalRender = window.renderItems;
-        window.renderItems = function(items, isSearchMode = false) {
-            originalRender(items, isSearchMode);
-            // Bơm nhẹ class ghost-paste vào các phần tử đang chờ lưu ngầm sau khi vẽ xong
-            setTimeout(() => {
-                items.forEach(item => {
-                    if (item.isGhostPaste) {
-                        const el = document.getElementById(`ui-card-${item.id}`);
-                        if (el) el.classList.add('ghost-paste');
-                    }
-                });
-            }, 40);
-        };
-        window._ghostPasteHooked = true;
-    }
-
-    window.executeGhostPaste = async function(targetFldId, mode) {
-        const ids = Array.from(window.multiSelectState?.selectedIds || []);
+    window.executeSuperPaste = async function(mode) {
+        const ids = Array.from(window.superSelectionIds);
         if (ids.length === 0) {
-            if(typeof showToast === 'function') showToast('Bạn chưa chọn thư mục/file nào để ' + (mode === 'copy' ? 'sao chép!' : 'di chuyển!'), true);
+            if (typeof showToast==='function') showToast('Chưa chọn mảng để dán!', true);
             return;
         }
+        document.getElementById('superPastePopup').classList.remove('show');
+        const targetFldId = window.superMiniHistory[window.superMiniHistory.length - 1].id;
         
-        const popup = document.getElementById('pastePopup');
-        if (popup) popup.classList.remove('show');
-        
+        if (typeof showToast==='function') showToast(`<i class="fas fa-spinner fa-spin mr-1.5"></i> Đang xử lý mảng...`);
+
         let itemsToProcess = [];
         for (let id of ids) {
             let it = currentDriveItems.find(i => i.id === id);
-            if (!it) {
-                Object.values(folderDataCache).forEach(arr => { let f = arr.find(x => x.id === id); if (f) it = f; });
-                Object.values(subFolderCache || {}).forEach(arr => { let f = arr.find(x => x.id === id); if (f) it = f; });
-            }
-            if (it) itemsToProcess.push({ id: it.id, type: it.type, name: it.name, mimeType: it.mimeType || '', origParent: currentFolderId });
+            if (!it) Object.values(folderDataCache||{}).forEach(arr => { let f = arr.find(x => x.id === id); if(f) it=f; });
+            if (it) itemsToProcess.push({ id: it.id, type: it.type, name: it.name, mimeType: it.mimeType||'', origParent: currentFolderId });
+        }
+
+        let ghosts = itemsToProcess.map(it => ({ ...it, id: 'ghost_'+Date.now()+'_'+it.id, name: (mode==='copy'?'Bản sao ':'')+it.name, isGhostPaste: true }));
+        if (typeof folderDataCache!=='undefined') {
+            if(!folderDataCache[targetFldId]) folderDataCache[targetFldId] = [];
+            folderDataCache[targetFldId] = [...ghosts, ...folderDataCache[targetFldId]];
+            if(currentFolderId === targetFldId) currentDriveItems = folderDataCache[targetFldId];
         }
         
-        if (itemsToProcess.length === 0) return;
-        if(typeof showToast === 'function') showToast(`<i class="fas fa-spinner fa-spin mr-1.5"></i> Đang chuẩn bị xử lý dán mảng...`);
+        window.superSelectionIds.clear(); window.updateSuperUI();
+        if(typeof window.renderItems==='function') window.renderItems(currentDriveItems);
 
-        let ghosts = itemsToProcess.map(it => ({
-            ...it, id: 'ghost_' + Date.now() + '_' + it.id, name: (mode === 'copy' ? 'Bản sao của ' : '') + it.name, isGhostPaste: true, isPending: true     
-        }));
-
-        if (!folderDataCache[targetFldId]) folderDataCache[targetFldId] = [];
-        folderDataCache[targetFldId] = [...ghosts, ...folderDataCache[targetFldId]];
-
-        if (mode === 'move') currentDriveItems.forEach(i => { if (ids.includes(i.id)) i.isGhostPaste = true; });
-        if (currentFolderId === targetFldId) currentDriveItems = folderDataCache[targetFldId];
-        
-        window.multiSelectState.selectedIds.clear();
-        window.renderItems(currentDriveItems);
-        window.updatePasteButtonState();
-
-        if (typeof syncQueueCount !== 'undefined') { syncQueueCount++; updateSyncIndicator(); }
+        if(typeof syncQueueCount!=='undefined'){ syncQueueCount++; updateSyncIndicator(); }
         try {
-            let res = await fetch(SCRIPT_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'clipboardOps', mode: mode, targetFolderId: targetFldId, items: itemsToProcess.map(i => ({ id: i.id, type: i.type, origParent: i.origParent })) })
-            }).then(r => r.json());
-
+            let res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'clipboardOps', mode: mode, targetFolderId: targetFldId, items: itemsToProcess.map(i => ({ id: i.id, type: i.type, origParent: i.origParent })) }) }).then(r=>r.json());
             if (res && res.success) {
-                if(typeof showToast === 'function') showToast(`<i class="fas fa-check-circle text-green-500 mr-1.5"></i> Xử lý ${mode === 'copy' ? 'sao chép' : 'di chuyển'} hoàn tất!`);
-                let newTargetRes = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'list', folderId: targetFldId }) }).then(r => r.json());
-                if (newTargetRes && newTargetRes.success) {
-                    folderDataCache[targetFldId] = newTargetRes.data;
-                    if (currentFolderId === targetFldId) { currentDriveItems = folderDataCache[targetFldId]; window.renderItems(currentDriveItems); }
+                if (typeof showToast==='function') showToast(`<i class="fas fa-check-circle text-green-500 mr-1.5"></i> Hoàn tất!`);
+                let newRes = await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify({action:'list', folderId: targetFldId}) }).then(r=>r.json());
+                if (newRes.success && typeof folderDataCache!=='undefined') {
+                    folderDataCache[targetFldId] = newRes.data;
+                    if(currentFolderId === targetFldId) { currentDriveItems = newRes.data; window.renderItems(currentDriveItems); }
                 }
                 if (mode === 'move' && currentFolderId !== targetFldId) {
                     currentDriveItems = currentDriveItems.filter(i => !ids.includes(i.id));
@@ -6682,13 +6721,9 @@ window.renderItems = function (items, isSearchMode = false) {
                 }
             } else throw new Error(res.message);
         } catch (e) {
-            if(typeof showToast === 'function') showToast(`Lỗi đồng bộ dán: ${e.message}`, true);
-            folderDataCache[targetFldId] = folderDataCache[targetFldId].filter(i => !i.isGhostPaste);
-            currentDriveItems.forEach(i => delete i.isGhostPaste);
-            if (currentFolderId === targetFldId) currentDriveItems = folderDataCache[targetFldId];
-            window.renderItems(currentDriveItems);
+            if (typeof showToast==='function') showToast(`Lỗi: ${e.message}`, true);
         } finally {
-            if (typeof syncQueueCount !== 'undefined') { syncQueueCount--; updateSyncIndicator(); }
+            if(typeof syncQueueCount!=='undefined'){ syncQueueCount--; updateSyncIndicator(); }
         }
     };
 })();
