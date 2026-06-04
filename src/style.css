@@ -360,3 +360,30 @@ div.bottom-20.right-6 label {
     }
 
 }
+/* =========================================================
+   TÙY CHỈNH LƯỚI HIỂN THỊ FILE CHO DESKTOP (6 CỘT, Ô VUÔNG)
+   ========================================================= */
+@media (min-width: 1024px) {
+    /* Ép lưới hiển thị thành 6 cột đều nhau, ghi đè class của Tailwind */
+    #fileList {
+        grid-template-columns: repeat(6, 1fr) !important;
+    }
+
+    /* Ép các thẻ chứa item bên trong lưới thành hình vuông (tỷ lệ 1:1) */
+    #fileList > div {
+        aspect-ratio: 1 / 1 !important;
+        height: auto !important; /* Hủy chiều cao cố định nếu có trong JS */
+        overflow: hidden !important;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+
+    /* Đảm bảo ảnh bìa hoặc ảnh thumbnail phủ kín không gian vuông mà không bị méo */
+    #fileList > div img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+    }
+}
