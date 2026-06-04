@@ -6895,191 +6895,162 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 // ==============================================================
-// SUPER PATCH: VÁ LỖI XÓA NHIỀU MỤC (DELETE SELECTED) & ĐỒNG BỘ
+// SUPER PATCH 48: VÁ LỖI XÓA ĐA CHỌN, ĐẾM SỐ LƯỢNG & ĐỒNG BỘ GIAO DIỆN
 // ==============================================================
-(function() {
-    // 1. SỬA LỖI VẪN ĐẾM SỐ LƯỢNG KHI RỜI KHỎI THƯ MỤC
-    // Ghi đè hàm loadFolder để reset lại trạng thái chọn khi chuyển thư mục
-    if (window.loadFolder && !window.loadFolder.isSelectionPatched) {
-        const originalLoadFolder = window.loadFolder;
-        window.loadFolder = async function(folderId, folderName, isNewNavigation, isPopState) {
-            // Xóa sạch bộ nhớ tạm các mục đã chọn khi chuyển sang thư mục mới
-            if (window.multiSelectState && window.multiSelectState.selectedIds) {
-                window.multiSelectState.selectedIds.clear();
-            }
-            
-            // Ẩn menu đang mở nếu có
-            const headerDropdown = document.getElementById('headerDropdown');
-            if (headerDropdown) headerDropdown.classList.add('hidden');
-            
-            return originalLoadFolder(folderId, folderName, isNewNavigation, isPopState);
-        };
-        window.loadFolder.isSelectionPatched = true;
-    }
-
-    // 2. SỬA LỖI ĐẾM SAI SỐ LƯỢNG FILE VÀ FOLDER KHI MỞ MENU
-    if (window.buildHeaderMenu) {
-        window.buildHeaderMenu = function () {
-            // Thanh lọc các ID không còn tồn tại trong thư mục hiện tại để đếm chính xác
-            if (window.multiSelectState && window.multiSelectState.selectedIds) {
-                let validIds = new Set();
-                window.multiSelectState.selectedIds.forEach(id => {
-                    if (currentDriveItems.some(item => item.id === id)) {
-                        validIds.add(id);
-                    }
-                });
-                window.multiSelectState.selectedIds = validIds;
-            }
-
-            let types = new Set(); 
-            let hasFolders = false;
-            currentDriveItems.forEach(item => { 
-                if (item.type === 'folder') hasFolders = true; 
-                else { 
-                    let ext = item.name.split('.').pop().toLowerCase(); 
-                    if (ext !== item.name) types.add('.' + ext); 
-                    else types.add('Khác'); 
-                } 
-            });
-            
-            let totalItems = currentDriveItems.length; 
-            let allSelected = totalItems > 0 && currentDriveItems.every(i => window.multiSelectState.selectedIds.has(i.id));
-            let html = `<div class="px-5 py-2 font-bold text-[11px] text-gray-400 uppercase tracking-wider bg-gray-50 border-b border-gray-100">Chọn lọc</div><div class="px-5 py-3 hover:bg-blue-50 cursor-pointer flex items-center justify-between transition font-semibold" onclick="window.selectAllItems()"><span>Tất cả</span>${allSelected ? '<i class="fas fa-check text-blue-600 bg-blue-100 p-1 rounded-full text-[10px]"></i>' : ''}</div>`;
-            
-            if (hasFolders) { 
-                let folderItems = currentDriveItems.filter(i => i.type === 'folder'); 
-                let folderSelected = folderItems.length > 0 && folderItems.every(i => window.multiSelectState.selectedIds.has(i.id)); 
-                html += `<div class="px-5 py-3 hover:bg-blue-50 cursor-pointer flex items-center justify-between transition font-medium border-t border-gray-50" onclick="window.selectByType('folder')"><span>Thư mục</span>${folderSelected ? '<i class="fas fa-check text-blue-600 bg-blue-100 p-1 rounded-full text-[10px]"></i>' : ''}</div>`; 
-            }
-            
-            types.forEach(type => { 
-                let itemsOfType = currentDriveItems.filter(i => i.type !== 'folder' && (i.name.toLowerCase().endsWith(type) || (type === 'Khác' && !i.name.includes('.')))); 
-                let typeSelected = itemsOfType.length > 0 && itemsOfType.every(i => window.multiSelectState.selectedIds.has(i.id)); 
-                html += `<div class="px-5 py-3 hover:bg-blue-50 cursor-pointer flex items-center justify-between transition font-medium border-t border-gray-50" onclick="window.selectByType('${type}')"><span>Đuôi ${type}</span>${typeSelected ? '<i class="fas fa-check text-blue-600 bg-blue-100 p-1 rounded-full text-[10px]"></i>' : ''}</div>`; 
-            });
-            
-            let selCount = window.multiSelectState.selectedIds.size; 
-            html += `<div class="border-t border-gray-200 mt-1"></div><div class="px-5 py-3 hover:bg-red-50 cursor-pointer text-red-600 font-bold flex items-center justify-between transition" onclick="window.deleteSelectedItems()"><span><i class="fas fa-trash-alt mr-2"></i>Xóa đã chọn</span>${selCount > 0 ? `<span class="bg-red-100 text-red-600 px-2 py-0.5 rounded-full text-xs">${selCount}</span>` : ''}</div>`;
-            
-            const headerDropdown = document.getElementById('headerDropdown');
-            if (headerDropdown) headerDropdown.innerHTML = html;
-        };
-    }
-
-    // 3. HÀM DỌN DẸP RÁC TOÀN CỤC CHUẨN XÁC (Sửa lỗi các nội dung đã xóa bị hiển thị lại)
-    window.purgeDeletedItem = function(id) {
-        if (typeof currentDriveItems !== 'undefined') {
-            currentDriveItems = currentDriveItems.filter(i => i.id !== id);
-        }
-        if (typeof folderDataCache !== 'undefined') {
-            for (let fId in folderDataCache) {
-                folderDataCache[fId] = folderDataCache[fId].filter(i => i.id !== id);
-            }
-        }
-        if (typeof subFolderCache !== 'undefined') {
-            for (let mId in subFolderCache) {
-                subFolderCache[mId] = subFolderCache[mId].filter(i => i.id !== id);
-            }
-        }
-        if (typeof appMeta !== 'undefined' && appMeta[id]) {
-            delete appMeta[id];
-            localforage.setItem('vinhloc_meta', appMeta).catch(()=>{});
-        }
-        
-        localforage.setItem('vinhloc_folder_cache', folderDataCache).catch(()=>{});
-        localforage.setItem('vinhloc_subfolder_cache', subFolderCache).catch(()=>{});
-    };
-
-    // 4. SỬA LỖI HÀM XÓA NHIỀU MỤC (Xóa thực sự trên drive, mất số lượng, đồng bộ đa thiết bị)
+setTimeout(() => {
+    
+    // 1. SỬA LỖI: HÀM XÓA NHIỀU MỤC KHÔNG CHẠY TRÊN DRIVE VÀ HIỂN THỊ RÁC GIAO DIỆN
     window.deleteSelectedItems = function() {
         if (!window.multiSelectState || window.multiSelectState.selectedIds.size === 0) {
-            return typeof showToast === 'function' ? showToast("Vui lòng chọn mục cần xóa!", true) : null;
+            return typeof showToast === 'function' ? showToast("Vui lòng chọn mục cần xóa!", true) : alert("Vui lòng chọn mục cần xóa!");
         }
-
+            
         const modalTitle = document.getElementById('modalTitle');
         const modalDesc = document.getElementById('modalDesc');
         const modalInput = document.getElementById('modalInput');
-        const btn = document.getElementById('modalConfirmBtn');
         const customModal = document.getElementById('customModal');
-
-        if (modalTitle) modalTitle.textContent = 'Xóa nhiều mục';
-        if (modalDesc) {
-            modalDesc.textContent = `Xác nhận xóa ${window.multiSelectState.selectedIds.size} mục? Hành động này không thể hoàn tác.`;
-            modalDesc.classList.remove('hidden');
-        }
-        if (modalInput) modalInput.classList.add('hidden');
+        const btn = document.getElementById('modalConfirmBtn');
         
-        if (btn) {
-            btn.textContent = 'Xóa tất cả'; 
-            btn.className = 'px-5 py-2 bg-red-600 text-white font-bold rounded-xl';
+        if (!customModal || !modalTitle || !modalDesc || !btn) return;
+        
+        modalTitle.textContent = 'Xóa nhiều mục';
+        modalDesc.textContent = `Xác nhận xóa ${window.multiSelectState.selectedIds.size} mục đã chọn? Hành động này không thể hoàn tác.`;
+        modalDesc.classList.remove('hidden');
+        if(modalInput) modalInput.classList.add('hidden');
+        
+        btn.textContent = 'Xóa tất cả';
+        btn.className = 'px-5 py-2 bg-red-600 text-white font-bold rounded-xl';
+        
+        btn.onclick = async () => {
+            if (typeof closeModal === 'function') closeModal();
             
-            btn.onclick = async () => {
-                if (typeof closeModal === 'function') closeModal();
-                
-                let idsToDelete = Array.from(window.multiSelectState.selectedIds);
-                let tracker = JSON.parse(localStorage.getItem('vinhloc_temp_tracker') || '{}');
-                let blacklist = JSON.parse(localStorage.getItem('vinhloc_blacklist') || '[]');
-                
-                showToast(`<i class="fas fa-spinner fa-spin mr-2"></i> Đang xử lý xóa ${idsToDelete.length} mục...`);
-                
-                // Lặp tuần tự qua các file để gửi lệnh xóa chính xác
-                for (let id of idsToDelete) {
-                    let targetItem = currentDriveItems.find(i => i.id === id);
-                    let itemType = targetItem ? targetItem.type : 'file'; // BẮT BUỘC CÓ TYPE ĐỂ GAS XÓA TRÊN DRIVE
-                    let targetName = targetItem ? targetItem.name : (tracker[id] || "Unknown");
+            let idsToDelete = Array.from(window.multiSelectState.selectedIds);
+            let blacklist = JSON.parse(localStorage.getItem('vinhloc_blacklist') || '[]');
+            let tracker = JSON.parse(localStorage.getItem('vinhloc_temp_tracker') || '{}');
+            
+            // Tìm tất cả item bị xóa từ mọi bộ nhớ cache
+            const allItems = [...(typeof currentDriveItems !== 'undefined' ? currentDriveItems : []), ...Object.values(typeof subFolderCache !== 'undefined' ? subFolderCache : {}).flat()];
 
-                    if (String(id).startsWith('temp_')) {
-                        blacklist.push({ tempId: id, name: targetName, time: Date.now() });
-                    } else {
-                        try {
-                            // Vá lỗi: Gửi đủ id và type để API xóa thực sự trên Drive
-                            if (typeof addActionToQueue === 'function') {
-                                await addActionToQueue('delete', { id: id, type: itemType });
-                            } else if (typeof bgApiCall === 'function') {
-                                await bgApiCall('delete', { id: id, type: itemType });
-                            }
-                        } catch (err) {
-                            console.error("Lỗi gửi lệnh xóa lên Drive:", id, err);
-                        }
+            idsToDelete.forEach(id => {
+                let itemType = 'file'; // Mặc định
+                let targetName = "Unknown";
+                let item = allItems.find(i => i.id === id);
+                
+                if (item) {
+                    itemType = item.type;
+                    targetName = item.name;
+                }
+
+                if (String(id).startsWith('temp_')) {
+                    if (tracker[id]) targetName = tracker[id];
+                    blacklist.push({ tempId: id, name: targetName, time: Date.now() });
+                } else {
+                    // SỬA LỖI: Truyền đúng Type (file/folder) để Google Drive phân biệt được và xóa thật
+                    if (typeof addActionToQueue === 'function') {
+                        addActionToQueue('delete', { id: id, type: itemType });
+                    } else if (typeof bgApiCall === 'function') {
+                        bgApiCall('delete', { id: id, type: itemType });
                     }
-                    
-                    // Quét sạch rác khỏi bộ nhớ
-                    if (typeof window.purgeDeletedItem === 'function') {
-                        window.purgeDeletedItem(id);
-                    }
-                    await new Promise(resolve => setTimeout(resolve, 50));
                 }
+                
+                // Dọn dẹp DOM HTML
+                if (window.purgeDeletedItem) window.purgeDeletedItem(id);
+            });
+            
+            localStorage.setItem('vinhloc_blacklist', JSON.stringify(blacklist));
 
-                localStorage.setItem('vinhloc_blacklist', JSON.stringify(blacklist));
-                
-                // Xóa số lượng đã chọn
-                window.multiSelectState.selectedIds.clear();
-                
-                // Render lại giao diện file ngay lập tức
-                if (typeof window.renderItems === 'function') {
-                    window.renderItems(currentDriveItems);
+            // SỬA LỖI: Lọc sạch các mục vừa xóa ra khỏi mảng dữ liệu (Không cho hiển thị lại)
+            if (typeof currentDriveItems !== 'undefined') {
+                currentDriveItems = currentDriveItems.filter(i => !idsToDelete.includes(i.id));
+                if (typeof currentFolderId !== 'undefined' && typeof folderDataCache !== 'undefined') {
+                    folderDataCache[currentFolderId] = currentDriveItems;
+                    if (window.localforage) localforage.setItem('vinhloc_folder_cache', folderDataCache).catch(()=>{});
                 }
-                
-                // Ẩn bảng menu Header
-                const headerDropdown = document.getElementById('headerDropdown');
-                if (headerDropdown) {
-                    headerDropdown.classList.add('hidden');
+            }
+            
+            // Xóa luôn khỏi Sub-Folder (nếu có mục trong Mega Folder)
+            if (typeof subFolderCache !== 'undefined') {
+                let subCacheChanged = false;
+                for (let megaId in subFolderCache) {
+                    const oldLen = subFolderCache[megaId].length;
+                    subFolderCache[megaId] = subFolderCache[megaId].filter(i => !idsToDelete.includes(i.id));
+                    if (subFolderCache[megaId].length !== oldLen) subCacheChanged = true;
                 }
-                
-                // ĐỒNG BỘ ĐA THIẾT BỊ NGAY LẬP TỨC
-                if (typeof triggerSync === 'function') {
-                    triggerSync();
-                } else if (typeof window.masterSync === 'function') {
-                    window.masterSync();
+                if (subCacheChanged && window.localforage) {
+                    localforage.setItem('vinhloc_subfolder_cache', subFolderCache).catch(()=>{});
                 }
+            }
 
-                showToast(`<i class="fas fa-check-circle text-green-500 mr-2"></i> Đã xóa trên Drive & Đồng bộ tất cả thiết bị!`);
-            };
-        }
-
-        if (customModal) {
-            customModal.classList.remove('hidden'); 
-            customModal.classList.add('flex');
-        }
+            // SỬA LỖI: Xóa số lượng đã chọn (Reset bộ nhớ đếm)
+            window.multiSelectState.selectedIds.clear();
+            
+            // Ẩn Menu Header để xóa hoàn toàn báo cáo số lượng cũ
+            const headerDropdown = document.getElementById('headerDropdown');
+            if (headerDropdown) headerDropdown.classList.add('hidden');
+            
+            // Vẽ lại giao diện (các mục bị xóa sẽ bốc hơi)
+            if (typeof window.renderItems === 'function' && typeof currentDriveItems !== 'undefined') {
+                window.renderItems(currentDriveItems);
+            }
+            
+            // Gửi tín hiệu ép Gọi Đồng bộ Đa thiết bị
+            if (typeof masterSync === 'function') masterSync();
+            
+            if (typeof showToast === 'function') {
+                showToast(`<i class="fas fa-check mr-2"></i> Đã xóa ${idsToDelete.length} mục`);
+            }
+        };
+        
+        customModal.classList.remove('hidden');
+        customModal.classList.add('flex');
     };
-})();
+
+    // 2. SỬA LỖI ĐẾM SAI VÀ VẪN GIỮ SỐ LƯỢNG KHI RỜI THƯ MỤC
+    if (window.loadFolder && !window.loadFolder.isPatch48Hooked) {
+        const originalLoadFolderPatch48 = window.loadFolder;
+        window.loadFolder = function(folderId, folderName, isNewNavigation, isPopState) {
+            // SỬA LỖI: Gọi biến 'currentFolderId' thật (không phải 'window.currentFolderId' bị undefined)
+            const currentId = typeof currentFolderId !== 'undefined' ? currentFolderId : window.currentFolderId;
+            if (currentId && currentId !== folderId) {
+                if (window.multiSelectState && window.multiSelectState.selectedIds) {
+                    window.multiSelectState.selectedIds.clear(); // Reset chọn file khi đổi Folder
+                }
+                // Đóng header để ẩn giao diện đếm thừa
+                const headerDropdown = document.getElementById('headerDropdown');
+                if (headerDropdown) headerDropdown.classList.add('hidden');
+            }
+            return originalLoadFolderPatch48.apply(this, arguments);
+        };
+        window.loadFolder.isPatch48Hooked = true;
+    }
+
+    // 3. CHẶN ĐỨNG TRƯỜNG HỢP GIAO DIỆN BỊ ĐẾM DƯ CÁC MỤC ĐÃ ẨN/XÓA
+    if (window.renderItems && !window.renderItems.isPatch48Hooked) {
+        const originalRenderItemsPatch48 = window.renderItems;
+        window.renderItems = function(items, isSearchMode = false) {
+            // Tự động quét và loại bỏ các ID trong bộ đếm nếu chúng không còn tồn tại trên màn hình
+            if (window.multiSelectState && window.multiSelectState.selectedIds && items && Array.isArray(items)) {
+                const visibleIds = new Set(items.map(item => item.id));
+                for (let id of window.multiSelectState.selectedIds) {
+                    if (!visibleIds.has(id)) {
+                        window.multiSelectState.selectedIds.delete(id);
+                    }
+                }
+            }
+            
+            // Vẽ lại mảng Items mới
+            const res = originalRenderItemsPatch48.apply(this, arguments);
+            
+            // Cập nhật lại UI Header Dropdown nếu nó đang mở để số lượng đếm tự tụt
+            const headerDropdown = document.getElementById('headerDropdown');
+            if (headerDropdown && !headerDropdown.classList.contains('hidden') && typeof window.buildHeaderMenu === 'function') {
+                window.buildHeaderMenu();
+            }
+            return res;
+        };
+        window.renderItems.isPatch48Hooked = true;
+    }
+    
+    console.log("✅ SUPER PATCH 48: Đã khắc phục triệt để lỗi Xóa đa chọn, Đếm số lượng, và Đồng bộ Drive!");
+
+}, 32000); // Set timeout 32s để đảm bảo ghi đè thành công toàn bộ logic cũ
