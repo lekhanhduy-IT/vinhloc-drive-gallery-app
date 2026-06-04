@@ -6863,3 +6863,34 @@ setTimeout(() => {
         el.addEventListener('click', onClick);
     }
 })();
+// Chặn menu tải xuống và kéo thả đối với các danh sách ảnh chỉ định, giữ nguyên sự kiện click
+document.addEventListener("DOMContentLoaded", () => {
+    const targetImages = [
+        "loaddata.gif", 
+        "pendesign.png", 
+        "addfolder.png", 
+        "vl_foot_sldebar.png", 
+        "vl_right_header.png", 
+        "vlimage.png"
+    ];
+
+    document.querySelectorAll("img").forEach(img => {
+        const src = img.getAttribute("src") || "";
+        // Kiểm tra xem ảnh hiện tại có thuộc danh sách bị cấm tải không
+        const isTarget = targetImages.some(target => src.includes(target));
+        
+        if (isTarget) {
+            // Chặn menu chuột phải (PC) và menu nhấn giữ (Android) hiển thị tùy chọn Save Image
+            img.addEventListener("contextmenu", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+
+            // Chặn hành động click giữ rồi kéo ảnh ra màn hình nền hoặc tab khác để tải về
+            img.addEventListener("dragstart", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        }
+    });
+});
