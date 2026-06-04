@@ -127,6 +127,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Hàm khởi chạy và kết nối thư viện Google Sign-In định dạng nút bấm mặc định
 // Hàm khởi chạy và kết nối thư viện Google Sign-In định dạng nút bấm mặc định
+// Hàm khởi chạy và kết nối thư viện Google Sign-In
 function initGoogleAuth() {
     if (typeof google === 'undefined') {
         // Nếu thư viện tải chậm do mạng, thử lại sau mỗi 500ms
@@ -137,21 +138,20 @@ function initGoogleAuth() {
     // 1. BẮT BUỘC PHẢI KHỞI TẠO CLIENT ID TRƯỚC
     google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
-        callback: handleCredentialResponse
+        callback: handleCredentialResponse,
+        auto_select: false // Chặn tự động lấy/hiện danh sách email trên máy
     });
 
-    // 2. RENDER NÚT BẤM (Khai báo biến 1 lần duy nhất)
+    // 2. RENDER NÚT BẤM 
     const loginBtnEl = document.getElementById("google-login-btn");
     if (loginBtnEl) {
         google.accounts.id.renderButton(
             loginBtnEl,
             { 
+                type: "icon",       // Chỉ hiển thị cứng icon Google, không có text
                 theme: "outline", 
                 size: "large",  
-                width: "100%", 
-                text: "signin_with", 
-                shape: "pill",
-                locale: "vi" // Ép ngôn ngữ luôn là tiếng Việt
+                shape: "circle"     // Chuyển dáng nút thành hình tròn để bao quanh icon
             }
         );
     }
@@ -6863,3 +6863,185 @@ setTimeout(() => {
         el.addEventListener('click', onClick);
     }
 })();
+// Chặn menu tải xuống và kéo thả đối với các danh sách ảnh chỉ định, giữ nguyên sự kiện click
+document.addEventListener("DOMContentLoaded", () => {
+    const targetImages = [
+        "loaddata.gif", 
+        "pendesign.png", 
+        "addfolder.png", 
+        "vl_foot_sldebar.png", 
+        "vl_right_header.png", 
+        "vlimage.png"
+    ];
+
+    document.querySelectorAll("img").forEach(img => {
+        const src = img.getAttribute("src") || "";
+        // Kiểm tra xem ảnh hiện tại có thuộc danh sách bị cấm tải không
+        const isTarget = targetImages.some(target => src.includes(target));
+        
+        if (isTarget) {
+            // Chặn menu chuột phải (PC) và menu nhấn giữ (Android) hiển thị tùy chọn Save Image
+            img.addEventListener("contextmenu", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+
+            // Chặn hành động click giữ rồi kéo ảnh ra màn hình nền hoặc tab khác để tải về
+            img.addEventListener("dragstart", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        }
+    });
+});
+// ==============================================================
+// LÕI HỦY DIỆT 49 (V3): XÓA TUẦN TỰ LẦN LƯỢT + VÒNG XOAY ĐỎ
+// ==============================================================
+setTimeout(() => {
+    console.log("⚡ Kích hoạt Lõi Hủy Diệt 49 (V3) - Xóa hiển thị mượt mà từng file!");
+
+    // 1. CHẶN BỘ ĐẾM KHI RỜI THƯ MỤC
+    const oldLoadFolder = window.loadFolder;
+    window.loadFolder = function(folderId, folderName, isNewNavigation, isPopState) {
+        if (window.currentFolderId !== folderId && window.multiSelectState) {
+            window.multiSelectState.selectedIds.clear(); 
+            let headerMenu = document.getElementById('headerDropdown');
+            if (headerMenu) headerMenu.classList.add('hidden');
+        }
+        return oldLoadFolder.apply(this, arguments);
+    };
+
+    // 2. KHÓA RENDER: CHỈ ĐẾM ITEM CÓ MẶT
+    const oldRenderItems = window.renderItems;
+    window.renderItems = function(items, isSearchMode = false) {
+        if (window.multiSelectState && window.multiSelectState.selectedIds && items) {
+            const validIds = new Set(items.map(i => i.id));
+            for (let id of window.multiSelectState.selectedIds) {
+                if (!validIds.has(id)) window.multiSelectState.selectedIds.delete(id);
+            }
+        }
+        let result = oldRenderItems.apply(this, arguments);
+        if (typeof window.buildHeaderMenu === 'function') window.buildHeaderMenu();
+        return result;
+    };
+
+    // 3. CHIÊU CUỐI: XÓA CUỐN CHIẾU TUẦN TỰ (TỪNG CÁI MỘT)
+    window.deleteSelectedItems = async function() {
+        if (!window.multiSelectState || window.multiSelectState.selectedIds.size === 0) {
+            return typeof showToast === 'function' ? showToast("Vui lòng chọn mục cần xóa!", true) : alert("Chưa chọn mục!");
+        }
+
+        const customModal = document.getElementById('customModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalDesc = document.getElementById('modalDesc');
+        const btn = document.getElementById('modalConfirmBtn');
+
+        if (!customModal || !btn) return;
+
+        modalTitle.textContent = 'Đang xóa...';
+        modalDesc.textContent = `Hệ thống sẽ tiến hành xóa lần lượt ${window.multiSelectState.selectedIds.size} mục đã chọn.`;
+        modalDesc.classList.remove('hidden');
+
+        btn.textContent = 'Xóa tất cả';
+        btn.className = 'px-5 py-2 bg-red-600 text-white font-bold rounded-xl';
+
+        btn.onclick = async () => {
+            if (typeof closeModal === 'function') closeModal();
+            
+            let idsToDelete = Array.from(window.multiSelectState.selectedIds);
+            let allItems = [...(typeof currentDriveItems !== 'undefined' ? currentDriveItems : []), ...Object.values(typeof subFolderCache !== 'undefined' ? subFolderCache : {}).flat()];
+
+            // A. PHỦ LỚP MỜ VÀ VÒNG XOAY LOADER ĐỎ LÊN TẤT CẢ CÁC ITEM
+            idsToDelete.forEach(id => {
+                // Định vị chính xác thẻ bằng class chứa tên file, sau đó leo ngược lên thẻ cha
+                let nameEl = document.querySelector(`.item-name-${id}`);
+                let itemEl = nameEl ? (nameEl.closest('.rounded-2xl') || nameEl.closest('.subfolder-row') || nameEl.closest('.mega-row')) : null;
+                
+                if (itemEl) {
+                    itemEl.style.position = 'relative';
+                    itemEl.style.pointerEvents = 'none'; // Khóa không cho bấm vào nữa
+                    
+                    let overlay = document.createElement('div');
+                    overlay.id = `del-overlay-${id}`;
+                    
+                    // Render vòng xoay màu đỏ quay tít (css inline thủ công để không bị ghi đè)
+                    if (itemEl.classList.contains('subfolder-row') || itemEl.classList.contains('mega-row')) {
+                        overlay.className = 'absolute inset-0 flex items-center justify-end pr-5 bg-white/70 z-50 transition-opacity duration-300 rounded-lg backdrop-blur-[1px]';
+                        overlay.innerHTML = `<div style="border: 2px solid #fecaca; border-top: 2px solid #ef4444; border-radius: 50%; width: 18px; height: 18px; animation: spin 1s linear infinite;" class="mr-2"></div><span class="text-xs font-bold text-red-600">Đang xóa...</span>`;
+                    } else {
+                        overlay.className = 'absolute inset-0 flex flex-col items-center justify-center bg-white/80 z-50 rounded-2xl transition-opacity duration-300 backdrop-blur-[2px]';
+                        overlay.innerHTML = `<div style="border: 3px solid #fecaca; border-top: 3px solid #ef4444; border-radius: 50%; width: 26px; height: 26px; animation: spin 1s linear infinite;" class="mb-2"></div><span class="text-xs font-bold text-red-600">Đang xóa...</span>`; 
+                    }
+                    
+                    itemEl.appendChild(overlay);
+                }
+            });
+
+            // B. GỬI LỆNH XÓA TUẦN TỰ (ĐỢI CÁI NÀY XONG MỚI ĐẾN CÁI KIA)
+            for (let id of idsToDelete) {
+                let itemType = 'file'; 
+                let foundItem = allItems.find(i => i.id === id);
+                if (foundItem && foundItem.type) itemType = foundItem.type;
+                else if (typeof appMeta !== 'undefined' && appMeta[id]) itemType = 'folder'; 
+
+                try {
+                    // Chờ Drive xóa xong
+                    await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'delete', id: id, type: itemType })
+                    });
+
+                    // Drive báo OK -> Cập nhật RAM
+                    if (typeof currentDriveItems !== 'undefined') {
+                        currentDriveItems = currentDriveItems.filter(i => i.id !== id);
+                        if (typeof folderDataCache !== 'undefined' && folderDataCache[currentFolderId]) {
+                            folderDataCache[currentFolderId] = currentDriveItems;
+                        }
+                    }
+
+                    // TÌM LẠI DOM ELEMENT ĐỂ CHO NÓ BAY MÀU (THU NHỎ -> BIẾN MẤT)
+                    let nameEl = document.querySelector(`.item-name-${id}`);
+                    let itemEl = nameEl ? (nameEl.closest('.rounded-2xl') || nameEl.closest('.subfolder-row') || nameEl.closest('.mega-row')) : null;
+                    if (itemEl) {
+                        itemEl.style.transition = 'all 0.3s ease';
+                        itemEl.style.transform = 'scale(0.8)';
+                        itemEl.style.opacity = '0';
+                        setTimeout(() => itemEl.remove(), 300); // Gỡ khỏi giao diện
+                    }
+                    
+                    // Giảm số lượng trên bộ đếm ngay lập tức
+                    window.multiSelectState.selectedIds.delete(id);
+                    if (typeof window.buildHeaderMenu === 'function') window.buildHeaderMenu();
+                    if (window.purgeDeletedItem) window.purgeDeletedItem(id);
+
+                } catch (e) {
+                    console.log(`Lỗi khi xóa ${id}:`, e);
+                    // Lỗi rớt mạng thì gỡ vòng xoay để thử lại
+                    let overlay = document.getElementById(`del-overlay-${id}`);
+                    if (overlay) overlay.remove();
+                    let nameEl = document.querySelector(`.item-name-${id}`);
+                    let itemEl = nameEl ? (nameEl.closest('.rounded-2xl') || nameEl.closest('.subfolder-row') || nameEl.closest('.mega-row')) : null;
+                    if (itemEl) itemEl.style.pointerEvents = 'auto'; 
+                }
+            }
+
+            // C. SAU KHI XÓA XONG HẾT LƯỢT
+            window.multiSelectState.selectedIds.clear();
+            let hd = document.getElementById('headerDropdown');
+            if (hd) hd.classList.add('hidden');
+
+            // Ép khung lưới căn chỉnh lại chỗ trống cho đều đẹp
+            if (typeof window.renderItems === 'function') window.renderItems(currentDriveItems); 
+            if (typeof masterSync === 'function') masterSync();
+            
+            if (typeof showToast === 'function') showToast(`<i class="fas fa-check mr-2"></i> Đã xóa lần lượt thành công!`);
+        };
+
+        customModal.classList.remove('hidden');
+        customModal.classList.add('flex');
+    };
+
+    // Khóa vật lý, bất khả xâm phạm
+    Object.defineProperty(window, 'deleteSelectedItems', { writable: false, configurable: false });
+
+}, 35000);

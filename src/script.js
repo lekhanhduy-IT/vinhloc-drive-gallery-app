@@ -190,7 +190,10 @@ async function handleCredentialResponse(response) {
         if (checkRes && checkRes.success) {
             // Xác thực thành công: Cất email vào bộ nhớ máy để bỏ qua bước đăng nhập lần sau
             localStorage.setItem("vinhloc_authenticated_email", email);
-            
+            // --- PATCH: LƯU QUYỀN VÀ ÁP DỤNG GIAO DIỆN ---
+        localStorage.setItem('userRole', response.role);
+        applyRoleRestrictions();
+        // ---------------------------------------------
             // Thực hiện đóng màn hình đăng nhập bảo mật
             const authOverlay = document.getElementById("auth-overlay");
             if (authOverlay) authOverlay.style.display = "none";
@@ -791,6 +794,12 @@ function closeInfoModal() {
 
 // DÙNG ACTION QUEUE ĐỂ XÓA ẢNH/THƯ MỤC LẠC QUAN
 window.handleDelete = function (id, type, e) {
+    // Bạn cần đổi tên biến 'currentFolderId', 'ROOT_FOLDER_ID' và 'selectedItems' sao cho khớp với biến trong file hiện tại của bạn
+const isMegaRowAction = (currentFolderId === ROOT_FOLDER_ID); 
+
+// Truyền mảng các file đang được chọn để xóa vào hàm
+const isApproved = await requestDeleteApproval(selectedItems, isMegaRowAction);
+if (!isApproved) return; // Lệnh return này sẽ dừng toàn bộ việc xóa nếu user không có quyền hoặc nhập sai pass
     e.stopPropagation(); document.getElementById(`menu-${id}`).classList.add('hidden');
     document.getElementById('modalTitle').textContent = 'Xác nhận xóa';
     document.getElementById('modalDesc').textContent = 'Bạn có chắc chắn muốn xóa mục này? Hành động này không thể hoàn tác.';
@@ -4180,6 +4189,9 @@ setTimeout(() => {
 // PATCH 27 (V3): QUY TRÌNH CHUẨN TẠO MEGA-ROW, DRIVE DESCRIPTION & SHEET (ID THẬT)
 // ==============================================================
 setTimeout(() => {
+    // Thay 'currentFolderId' và 'ROOT_FOLDER_ID' bằng đúng tên biến bạn đang dùng trong file để lưu ID thư mục
+const isMegaRowAction = (currentFolderId === ROOT_FOLDER_ID); 
+if (!checkMegaRowPermission(isMegaRowAction)) return; // Nếu hàm trả về false, lệnh return sẽ lập tức chặn không cho code chạy tiếp
     // 1. HÀM THAY ID ẢO THÀNH THẬT TRÊN GIAO DIỆN (SAU KHI SERVER CHẠY XONG)
     const originalReplaceTempId = window.replaceTempId || function(){};
     window.replaceTempId = function(tempId, realId) {
@@ -5298,6 +5310,12 @@ setTimeout(() => {
 
     // 2. GHI SỔ ĐEN KHI BẤM XÓA ĐƠN
     window.handleDelete = function(id, type, e) {
+        // Bạn cần đổi tên biến 'currentFolderId', 'ROOT_FOLDER_ID' và 'selectedItems' sao cho khớp với biến trong file hiện tại của bạn
+const isMegaRowAction = (currentFolderId === ROOT_FOLDER_ID); 
+
+// Truyền mảng các file đang được chọn để xóa vào hàm
+const isApproved = await requestDeleteApproval(selectedItems, isMegaRowAction);
+if (!isApproved) return; // Lệnh return này sẽ dừng toàn bộ việc xóa nếu user không có quyền hoặc nhập sai pass
         if (e) e.stopPropagation(); 
         const menuObj = document.getElementById(`menu-${id}`);
         if (menuObj) menuObj.classList.add('hidden');
@@ -6515,6 +6533,14 @@ setTimeout(() => {
         }
 
         if (!document.getElementById('pastePopup')) {
+            // Đổi tên 'currentFolderId', 'ROOT_FOLDER_ID' cho khớp với biến trong file của bạn
+const isMegaRowAction = (currentFolderId === ROOT_FOLDER_ID); 
+
+// Xác định xem thao tác đang lưu trong bộ nhớ tạm là copy hay move
+const actionType = clipboardMode; // Thay 'clipboardMode' bằng biến lưu trạng thái copy/cut hiện tại của bạn (ví dụ: 'copy' hoặc 'move')
+
+const isApproved = await requestCopyMoveApproval(actionType, isMegaRowAction);
+if (!isApproved) return; // Nếu hàm trả về false (hủy hoặc sai pass), lập tức chặn lệnh Dán
             const popup = document.createElement('div');
             popup.id = 'pastePopup';
             popup.innerHTML = `
@@ -6662,6 +6688,14 @@ setTimeout(() => {
 
     // 5. XỬ LÝ DÁN MẢNG
     window.executeGhostPaste = async function(targetFldId, mode) {
+        // Đổi tên 'currentFolderId', 'ROOT_FOLDER_ID' cho khớp với biến trong file của bạn
+const isMegaRowAction = (currentFolderId === ROOT_FOLDER_ID); 
+
+// Xác định xem thao tác đang lưu trong bộ nhớ tạm là copy hay move
+const actionType = clipboardMode; // Thay 'clipboardMode' bằng biến lưu trạng thái copy/cut hiện tại của bạn (ví dụ: 'copy' hoặc 'move')
+
+const isApproved = await requestCopyMoveApproval(actionType, isMegaRowAction);
+if (!isApproved) return; // Nếu hàm trả về false (hủy hoặc sai pass), lập tức chặn lệnh Dán
         const ids = Array.from(window.multiSelectState?.selectedIds || []);
         
         if (ids.length === 0) {
@@ -6710,6 +6744,14 @@ setTimeout(() => {
             }).then(r => r.json());
 
             if (res && res.success) {
+                // Đổi tên 'currentFolderId', 'ROOT_FOLDER_ID' cho khớp với biến trong file của bạn
+const isMegaRowAction = (currentFolderId === ROOT_FOLDER_ID); 
+
+// Xác định xem thao tác đang lưu trong bộ nhớ tạm là copy hay move
+const actionType = clipboardMode; // Thay 'clipboardMode' bằng biến lưu trạng thái copy/cut hiện tại của bạn (ví dụ: 'copy' hoặc 'move')
+
+const isApproved = await requestCopyMoveApproval(actionType, isMegaRowAction);
+if (!isApproved) return; // Nếu hàm trả về false (hủy hoặc sai pass), lập tức chặn lệnh Dán
                 showToast(`<i class="fas fa-check-circle text-green-500 mr-1.5"></i> Xử lý ${mode === 'copy' ? 'sao chép' : 'di chuyển'} hoàn tất!`);
                 let newTargetRes = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'list', folderId: targetFldId }) }).then(r => r.json());
                 if (newTargetRes && newTargetRes.success) {
@@ -7045,3 +7087,177 @@ setTimeout(() => {
     Object.defineProperty(window, 'deleteSelectedItems', { writable: false, configurable: false });
 
 }, 35000);
+function applyRoleRestrictions() {
+    const role = localStorage.getItem('userRole');
+    const isGuest = role === 'guest';
+
+    if (isGuest) {
+        // Ẩn các nút chức năng
+        const btnDesign = document.getElementById('btn-open-design'); // Nút pendesign
+        const btnCopyCut = document.getElementById('btn-copy-cut'); // Nút Đích dán
+        const sidebarBtn = document.getElementById('btnMenu'); // Nút mở slidebar
+        
+        if (btnDesign) btnDesign.style.display = 'none';
+        if (btnCopyCut) btnCopyCut.style.display = 'none';
+        if (sidebarBtn) sidebarBtn.style.display = 'none';
+
+        // Ẩn tất cả dấu 3 chấm
+        const dots = document.querySelectorAll('.fa-ellipsis-vertical, .menu-trigger'); // Điều chỉnh class tương ứng
+        dots.forEach(dot => dot.style.display = 'none');
+
+        // Chặn điều hướng nếu đang ở link public (Guest)
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('folder') || urlParams.has('f')) { 
+            const headerLogo = document.querySelector('.vlimage-logo'); // Chỉnh class logo của bạn
+            const headerTitle = document.getElementById('currentFolderName');
+            const btnBack = document.getElementById('btnBack');
+            
+            if (headerLogo) headerLogo.style.pointerEvents = 'none';
+            if (headerTitle) headerTitle.style.pointerEvents = 'none';
+            if (btnBack) btnBack.style.display = 'none';
+        }
+    }
+}
+let passwordResolve = null;
+
+function closePasswordModal() {
+    document.getElementById('passwordModal').classList.add('hidden');
+    document.getElementById('passwordModal').classList.remove('flex');
+    if (passwordResolve) passwordResolve(false);
+}
+
+function promptForPassword(reasonText) {
+    return new Promise((resolve) => {
+        passwordResolve = resolve;
+        document.getElementById('passwordReason').innerText = reasonText;
+        document.getElementById('inputActionPassword').value = '';
+        
+        const modal = document.getElementById('passwordModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    });
+}
+
+document.getElementById('btnConfirmPassword').addEventListener('click', async () => {
+    const pass = document.getElementById('inputActionPassword').value;
+    if (!pass) return alert("Vui lòng nhập mật khẩu");
+    
+    const btn = document.getElementById('btnConfirmPassword');
+    btn.innerText = 'Đang check...';
+    btn.disabled = true;
+
+    try {
+        const res = await fetch(APP_SCRIPT_URL, { 
+            method: 'POST',
+            body: JSON.stringify({ action: 'verifyPassword', password: pass })
+        });
+        const data = await res.json();
+        
+        btn.innerText = 'Xác nhận';
+        btn.disabled = false;
+
+        if (data.success) {
+            closePasswordModal();
+            if (passwordResolve) passwordResolve(true);
+        } else {
+            alert(data.message);
+        }
+    } catch (e) {
+        btn.innerText = 'Xác nhận';
+        btn.disabled = false;
+        alert("Lỗi mạng khi kiểm tra mật khẩu");
+    }
+});
+function checkMegaRowPermission(isMegaRowAction) {
+
+    const role = localStorage.getItem('userRole');
+
+    if (role === 'member' && isMegaRowAction) {
+
+        alert("Quyền hạn hạn chế: Bạn không thể Thêm/Sửa/Xóa/Di chuyển thư mục mega-row.");
+
+        return false;
+
+    }
+
+    return true;
+
+}
+
+// Gọi kiểm tra này trước khi execute tạo thư mục hoặc đổi tên trên mega-row. 
+
+
+async function requestDeleteApproval(itemsToDelete, isMegaRowAction) {
+
+    const role = localStorage.getItem('userRole');
+
+    
+
+    if (!checkMegaRowPermission(isMegaRowAction)) return false;
+
+
+
+    if (role === 'member') {
+
+        const hasFolder = itemsToDelete.some(item => item.type === 'folder');
+
+        let needsPassword = false;
+
+        let reason = "";
+
+
+
+        if (hasFolder) {
+
+            needsPassword = true;
+
+            reason = "Xóa thư mục yêu cầu mật khẩu bảo vệ.";
+
+        } else if (itemsToDelete.length > 2) {
+
+            needsPassword = true;
+
+            reason = `Xóa ${itemsToDelete.length} tệp cùng lúc yêu cầu mật khẩu bảo vệ.`;
+
+        }
+
+
+
+        if (needsPassword) {
+
+            const isAuthorized = await promptForPassword(reason);
+
+            if (!isAuthorized) return false; 
+
+        }
+
+    }
+
+    return true; // Cho phép đi tiếp đến lệnh gọi fetch xóa
+
+} 
+
+async function requestCopyMoveApproval(actionType, isMegaRowAction) {
+
+    const role = localStorage.getItem('userRole');
+
+    
+
+    if (!checkMegaRowPermission(isMegaRowAction)) return false;
+
+
+
+    if (role === 'member') {
+
+        const reason = `Thao tác ${actionType === 'copy' ? 'Sao chép' : 'Di chuyển'} yêu cầu mật khẩu bảo vệ.`;
+
+        const isAuthorized = await promptForPassword(reason);
+
+        if (!isAuthorized) return false;
+
+    }
+
+    return true; // Cho phép đi tiếp đến lệnh gọi fetch copy/move
+
+} 
+

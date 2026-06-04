@@ -20,7 +20,7 @@ function doPost(e) {
 
     switch (action) {
       
-case 'verifyUser':
+      case 'verifyUser':
       try {
         const userEmail = payload.email; 
         if (!userEmail) return ContentService.createTextOutput(JSON.stringify({ success: false, message: "Không nhận được Email từ Google Sign-in" })).setMimeType(ContentService.MimeType.JSON);
