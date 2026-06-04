@@ -793,35 +793,47 @@ function closeInfoModal() {
 })();
 
 // DÙNG ACTION QUEUE ĐỂ XÓA ẢNH/THƯ MỤC LẠC QUAN
-window.handleDelete = function (id, type, e) {
-    // Bạn cần đổi tên biến 'currentFolderId', 'ROOT_FOLDER_ID' và 'selectedItems' sao cho khớp với biến trong file hiện tại của bạn
-const isMegaRowAction = (currentFolderId === ROOT_FOLDER_ID); 
+window.handleDelete = async function (id, type, e) {
+    // 1. NGĂN SỰ KIỆN CLICK LAN RA NGOÀI VÀ ẨN MENU TRƯỚC
+    e.stopPropagation(); 
+    document.getElementById(`menu-${id}`).classList.add('hidden');
 
-// Truyền mảng các file đang được chọn để xóa vào hàm
-const isApproved = await requestDeleteApproval(selectedItems, isMegaRowAction);
-if (!isApproved) return; // Lệnh return này sẽ dừng toàn bộ việc xóa nếu user không có quyền hoặc nhập sai pass
-    e.stopPropagation(); document.getElementById(`menu-${id}`).classList.add('hidden');
+    // 2. CHỐT CHẶN PHÂN QUYỀN VÀ KIỂM TRA MẬT KHẨU
+    const isMegaRowAction = (currentFolderId === ROOT_FOLDER_ID); 
+    const itemsToDelete = [{ id: id, type: type }]; // Tạo mảng ảo chứa item đang xóa
+    
+    const isApproved = await requestDeleteApproval(itemsToDelete, isMegaRowAction);
+    if (!isApproved) return; // Dừng lại nếu guest xóa mega-row hoặc member nhập sai pass
+    // ----------------------------------------------------
+
+    // 3. HIỂN THỊ MODAL XÁC NHẬN NẾU QUA ĐƯỢC BƯỚC BẢO VỆ
     document.getElementById('modalTitle').textContent = 'Xác nhận xóa';
     document.getElementById('modalDesc').textContent = 'Bạn có chắc chắn muốn xóa mục này? Hành động này không thể hoàn tác.';
-    document.getElementById('modalDesc').classList.remove('hidden'); document.getElementById('modalInput').classList.add('hidden');
+    document.getElementById('modalDesc').classList.remove('hidden'); 
+    document.getElementById('modalInput').classList.add('hidden');
 
     const btn = document.getElementById('modalConfirmBtn');
-    btn.textContent = 'Xóa'; btn.className = 'px-5 py-2 bg-red-600 text-white font-bold rounded-xl';
+    btn.textContent = 'Xóa'; 
+    btn.className = 'px-5 py-2 bg-red-600 text-white font-bold rounded-xl';
 
     btn.onclick = () => {
         // Cập nhật giao diện xóa ngay lập tức
         currentDriveItems = currentDriveItems.filter(i => i.id !== id);
         folderDataCache[currentFolderId] = currentDriveItems;
-        for (let megaId in subFolderCache) subFolderCache[megaId] = subFolderCache[megaId].filter(i => i.id !== id);
+        for (let megaId in subFolderCache) {
+            subFolderCache[megaId] = subFolderCache[megaId].filter(i => i.id !== id);
+        }
         window.renderItems(currentDriveItems);
-        closeModal(); showToast(`<i class="fas fa-trash mr-2"></i> Đã xóa`);
+        closeModal(); 
+        showToast(`<i class="fas fa-trash mr-2"></i> Đã xóa`);
 
         // Bỏ vào hàng đợi gửi lên Server ngầm
         addActionToQueue('delete', { id: id, type: type });
     };
-    document.getElementById('customModal').classList.remove('hidden'); document.getElementById('customModal').classList.add('flex');
+    
+    document.getElementById('customModal').classList.remove('hidden'); 
+    document.getElementById('customModal').classList.add('flex');
 };
-
 function closeModal() {
     document.getElementById('customModal').classList.add('hidden'); document.getElementById('customModal').classList.remove('flex');
 }
