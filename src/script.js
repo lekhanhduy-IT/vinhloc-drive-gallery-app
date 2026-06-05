@@ -7232,45 +7232,65 @@ setTimeout(() => {
     });
 })();
 // ==============================================================
-// SUPER PATCH 60 (V4 CHỐNG LÌ): HỆ THỐNG PHÂN QUYỀN "KẺ HỦY DIỆT"
+// SUPER PATCH 60 (V5 CHUẨN XÁC): FIX LỖI ẨN NHẦM THƯ MỤC CON
 // ==============================================================
 setTimeout(() => {
     const ADMIN_EMAIL = "admin@tudonghoavinhloc.com";
 
-    // 1. KẺ HỦY DIỆT FAB MENU: Chạy ngầm quét liên tục 5 lần/giây
+    // HÀM QUAN TRỌNG: Dò tìm xem người dùng có đang chui vào thư mục con hay không
+    function checkIsInsideSubFolder() {
+        // 1. Nhìn vào thanh điều hướng (Breadcrumbs)
+        const breadcrumb = document.getElementById('breadcrumbs') || document.querySelector('[id*="breadcrumb"]');
+        if (breadcrumb && breadcrumb.children && breadcrumb.children.length > 1) {
+            return true; // Có nhiều hơn 1 nấc -> Đang ở trong folder con
+        }
+
+        // 2. Nhìn vào nút Quay lại (Back Button)
+        const backBtn = document.querySelector('button[onclick*="goBack"], #btnBack, .btn-back');
+        if (backBtn && !backBtn.classList.contains('hidden') && backBtn.style.display !== 'none') {
+            return true; // Nút quay lại đang hiện -> Đang ở trong folder con
+        }
+
+        // 3. Kiểm tra biến ID (nếu web có dùng)
+        if (window.currentFolderId && window.currentFolderId !== 'root' && window.currentFolderId !== '') {
+            return true; 
+        }
+
+        // Không thấy dấu hiệu nào -> Chắc chắn đang ở ngoài trang chủ (Mega-row)
+        return false;
+    }
+
+    // 1. KẺ HỦY DIỆT VÀ NGƯỜI BẢO VỆ FAB MENU
     setInterval(() => {
         const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
-        // Kiểm tra xem có đang ở trang chủ (root) không
-        const isRoot = (!window.folderStack || window.folderStack.length <= 1);
+        const isInsideSubFolder = checkIsInsideSubFolder();
         
-        // Bắt đích danh mọi nút có gọi hàm uiPromptFolder()
-        const folderButtons = document.querySelectorAll('button[onclick*="uiPromptFolder"]');
+        // Nắm đầu chính xác cái nút tạo thư mục
+        const folderButtons = document.querySelectorAll('#fabMenu button[onclick*="uiPromptFolder"]');
         
         folderButtons.forEach(btn => {
-            if (currentUserEmail !== ADMIN_EMAIL && isRoot) {
-                // Đang ở trang chủ & KHÔNG phải admin -> ÉP ẨN TRIỆT ĐỂ
+            if (currentUserEmail !== ADMIN_EMAIL && !isInsideSubFolder) {
+                // ÉP ẨN: Khi đang ở TRANG CHỦ và KHÔNG PHẢI ADMIN
                 btn.style.setProperty('display', 'none', 'important');
                 btn.classList.remove('flex');
                 btn.classList.add('hidden');
             } else {
-                // Đã vào thư mục con HOẶC là admin -> THẢ XÍCH TRỞ LẠI
-                if (btn.style.display === 'none') {
-                    btn.style.removeProperty('display');
-                    btn.classList.remove('hidden');
-                    btn.classList.add('flex');
-                }
+                // ÉP HIỆN: Khi đã VÀO THƯ MỤC CON hoặc LÀ ADMIN
+                btn.style.setProperty('display', 'flex', 'important');
+                btn.classList.remove('hidden');
+                btn.classList.add('flex');
             }
         });
-    }, 200); // 200ms quét một lần, thách JS gốc hiển thị lại được!
+    }, 200);
 
     // 2. KHÓA TẦNG LOGIC (Chặn triệt để phòng hờ User F12 vọc vạch)
     if (window.uiPromptFolder && !window.uiPromptFolder.isAdminPatched) {
         const originalUiPromptFolder = window.uiPromptFolder;
         window.uiPromptFolder = function() {
             const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
-            const isRoot = (!window.folderStack || window.folderStack.length <= 1);
-            if (currentUserEmail !== ADMIN_EMAIL && isRoot) {
-                alert("❌ Hành động bị từ chối: Chỉ Quản trị viên mới được tạo thư mục gốc!");
+            const isInsideSubFolder = checkIsInsideSubFolder();
+            if (currentUserEmail !== ADMIN_EMAIL && !isInsideSubFolder) {
+                alert("❌ Hành động bị từ chối: Chỉ Quản trị viên mới được tạo thư mục gốc Mega-row!");
                 return;
             }
             originalUiPromptFolder();
@@ -7282,7 +7302,7 @@ setTimeout(() => {
     if (window.toggleHeaderMenu && !window.toggleHeaderMenu.isAdminPatched) {
         const originalToggleHeaderMenu = window.toggleHeaderMenu;
         window.toggleHeaderMenu = function(e) {
-            originalToggleHeaderMenu(e); // Kích hoạt tạo menu
+            originalToggleHeaderMenu(e); 
             
             const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
             if (currentUserEmail !== ADMIN_EMAIL) {
@@ -7310,7 +7330,7 @@ setTimeout(() => {
     if (window.toggleItemMenu && !window.toggleItemMenu.isAdminPatched) {
         const originalToggleItemMenu = window.toggleItemMenu;
         window.toggleItemMenu = function(id, e) {
-            originalToggleItemMenu(id, e); // Kích hoạt mở menu mục tiêu
+            originalToggleItemMenu(id, e); 
             
             const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
             if (currentUserEmail !== ADMIN_EMAIL) {
@@ -7349,5 +7369,5 @@ setTimeout(() => {
         window.toggleItemMenu.isAdminPatched = true;
     }
 
-    console.log("✅ PATCH 60 (V4): Đã khởi động 'Kẻ hủy diệt' vòng lặp. Nút FAB hết đường sống rồi!");
+    console.log("✅ PATCH 60 (V5): Đã fix lỗi dò nhầm đường, thả xích cho nút thư mục con!");
 }, 7000);
