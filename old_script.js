@@ -7232,17 +7232,15 @@ setTimeout(() => {
     });
 })();
 // ==============================================================
-// SUPER PATCH 60 (V6 HOÀN HẢO): ĐỊNH VỊ CSS ĐỘNG (KHÔNG LÀM CỨNG NÚT)
+// SUPER PATCH 60 (V7 TUYỆT ĐỐI): KHÓA LUÔN SỰ KIỆN CHỌN FILE Ở HEADER
 // ==============================================================
 setTimeout(() => {
     const ADMIN_EMAIL = "admin@tudonghoavinhloc.com";
 
-    // 1. TẠO LÁ CHẮN CSS THÔNG MINH
+    // 1. TẠO LÁ CHẮN CSS THÔNG MINH (KHÔNG LÀM CỨNG NÚT FAB)
     if (!document.getElementById("vinhloc-fab-smart-shield")) {
         const style = document.createElement("style");
         style.id = "vinhloc-fab-smart-shield";
-        // BÍ QUYẾT LÀ ĐÂY: Chỉ ép ẨN khi đang ở ngoài gốc (data-at-root="true") và KHÔNG phải Admin. 
-        // Tuyệt đối KHÔNG ép "flex" làm cứng nút khi đang ở trong folder.
         style.innerHTML = `
             body[data-is-admin="false"][data-at-root="true"] #fabMenu button[onclick*="uiPromptFolder"],
             body[data-is-admin="false"][data-at-root="true"] #fabMenu button[onclick*="Folder"],
@@ -7253,7 +7251,32 @@ setTimeout(() => {
         document.head.appendChild(style);
     }
 
-    // 2. KẺ CHỈ HUY (CHẠY NGẦM ĐỂ CẬP NHẬT TRẠNG THÁI)
+    // HÀM VỆ SĨ: CHUYÊN DỌN DẸP MENU HEADER TRONG MỌI HOÀN CẢNH
+    function sanitizeHeaderMenu() {
+        const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
+        if (currentUserEmail !== ADMIN_EMAIL) {
+            const headerDropdown = document.getElementById('headerDropdown');
+            // Quét liên tục, dù menu đang đóng hay mở, kệ nó!
+            if (headerDropdown) {
+                Array.from(headerDropdown.children).forEach(child => {
+                    const html = child.innerHTML || '';
+                    const text = child.innerText || '';
+                    let isAllowed = false;
+                    
+                    // Chỉ cấp phép cho Đăng xuất và Chia sẻ
+                    if (child.id === 'vinhloc-logout-btn' || child.id === 'vinhloc-logout-splitter') isAllowed = true;
+                    if (html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) isAllowed = true;
+                    
+                    // Nếu không được cấp phép mà đang lòi ra -> Chém!
+                    if (!isAllowed && child.style.display !== 'none') {
+                        child.style.setProperty('display', 'none', 'important');
+                    }
+                });
+            }
+        }
+    }
+
+    // 2. KẺ CHỈ HUY (CHẠY NGẦM ĐỂ CẬP NHẬT TRẠNG THÁI LIÊN TỤC)
     setInterval(() => {
         const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
         
@@ -7267,24 +7290,24 @@ setTimeout(() => {
         // Dò xem có đang ở trang chủ (Mega-row) hay không
         let isAtRoot = true; 
         
-        // Nhìn thanh Breadcrumb
         const breadcrumb = document.getElementById('breadcrumbs') || document.querySelector('[id*="breadcrumb"]');
         if (breadcrumb && breadcrumb.children && breadcrumb.children.length > 1) {
-            isAtRoot = false; // Có từ 2 nấc trở lên -> Đang ở trong folder
+            isAtRoot = false; 
         }
         
-        // Nhìn nút Quay lại
         const backBtn = document.querySelector('button[onclick*="goBack"], #btnBack, .btn-back');
         if (backBtn && !backBtn.classList.contains('hidden') && backBtn.style.display !== 'none') {
-            isAtRoot = false; // Đang hiện nút quay lại -> Đang ở trong folder
+            isAtRoot = false; 
         }
 
-        // Dán nhãn vị trí cho Body
         document.body.setAttribute('data-at-root', isAtRoot.toString());
         
-    }, 300); // 0.3s cập nhật một lần, rất nhẹ và không chọc phá giao diện nút
+        // GỌI VỆ SĨ DỌN DẸP HEADER MENU LIÊN TỤC MỖI 0.3 GIÂY
+        sanitizeHeaderMenu();
+        
+    }, 300);
 
-    // 3. KHÓA TẦNG LOGIC (Chặn triệt để)
+    // 3. KHÓA TẦNG LOGIC TẠO THƯ MỤC
     if (window.uiPromptFolder && !window.uiPromptFolder.isAdminPatched) {
         const originalUiPromptFolder = window.uiPromptFolder;
         window.uiPromptFolder = function() {
@@ -7299,27 +7322,12 @@ setTimeout(() => {
         window.uiPromptFolder.isAdminPatched = true;
     }
 
-    // 4. ĐÁNH CHẶN MENU 3 CHẤM Ở HEADER
+    // 4. ĐÁNH CHẶN MENU 3 CHẤM Ở HEADER BƯỚC ĐẦU
     if (window.toggleHeaderMenu && !window.toggleHeaderMenu.isAdminPatched) {
         const originalToggleHeaderMenu = window.toggleHeaderMenu;
         window.toggleHeaderMenu = function(e) {
             originalToggleHeaderMenu(e); 
-            
-            const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
-            if (currentUserEmail !== ADMIN_EMAIL) {
-                const headerDropdown = document.getElementById('headerDropdown');
-                if (headerDropdown && !headerDropdown.classList.contains('hidden')) {
-                    Array.from(headerDropdown.children).forEach(child => {
-                        const html = child.innerHTML || '';
-                        const text = child.innerText || '';
-                        let isAllowed = false;
-                        if (child.id === 'vinhloc-logout-btn' || child.id === 'vinhloc-logout-splitter') isAllowed = true;
-                        if (html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) isAllowed = true;
-                        
-                        if (!isAllowed) child.style.setProperty('display', 'none', 'important');
-                    });
-                }
-            }
+            sanitizeHeaderMenu(); // Dọn ngay khi vừa bấm mở
         };
         window.toggleHeaderMenu.isAdminPatched = true;
     }
@@ -7365,5 +7373,5 @@ setTimeout(() => {
         window.toggleItemMenu.isAdminPatched = true;
     }
 
-    console.log("✅ PATCH 60 (V6): Fix triệt để lỗi hiển thị cứng nút FAB, mượt mà 100%!");
+    console.log("✅ PATCH 60 (V7): Đã khóa mõm triệt để sự kiện chọn file làm lòi menu header!");
 }, 7000);
