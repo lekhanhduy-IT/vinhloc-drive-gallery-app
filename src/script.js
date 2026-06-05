@@ -7045,3 +7045,179 @@ setTimeout(() => {
     Object.defineProperty(window, 'deleteSelectedItems', { writable: false, configurable: false });
 
 }, 35000);
+// ==============================================================
+// SUPER PATCH 32: VÁ TẬN GỐC LỖI LINK CHIA SẺ PUBLIC (SHARE URL) VÀ GIAO DIỆN
+// ==============================================================
+setTimeout(() => {
+    console.log("🚀 Kích hoạt quy trình xử lý Link Chia Sẻ an toàn tuyệt đối...");
+
+    // 1. DỌN SẠCH CÁC CỜ BẢO VỆ CỦA PATCH CŨ GÂY KẸT GIAO DIỆN
+    window.vinhloc_is_sharing_boot = false;
+    
+    // Lấy thông số URL chuẩn xác nhất trước khi bị các hàm khác xóa mất
+    const params = new URLSearchParams(window.location.search);
+    const sId = params.get('shareId') || (window.vinhloc_share_params && window.vinhloc_share_params.get('shareId'));
+    const sType = params.get('shareType') || (window.vinhloc_share_params && window.vinhloc_share_params.get('shareType'));
+    const sName = params.get('shareName') || (window.vinhloc_share_params && window.vinhloc_share_params.get('shareName'));
+    const sMime = params.get('mimeType') || (window.vinhloc_share_params && window.vinhloc_share_params.get('mimeType'));
+
+    // 2. TÁI CẤU TRÚC LẠI HÀM INIT DATABASE (TRÁNH RACE CONDITION GÂY MẤT ẢNH BÌA)
+    window.initDatabase = async function() {
+        try {
+            let storedMeta = await localforage.getItem('vinhloc_meta');
+            appMeta = storedMeta || {};
+
+            // KHÓA AN TOÀN: Ép buộc tải Meta mới nhất nếu truy cập bằng Link Chia Sẻ hoặc mở ứng dụng lần đầu
+            if (Object.keys(appMeta).length === 0 || sId) {
+                const folderListEl = document.getElementById('folderList');
+                if (folderListEl) {
+                    folderListEl.innerHTML = '<div class="text-center text-gray-500 mt-10 w-full"><div class="loader mx-auto mb-3 border-blue-400"></div>Đang thiết lập dữ liệu an toàn...</div>';
+                }
+                try {
+                    const metaRes = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'getMeta' }) }).then(r => r.json());
+                    if (metaRes && metaRes.success && metaRes.meta) {
+                        appMeta = metaRes.meta;
+                        await localforage.setItem('vinhloc_meta', appMeta);
+                    }
+                } catch(e) { console.warn("Lỗi mạng đồng bộ Meta"); }
+            }
+
+            folderDataCache = await localforage.getItem('vinhloc_folder_cache') || {};
+            subFolderCache = await localforage.getItem('vinhloc_subfolder_cache') || {};
+
+            // Dọn rác Meta cho nhẹ ổ cứng
+            let metaCleaned = false;
+            for (let id in appMeta) {
+                if (appMeta[id].cover && appMeta[id].cover.length > 30000) {
+                    appMeta[id].cover = ''; metaCleaned = true;
+                }
+            }
+            if (metaCleaned) await localforage.setItem('vinhloc_meta', appMeta);
+
+            // 3. ĐIỀU HƯỚNG GIAO DIỆN XỬ LÝ LINK CHIA SẺ
+            if (sId) {
+                console.log("🔗 Đang mở truy cập từ Link chia sẻ:", sName);
+                
+                // Dọn dẹp thanh URL ngay lập tức để người dùng F5 không bị kẹt vòng lặp
+                window.history.replaceState({}, document.title, window.location.pathname);
+
+                if (sType === 'folder') {
+                    // Xóa trắng UI cũ để không bị chớp nháy Mega-row
+                    if (document.getElementById('folderList')) document.getElementById('folderList').innerHTML = '';
+                    if (document.getElementById('fileList')) document.getElementById('fileList').innerHTML = '';
+
+                    // Lấy thông tin từ Meta để hiển thị Tên và Tab chính xác
+                    let targetCategory = appMeta[sId]?.type || "Triển khai"; 
+                    let realName = appMeta[sId]?.name || sName || "Thư mục chia sẻ";
+                    
+                    if (window.switchCategory) window.switchCategory(targetCategory, false);
+
+                    // THIẾT LẬP ĐƯỜNG DẪN ỔN ĐỊNH: Root -> Thư mục được chia sẻ
+                    folderStack = [
+                        { id: ROOT_FOLDER_ID, name: targetCategory, scrollTop: 0 },
+                        { id: sId, name: realName, scrollTop: 0 }
+                    ];
+                    currentFolderId = sId;
+                    localStorage.setItem('appFolderStack', JSON.stringify(folderStack));
+                    
+                    if (window.loadFolder) {
+                        // Tắt hoàn toàn cờ chặn load của phiên bản cũ
+                        window.vinhloc_is_sharing_boot = false;
+                        
+                        // HIỆU ỨNG TẢI: ÉP tải từ Mây thay vì dùng Cache để 100% thấy đủ sub-folder mới nhất
+                        if (document.getElementById('folderList')) {
+                            document.getElementById('folderList').innerHTML = '<div class="text-center text-gray-500 mt-10 w-full"><div class="loader mx-auto mb-3 border-blue-400"></div>Đang tải dữ liệu thư mục chia sẻ...</div>';
+                        }
+                        
+                        const res = await apiCall('list', { folderId: sId });
+                        if (res && res.success) {
+                            let newData = res.data;
+                            // Nạp tên chuẩn từ bảng Meta vào dữ liệu Drive
+                            newData.forEach(item => { if (appMeta[item.id] && appMeta[item.id].name) item.name = appMeta[item.id].name; });
+                            currentDriveItems = newData; 
+                            folderDataCache[sId] = newData;
+                            await localforage.setItem('vinhloc_folder_cache', folderDataCache);
+                            
+                            if (window.updateBreadcrumbs) window.updateBreadcrumbs();
+                            
+                            // Vẽ ra giao diện với đầy đủ cấu trúc File và Subfolder
+                            window.renderItems(currentDriveItems);
+                        } else {
+                            if (document.getElementById('folderList')) {
+                                document.getElementById('folderList').innerHTML = '<div class="text-center text-red-500 mt-10 w-full italic">Lỗi kết nối hoặc thư mục trống/chưa cấp quyền.</div>';
+                            }
+                        }
+                    }
+                } 
+                else if (sType === 'file') {
+                    if (window.loadFolder) window.loadFolder(ROOT_FOLDER_ID, "Triển khai", false, false);
+                    setTimeout(() => { 
+                        if (window.openMedia) window.openMedia(sId, sMime || '', appMeta[sId]?.name || sName || 'File chia sẻ', null); 
+                    }, 800);
+                }
+            } else {
+                // Mở web bình thường
+                if (window.loadFolder) window.loadFolder(ROOT_FOLDER_ID, "Triển khai", false, false);
+            }
+        } catch (err) {
+            console.error("Lỗi khởi tạo DB:", err);
+        }
+    };
+
+    // 4. SỬA LỖI MASTER SYNC ĐỂ ĐẢM BẢO UI LUÔN BẮT ĐƯỢC ẢNH BÌA MỚI NHẤT
+    if (window.masterSyncInterval) clearInterval(window.masterSyncInterval);
+    window.masterSync = async function() {
+        if (syncQueueCount > 0 || (window.lastEditTime && Date.now() - window.lastEditTime < 15000)) return;
+        if (document.querySelector('.item-action-menu:not(.hidden)') || !document.getElementById('customModal').classList.contains('hidden') || !document.getElementById('infoModal').classList.contains('hidden')) return;
+
+        const syncTargetId = currentFolderId;
+        try {
+            const metaRes = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'getMeta' }) }).then(r => r.json());
+            if (metaRes && metaRes.success && metaRes.meta) {
+                if (JSON.stringify(appMeta) !== JSON.stringify(metaRes.meta)) {
+                    appMeta = metaRes.meta;
+                    localforage.setItem('vinhloc_meta', appMeta).catch(()=>{});
+                    
+                    // Nâng cấp: Ép render lại toàn bộ Items để nhúng ảnh bìa mới vào giao diện
+                    if (window.smoothUpdateUI) window.smoothUpdateUI(appMeta);
+                    if (currentDriveItems && currentDriveItems.length > 0) {
+                        currentDriveItems.forEach(item => { if (appMeta[item.id] && appMeta[item.id].name) item.name = appMeta[item.id].name; });
+                        window.renderItems(currentDriveItems);
+                    }
+                }
+            }
+
+            const hasStructureChanged = (oldArr, newArr) => {
+                const oldIds = oldArr.filter(i => !i.isPending).map(i => i.id).sort().join(',');
+                const newIds = newArr.filter(i => !i.isPending).map(i => i.id).sort().join(',');
+                return oldIds !== newIds;
+            };
+
+            if (syncTargetId && syncTargetId !== 'dummy_design_state') {
+                const listRes = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'list', folderId: syncTargetId }) }).then(r => r.json());
+                // Chống chớp giao diện nếu người dùng đã chuyển thư mục khác
+                if (currentFolderId !== syncTargetId) return; 
+
+                if (listRes && listRes.success && listRes.data) {
+                    let newData = listRes.data;
+                    newData.forEach(item => { if (appMeta[item.id] && appMeta[item.id].name) item.name = appMeta[item.id].name; });
+                    const oldData = folderDataCache[syncTargetId] || [];
+                    
+                    if (hasStructureChanged(oldData, newData)) {
+                        const pendingItems = oldData.filter(i => i.isPending);
+                        newData = [...pendingItems, ...newData];
+                        folderDataCache[syncTargetId] = newData;
+                        localforage.setItem('vinhloc_folder_cache', folderDataCache).catch(()=>{});
+                        currentDriveItems = newData;
+                        window.renderItems(currentDriveItems);
+                    }
+                }
+            }
+        } catch(e) {}
+    };
+    window.masterSyncInterval = setInterval(window.masterSync, 6000);
+
+    // 5. Kích hoạt ngay lập tức quy trình nạp lại giao diện chuẩn
+    window.initDatabase();
+
+}, 16000); // Chạy trễ 16 giây để đảm bảo đè thành công mọi đoạn Patch cũ
