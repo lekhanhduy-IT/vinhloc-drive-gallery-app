@@ -7232,79 +7232,84 @@ setTimeout(() => {
     });
 })();
 // ==============================================================
-// SUPER PATCH 60 (CẬP NHẬT V2): HỆ THỐNG PHÂN QUYỀN MENU DÀNH CHO ADMIN
+// SUPER PATCH 60 (CẬP NHẬT V3): LÁ CHẮN CSS & HỆ THỐNG PHÂN QUYỀN
 // ==============================================================
 setTimeout(() => {
     const ADMIN_EMAIL = "admin@tudonghoavinhloc.com";
 
-    // 0. BẢO MẬT TẦNG LOGIC: KHÓA TRỰC TIẾP HÀM TẠO THƯ MỤC
+    // 1. TẠO LÁ CHẮN CSS TOÀN CỤC (Khóa chết hiển thị, JS gốc không thể ghi đè)
+    if (!document.getElementById("admin-vinhloc-fab-shield")) {
+        const style = document.createElement("style");
+        style.id = "admin-vinhloc-fab-shield";
+        document.head.appendChild(style);
+    }
+
+    // Hàm kiểm tra và đóng/mở lá chắn CSS
+    const applyFabShield = () => {
+        const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
+        const isRoot = (window.folderStack && window.folderStack.length <= 1);
+        const shield = document.getElementById("admin-vinhloc-fab-shield");
+        
+        if (currentUserEmail !== ADMIN_EMAIL && isRoot) {
+            // Đang ở Root và không phải Admin -> Bơm CSS ép ẩn triệt để
+            shield.innerHTML = `
+                #fabMenu button[onclick*="uiPromptFolder"],
+                #fabMenu button[onclick*="Folder"],
+                #fabMenu button[onclick*="folder"],
+                #fabMenu button[onclick*="Mega"],
+                #fabMenu button[onclick*="mega"] {
+                    display: none !important;
+                    opacity: 0 !important;
+                    visibility: hidden !important;
+                    pointer-events: none !important;
+                    position: absolute !important;
+                }
+            `;
+        } else {
+            // Đã vào trong thư mục con HOẶC là Admin -> Xóa CSS đi để hiện lại bình thường
+            shield.innerHTML = ``;
+        }
+    };
+
+    // 2. KHÓA TẦNG LOGIC (Trường hợp ai đó cố tình hack F12 để hiện nút)
     if (window.uiPromptFolder && !window.uiPromptFolder.isAdminPatched) {
         const originalUiPromptFolder = window.uiPromptFolder;
         window.uiPromptFolder = function() {
             const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
             const isRoot = (window.folderStack && window.folderStack.length <= 1);
-            
-            // Nếu không phải Admin và đang ở ngoài giao diện chính (Root) -> Chặn thực thi
             if (currentUserEmail !== ADMIN_EMAIL && isRoot) {
-                alert("Hành động bị từ chối: Chỉ Quản trị viên mới được tạo thư mục gốc (Mega-row)!");
+                alert("Từ chối truy cập: Chỉ Quản trị viên mới được tạo mega-row folder ở đây!");
                 return;
             }
-            originalUiPromptFolder(); // Cho phép chạy nếu hợp lệ
+            originalUiPromptFolder();
         };
         window.uiPromptFolder.isAdminPatched = true;
     }
 
-    // 1. ĐÁNH CHẶN GIAO DIỆN: ẨN TOÀN BỘ NÚT TẠO FOLDER TRONG KHỐI FAB MENU NGOÀI TRANG CHỦ
+    // 3. GẮN LÁ CHẮN VÀO HÀM CHUYỂN TRANG
     if (window.updateBreadcrumbs && !window.updateBreadcrumbs.isAdminPatched) {
         const originalUpdateBreadcrumbs = window.updateBreadcrumbs;
         window.updateBreadcrumbs = function() {
-            originalUpdateBreadcrumbs(); // Chạy logic cũ gốc
-            
-            const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
-            const isRoot = (window.folderStack && window.folderStack.length <= 1);
-            
-            // Tìm đích danh nút chứa uiPromptFolder và các nút Folder/Mega liên quan trong fabMenu
-            const fabFolderButtons = document.querySelectorAll(
-                '#fabMenu button[onclick*="uiPromptFolder"], #fabMenu button[onclick*="Folder"], #fabMenu button[onclick*="folder"], #fabMenu button[onclick*="Mega"], #fabMenu button[onclick*="mega"]'
-            );
-            
-            if (currentUserEmail !== ADMIN_EMAIL) {
-                if (isRoot) {
-                    // Đang ở giao diện chính -> Xóa class hiển thị, ép ẩn hoàn toàn
-                    fabFolderButtons.forEach(btn => {
-                        btn.classList.remove('flex');
-                        btn.classList.add('hidden');
-                        btn.style.setProperty('display', 'none', 'important');
-                    });
-                } else {
-                    // Đang ở bên trong các folder con -> Hiển thị lại đầy đủ
-                    fabFolderButtons.forEach(btn => {
-                        btn.classList.remove('hidden');
-                        btn.classList.add('flex');
-                        btn.style.setProperty('display', 'flex', 'important');
-                    });
-                }
-            } else {
-                // Nếu là Admin đăng nhập thì luôn hiển thị
-                fabFolderButtons.forEach(btn => {
-                    btn.classList.remove('hidden');
-                    btn.classList.add('flex');
-                    btn.style.setProperty('display', 'flex', 'important');
-                });
-            }
+            originalUpdateBreadcrumbs();
+            applyFabShield(); // Cập nhật lại trạng thái nút mỗi khi bấm chuyển thư mục
         };
         window.updateBreadcrumbs.isAdminPatched = true;
     }
-    
-    // Kích hoạt mồi lần đầu để áp dụng cấu trúc phân quyền ngay khi ứng dụng tải xong
-    if (window.updateBreadcrumbs) window.updateBreadcrumbs();
 
-    // 2. ĐÁNH CHẶN MENU 3 CHẤM Ở HEADER (Chỉ để lại Đăng xuất và Chia sẻ nếu không phải Admin)
+    // 4. KÍCH HOẠT LÁ CHẮN NGAY LẦN ĐẦU TẢI TRANG VÀ BẮT SỰ KIỆN CLICK
+    applyFabShield();
+    document.addEventListener('click', (e) => {
+        // Củng cố lá chắn mỗi khi người dùng có hành vi tương tác với nút mở menu
+        if(e.target.closest('img[src*="addfolder"]') || e.target.closest('#fabMenu')) {
+            applyFabShield();
+        }
+    }, true);
+
+    // 5. ĐÁNH CHẶN MENU 3 CHẤM Ở HEADER
     if (window.toggleHeaderMenu && !window.toggleHeaderMenu.isAdminPatched) {
         const originalToggleHeaderMenu = window.toggleHeaderMenu;
         window.toggleHeaderMenu = function(e) {
-            originalToggleHeaderMenu(e); // Kích hoạt tạo menu
-            
+            originalToggleHeaderMenu(e);
             const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
             if (currentUserEmail !== ADMIN_EMAIL) {
                 const headerDropdown = document.getElementById('headerDropdown');
@@ -7312,16 +7317,10 @@ setTimeout(() => {
                     Array.from(headerDropdown.children).forEach(child => {
                         const html = child.innerHTML || '';
                         const text = child.innerText || '';
-                        
                         let isAllowed = false;
-                        // Giữ lại nút Đăng xuất và các đường gạch phân tách đi kèm
                         if (child.id === 'vinhloc-logout-btn' || child.id === 'vinhloc-logout-splitter') isAllowed = true;
-                        // Giữ lại mục Chia sẻ
                         if (html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) isAllowed = true;
-                        
-                        if (!isAllowed) {
-                            child.style.setProperty('display', 'none', 'important');
-                        }
+                        if (!isAllowed) child.style.setProperty('display', 'none', 'important');
                     });
                 }
             }
@@ -7329,17 +7328,15 @@ setTimeout(() => {
         window.toggleHeaderMenu.isAdminPatched = true;
     }
 
-    // 3. ĐÁNH CHẶN CÁC MENU 3 CHẤM CỦA THƯ MỤC & FILE THEO ĐÚNG CẤP ĐỘ PHÂN LUỒNG
+    // 6. ĐÁNH CHẶN CÁC MENU 3 CHẤM CỦA THƯ MỤC & FILE
     if (window.toggleItemMenu && !window.toggleItemMenu.isAdminPatched) {
         const originalToggleItemMenu = window.toggleItemMenu;
         window.toggleItemMenu = function(id, e) {
-            originalToggleItemMenu(id, e); // Kích hoạt mở menu mục tiêu
-            
+            originalToggleItemMenu(id, e);
             const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
             if (currentUserEmail !== ADMIN_EMAIL) {
                 const menuObj = document.getElementById(`menu-${id}`);
                 if (menuObj && !menuObj.classList.contains('hidden')) {
-                    // Phân tích thứ tự phân cấp cây thư mục
                     const isMega = menuObj.closest('.mega-header') !== null;
                     const isLevel2 = menuObj.closest('[id^="acc-"]') !== null;
                     const isLevel3Plus = !isMega && !isLevel2 && menuObj.closest('#folderList') !== null;
@@ -7351,34 +7348,16 @@ setTimeout(() => {
                         let shouldShow = false;
 
                         if (isMega) {
-                            // Cấp 1 (Mega-row): Chỉ giữ lại 'Thư mục' và 'Chia sẻ'
-                            if (html.includes('fa-folder-plus') || text.toLowerCase().includes('thư mục') || 
-                                html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) {
-                                shouldShow = true;
-                            }
+                            if (html.includes('fa-folder-plus') || text.toLowerCase().includes('thư mục') || html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) shouldShow = true;
                         } else if (isLevel2) {
-                            // Cấp 2 (Con của Mega-row): Chỉ giữ lại 'Thêm mục' và 'Chia sẻ'
-                            if (html.includes('fa-folder-plus') || text.toLowerCase().includes('thêm mục') || 
-                                html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) {
-                                shouldShow = true;
-                            }
+                            if (html.includes('fa-folder-plus') || text.toLowerCase().includes('thêm mục') || html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) shouldShow = true;
                         } else if (isLevel3Plus) {
-                            // Cấp 3+ (Các folder con lồng sâu bên trong): Chỉ giữ lại 'Chia sẻ'
-                            if (html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) {
-                                shouldShow = true;
-                            }
+                            if (html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) shouldShow = true;
                         } else if (isFile) {
-                            // Menu thao tác File: Chỉ giữ lại 'Tải xuống' và 'Chia sẻ'
-                            if (html.includes('fa-download') || text.toLowerCase().includes('tải xuống') || 
-                                html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) {
-                                shouldShow = true;
-                            }
+                            if (html.includes('fa-download') || text.toLowerCase().includes('tải xuống') || html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) shouldShow = true;
                         }
 
-                        // Thực thi ẩn các mục vi phạm luồng phân quyền
-                        if (!shouldShow) {
-                            child.style.setProperty('display', 'none', 'important');
-                        }
+                        if (!shouldShow) child.style.setProperty('display', 'none', 'important');
                     });
                 }
             }
@@ -7386,5 +7365,5 @@ setTimeout(() => {
         window.toggleItemMenu.isAdminPatched = true;
     }
 
-    console.log("✅ PATCH 60 (CẬP NHẬT V2): Phân quyền toàn bộ menu và ĐÃ KHÓA TRIỆT ĐỂ nút tạo mega-row ngoài giao diện chính!");
+    console.log("✅ PATCH 60 (V3): Lá chắn CSS được kích hoạt, đã xử lý triệt để nút FAB Menu!");
 }, 7000);
