@@ -7363,3 +7363,43 @@ setTimeout(() => {
 
     console.log("✅ PATCH 60 (ĐÃ ĐỒNG BỘ FAB): Phân quyền toàn bộ menu và nút tạo thư mục đã sẵn sàng!");
 }, 7000);
+// ==============================================================
+// PATCH: ẨN NÚT TẠO THƯ MỤC TRONG FAB MENU NGOÀI TRANG CHỦ CHO USER
+// ==============================================================
+setTimeout(() => {
+    const ADMIN_EMAIL = "admin@tudonghoavinhloc.com";
+
+    // Gắn hook vào hàm updateBreadcrumbs vì hàm này luôn chạy mỗi khi chuyển đổi giữa ngoài trang chủ và trong folder con
+    if (window.updateBreadcrumbs && !window.updateBreadcrumbs.isFabPatched) {
+        const originalUpdateBreadcrumbs = window.updateBreadcrumbs;
+        window.updateBreadcrumbs = function() {
+            originalUpdateBreadcrumbs(); // Chạy logic hiển thị đường dẫn gốc
+            
+            const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
+            
+            // Bắt chính xác nút có onclick="uiPromptFolder()" nằm trong khối #fabMenu
+            const fabAddFolderBtn = document.querySelector('#fabMenu button[onclick*="uiPromptFolder"]');
+            
+            if (fabAddFolderBtn) {
+                if (currentUserEmail !== ADMIN_EMAIL) {
+                    // folderStack.length <= 1 nghĩa là đang ở ngoài cùng (danh sách mega-row)
+                    if (window.folderStack && window.folderStack.length <= 1) {
+                        // Ép ẩn tuyệt đối (dùng !important để đè Tailwind)
+                        fabAddFolderBtn.style.setProperty('display', 'none', 'important');
+                    } else {
+                        // Vào trong folder con thì hiện lại nút dưới dạng flex
+                        fabAddFolderBtn.style.setProperty('display', 'flex', 'important');
+                    }
+                } else {
+                    // Nếu là Admin thì luôn hiển thị ở mọi nơi
+                    fabAddFolderBtn.style.setProperty('display', 'flex', 'important');
+                }
+            }
+        };
+        window.updateBreadcrumbs.isFabPatched = true;
+    }
+    
+    // Kích hoạt chạy mồi ngay 1 lần để áp dụng trạng thái ẩn/hiện hiện tại mà không cần click
+    if (window.updateBreadcrumbs) window.updateBreadcrumbs();
+    
+}, 7500);
