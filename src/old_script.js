@@ -7045,3 +7045,325 @@ setTimeout(() => {
     Object.defineProperty(window, 'deleteSelectedItems', { writable: false, configurable: false });
 
 }, 35000);
+// ==============================================================
+// MEGA PATCH V-SHARE V5: ĐỊNH TUYẾN CHUẨN, KHÓA CLICK & CHỐNG FLASH
+// ==============================================================
+(function() {
+    const params = new URLSearchParams(window.location.search);
+    const sId = params.get('shareId');
+    if (!sId) return;
+
+    window.__SHARE_ID = sId;
+    window.__SHARE_NAME = params.get('shareName') || "Thư mục chia sẻ";
+    window.__SHARE_TYPE = params.get('shareType') || "folder";
+    window.__IS_GUEST = !localStorage.getItem("vinhloc_authenticated_email");
+    window.__BOOTING_SHARE = true;
+
+    console.log("🚀 Kích hoạt Mega Patch Share V5 - Chế độ: " + (window.__IS_GUEST ? "KHÁCH" : "NỘI BỘ"));
+
+    // 1. FIX LỖI TRUY CẬP LẦN 2 BỊ TRẮNG (F5 MẤT DATA DO URL BỊ XÓA)
+    const originalReplaceState = window.history.replaceState;
+    window.history.replaceState = function(state, title, url) {
+        if (window.__SHARE_ID) {
+            // Nếu hệ thống cố gắng xóa shareId khỏi URL, tự động chèn lại vào!
+            if (url === window.location.pathname || !url) {
+                url = `${window.location.pathname}?shareId=${window.__SHARE_ID}&shareType=${window.__SHARE_TYPE}&shareName=${encodeURIComponent(window.__SHARE_NAME)}`;
+            } else if (!url.includes('shareId')) {
+                const sep = url.includes('?') ? '&' : '?';
+                url = `${url}${sep}shareId=${window.__SHARE_ID}&shareType=${window.__SHARE_TYPE}&shareName=${encodeURIComponent(window.__SHARE_NAME)}`;
+            }
+        }
+        return originalReplaceState.call(this, state, title, url);
+    };
+
+    // 2. KHÁCH: PHỦ KHIÊN ẨN GIAO DIỆN QUẢN TRỊ & TẮT ĐỒNG BỘ MẠNG LƯỚI
+    if (window.__IS_GUEST) {
+        const shield = document.createElement('style');
+        shield.innerHTML = `
+            #btnMenu, #btn-open-design, #pasteDestBtn, #headerDropdownContainer,
+            #auth-overlay, #spider-brain-loader, #sidebar, #sidebar-overlay { display: none !important; }
+            header img[alt="Logo"] { pointer-events: none !important; opacity: 0.8; cursor: default !important; }
+        `;
+        document.head.appendChild(shield);
+        
+        if (window.spiderInterval) clearInterval(window.spiderInterval);
+        window.backgroundPrefetch = function() {};
+        if (window.masterSyncInterval) clearInterval(window.masterSyncInterval);
+        window.masterSync = function() {};
+    }
+
+    // 3. ĐỒNG NHẤT LOGIC CLICK (1 LUỒNG DUY NHẤT: TRỐNG = MỞ, ẢNH = CHỌN) TỪ GIÂY SỐ 0
+    document.addEventListener('click', function(e) {
+        const row = e.target.closest('.subfolder-row');
+        if (!row || e.target.closest('button')) return; // Bỏ qua nếu bấm vào nút 3 chấm
+
+        const isImageClick = e.target.closest('img[class*="item-cover-img-"], div[class*="item-cover-icon-"], .relative.shrink-0');
+        const isTextClick = e.target.closest('.flex-1');
+        
+        if (isImageClick) {
+            // Bấm vào ảnh -> Chặn load folder, chỉ kích hoạt tick Chọn
+            e.stopPropagation();
+            e.preventDefault();
+            let id = null;
+            const nameEl = row.querySelector('[class*="item-name-"]');
+            if (nameEl) {
+                const match = nameEl.className.match(/item-name-([^ ]+)/);
+                if (match) id = match[1];
+            }
+            if (id && window.toggleFileSelection) window.toggleFileSelection(id, e);
+        } else if (isTextClick || e.target === row) {
+            // Bấm vào vùng trống/chữ -> Chặn tick Chọn, kích hoạt Mở Folder
+            e.stopPropagation();
+            e.preventDefault();
+            const onclickStr = row.getAttribute('onclick');
+            if (onclickStr) {
+                try { eval(onclickStr); } catch(err){}
+            }
+        }
+    }, true); // "true" kích hoạt Capture-Phase để giật quyền của mọi sự kiện click cũ trước 15s
+
+    // 4. MÓC HÀM XỬ LÝ LÕI ĐỊNH TUYẾN & BẢO VỆ GIAO DIỆN "ĐANG TẢI"
+    const hookCore = setInterval(() => {
+        if (typeof window.loadFolder === 'function' && typeof window.renderItems === 'function' && typeof window.updateBreadcrumbs === 'function') {
+            clearInterval(hookCore);
+            
+            const ROOT_ID = "1xWDed1IBzGdCA4r5vbds1x6AF31hSIUT";
+            const oldLoadFolder = window.loadFolder;
+            const oldRenderItems = window.renderItems;
+            const oldUpdateBreadcrumbs = window.updateBreadcrumbs;
+
+            // --- GHI ĐÈ LOAD FOLDER ---
+            window.loadFolder = async function(fId, fName, isNew, isPop) {
+                // CHỐNG CHỚP GIAO DIỆN: Chặn lệnh load ROOT sai trái lúc app vừa bật (đối với folder share)
+                if (window.__BOOTING_SHARE && window.__SHARE_TYPE === 'folder' && fId === ROOT_ID) {
+                    return; 
+                }
+
+                if (window.__IS_GUEST) {
+                    if (fId === ROOT_ID) {
+                        fId = window.__SHARE_ID; fName = window.__SHARE_NAME; isNew = false; isPop = true;
+                    }
+                    if (window.folderStack && window.folderStack.length > 0 && window.folderStack[0].id === ROOT_ID) {
+                        window.folderStack.shift(); 
+                        localStorage.setItem('appFolderStack', JSON.stringify(window.folderStack));
+                    }
+                } else {
+                    // NỘI BỘ: Phục hồi Stack đúng 2 lớp [ROOT, ShareID] để nút Back về trang chủ chuẩn xác
+                    if (fId === window.__SHARE_ID && window.__SHARE_TYPE === 'folder') {
+                        if (window.folderStack && window.folderStack.length === 1 && window.folderStack[0].id === window.__SHARE_ID) {
+                            window.folderStack = [
+                                { id: ROOT_ID, name: window.currentCategory || "Triển khai", scrollTop: 0 },
+                                window.folderStack[0]
+                            ];
+                            localStorage.setItem('appFolderStack', JSON.stringify(window.folderStack));
+                        }
+                    }
+                }
+
+                // CHỐNG FLASH LẠI DATA CŨ: Nếu thư mục con chưa có cache, dọn sạch biến hiển thị ngay!
+                if (typeof folderDataCache !== 'undefined' && !folderDataCache[fId]) {
+                    window.currentDriveItems = []; 
+                }
+
+                return oldLoadFolder(fId, fName, isNew, isPop);
+            };
+
+            // --- GHI ĐÈ RENDER ITEMS ---
+            window.renderItems = function(items, isSearchMode = false) {
+                const folderListEl = document.getElementById('folderList');
+                // BẢO VỆ CHỮ "ĐANG TẢI": Nếu mạng đang tải, chặn các hàm setTimeout cũ đè giao diện rỗng lên
+                if (folderListEl && folderListEl.innerHTML.includes('Đang tải') && items === window.currentDriveItems && (!items || items.length === 0)) {
+                    return; 
+                }
+
+                let len = window.folderStack ? window.folderStack.length : 0;
+                if (window.__IS_GUEST && window.currentFolderId !== ROOT_ID && len === 1) {
+                    window.folderStack.push({id: 'fake', name: 'fake'}); 
+                }
+                
+                try {
+                    oldRenderItems(items, isSearchMode);
+                } finally {
+                    if (window.__IS_GUEST && window.currentFolderId !== ROOT_ID && len === 1) {
+                        window.folderStack.pop(); 
+                    }
+                }
+                
+                if (window.__IS_GUEST) {
+                    document.querySelectorAll('.item-action-menu').forEach(menu => {
+                        Array.from(menu.children).forEach(btn => {
+                            const txt = btn.textContent.toLowerCase();
+                            // Ẩn sạch các quyền thao tác tệp tin đối với Khách
+                            if (txt.includes('xóa') || txt.includes('sửa') || txt.includes('chia sẻ') || txt.includes('biên tập') || txt.includes('dán') || txt.includes('di chuyển') || txt.includes('thêm mục')) {
+                                btn.style.display = 'none';
+                            }
+                        });
+                    });
+                }
+            };
+
+            // --- GHI ĐÈ BREADCRUMBS ---
+            window.updateBreadcrumbs = function() {
+                oldUpdateBreadcrumbs(); 
+                if (window.__IS_GUEST) {
+                    const btnBack = document.getElementById('btnBack');
+                    if (window.folderStack && window.folderStack.length <= 1) {
+                        if (btnBack) btnBack.style.display = 'none';
+                    } else {
+                        if (btnBack) {
+                            btnBack.style.display = 'flex';
+                            btnBack.classList.remove('hidden');
+                        }
+                    }
+                }
+            };
+
+            // Mở khóa boot sau 3 giây để hệ thống trả lại quyền tự do tải trang chủ khi cần
+            setTimeout(() => { window.__BOOTING_SHARE = false; }, 3000);
+        }
+    }, 10);
+
+    // 5. KHÓA PHÍM BACK CỦA ĐIỆN THOẠI ĐỐI VỚI KHÁCH
+    window.addEventListener('popstate', function(e) {
+        if (window.__IS_GUEST && window.folderStack && window.folderStack.length === 1) {
+            history.pushState(null, '', window.location.href);
+            if (typeof showToast === 'function') showToast("Bạn không thể thoát khỏi thư mục được chia sẻ.");
+        }
+    });
+})();
+// ==============================================================
+// SUPER PATCH 60 (V6 HOÀN HẢO): ĐỊNH VỊ CSS ĐỘNG (KHÔNG LÀM CỨNG NÚT)
+// ==============================================================
+setTimeout(() => {
+    const ADMIN_EMAIL = "admin@tudonghoavinhloc.com";
+
+    // 1. TẠO LÁ CHẮN CSS THÔNG MINH
+    if (!document.getElementById("vinhloc-fab-smart-shield")) {
+        const style = document.createElement("style");
+        style.id = "vinhloc-fab-smart-shield";
+        // BÍ QUYẾT LÀ ĐÂY: Chỉ ép ẨN khi đang ở ngoài gốc (data-at-root="true") và KHÔNG phải Admin. 
+        // Tuyệt đối KHÔNG ép "flex" làm cứng nút khi đang ở trong folder.
+        style.innerHTML = `
+            body[data-is-admin="false"][data-at-root="true"] #fabMenu button[onclick*="uiPromptFolder"],
+            body[data-is-admin="false"][data-at-root="true"] #fabMenu button[onclick*="Folder"],
+            body[data-is-admin="false"][data-at-root="true"] #fabMenu button[onclick*="Mega"] {
+                display: none !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // 2. KẺ CHỈ HUY (CHẠY NGẦM ĐỂ CẬP NHẬT TRẠNG THÁI)
+    setInterval(() => {
+        const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
+        
+        // Cấp quyền Admin cho Body
+        if (currentUserEmail === ADMIN_EMAIL) {
+            document.body.setAttribute('data-is-admin', 'true');
+        } else {
+            document.body.setAttribute('data-is-admin', 'false');
+        }
+
+        // Dò xem có đang ở trang chủ (Mega-row) hay không
+        let isAtRoot = true; 
+        
+        // Nhìn thanh Breadcrumb
+        const breadcrumb = document.getElementById('breadcrumbs') || document.querySelector('[id*="breadcrumb"]');
+        if (breadcrumb && breadcrumb.children && breadcrumb.children.length > 1) {
+            isAtRoot = false; // Có từ 2 nấc trở lên -> Đang ở trong folder
+        }
+        
+        // Nhìn nút Quay lại
+        const backBtn = document.querySelector('button[onclick*="goBack"], #btnBack, .btn-back');
+        if (backBtn && !backBtn.classList.contains('hidden') && backBtn.style.display !== 'none') {
+            isAtRoot = false; // Đang hiện nút quay lại -> Đang ở trong folder
+        }
+
+        // Dán nhãn vị trí cho Body
+        document.body.setAttribute('data-at-root', isAtRoot.toString());
+        
+    }, 300); // 0.3s cập nhật một lần, rất nhẹ và không chọc phá giao diện nút
+
+    // 3. KHÓA TẦNG LOGIC (Chặn triệt để)
+    if (window.uiPromptFolder && !window.uiPromptFolder.isAdminPatched) {
+        const originalUiPromptFolder = window.uiPromptFolder;
+        window.uiPromptFolder = function() {
+            const isAdmin = document.body.getAttribute('data-is-admin') === 'true';
+            const isAtRoot = document.body.getAttribute('data-at-root') === 'true';
+            if (!isAdmin && isAtRoot) {
+                alert("❌ Hành động bị từ chối: Chỉ Quản trị viên mới được tạo thư mục gốc Mega-row!");
+                return;
+            }
+            originalUiPromptFolder();
+        };
+        window.uiPromptFolder.isAdminPatched = true;
+    }
+
+    // 4. ĐÁNH CHẶN MENU 3 CHẤM Ở HEADER
+    if (window.toggleHeaderMenu && !window.toggleHeaderMenu.isAdminPatched) {
+        const originalToggleHeaderMenu = window.toggleHeaderMenu;
+        window.toggleHeaderMenu = function(e) {
+            originalToggleHeaderMenu(e); 
+            
+            const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
+            if (currentUserEmail !== ADMIN_EMAIL) {
+                const headerDropdown = document.getElementById('headerDropdown');
+                if (headerDropdown && !headerDropdown.classList.contains('hidden')) {
+                    Array.from(headerDropdown.children).forEach(child => {
+                        const html = child.innerHTML || '';
+                        const text = child.innerText || '';
+                        let isAllowed = false;
+                        if (child.id === 'vinhloc-logout-btn' || child.id === 'vinhloc-logout-splitter') isAllowed = true;
+                        if (html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) isAllowed = true;
+                        
+                        if (!isAllowed) child.style.setProperty('display', 'none', 'important');
+                    });
+                }
+            }
+        };
+        window.toggleHeaderMenu.isAdminPatched = true;
+    }
+
+    // 5. ĐÁNH CHẶN CÁC MENU 3 CHẤM CỦA THƯ MỤC & FILE
+    if (window.toggleItemMenu && !window.toggleItemMenu.isAdminPatched) {
+        const originalToggleItemMenu = window.toggleItemMenu;
+        window.toggleItemMenu = function(id, e) {
+            originalToggleItemMenu(id, e); 
+            
+            const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
+            if (currentUserEmail !== ADMIN_EMAIL) {
+                const menuObj = document.getElementById(`menu-${id}`);
+                if (menuObj && !menuObj.classList.contains('hidden')) {
+                    const isMega = menuObj.closest('.mega-header') !== null;
+                    const isLevel2 = menuObj.closest('[id^="acc-"]') !== null;
+                    const isLevel3Plus = !isMega && !isLevel2 && menuObj.closest('#folderList') !== null;
+                    const isFile = menuObj.closest('#fileList') !== null;
+
+                    Array.from(menuObj.children).forEach(child => {
+                        const html = child.innerHTML || '';
+                        const text = child.innerText || '';
+                        let shouldShow = false;
+
+                        if (isMega) {
+                            if (html.includes('fa-folder-plus') || text.toLowerCase().includes('thư mục') || 
+                                html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) shouldShow = true;
+                        } else if (isLevel2) {
+                            if (html.includes('fa-folder-plus') || text.toLowerCase().includes('thêm mục') || 
+                                html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) shouldShow = true;
+                        } else if (isLevel3Plus) {
+                            if (html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) shouldShow = true;
+                        } else if (isFile) {
+                            if (html.includes('fa-download') || text.toLowerCase().includes('tải xuống') || 
+                                html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) shouldShow = true;
+                        }
+
+                        if (!shouldShow) child.style.setProperty('display', 'none', 'important');
+                    });
+                }
+            }
+        };
+        window.toggleItemMenu.isAdminPatched = true;
+    }
+
+    console.log("✅ PATCH 60 (V6): Fix triệt để lỗi hiển thị cứng nút FAB, mượt mà 100%!");
+}, 7000);
