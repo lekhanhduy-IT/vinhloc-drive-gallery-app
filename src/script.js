@@ -7232,45 +7232,70 @@ setTimeout(() => {
     });
 })();
 // ==============================================================
-// SUPER PATCH 60 (CẬP NHẬT): HỆ THỐNG PHÂN QUYỀN MENU DÀNH CHO ADMIN
+// SUPER PATCH 60 (CẬP NHẬT V2): HỆ THỐNG PHÂN QUYỀN MENU DÀNH CHO ADMIN
 // ==============================================================
 setTimeout(() => {
     const ADMIN_EMAIL = "admin@tudonghoavinhloc.com";
 
-    // 1. ĐÁNH CHẶN TOÀN BỘ NÚT "THÊM FOLDER / MEGA FOLDER" TRONG KHỐI FAB MENU NGOÀI TRANG CHỦ
+    // 0. BẢO MẬT TẦNG LOGIC: KHÓA TRỰC TIẾP HÀM TẠO THƯ MỤC
+    if (window.uiPromptFolder && !window.uiPromptFolder.isAdminPatched) {
+        const originalUiPromptFolder = window.uiPromptFolder;
+        window.uiPromptFolder = function() {
+            const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
+            const isRoot = (window.folderStack && window.folderStack.length <= 1);
+            
+            // Nếu không phải Admin và đang ở ngoài giao diện chính (Root) -> Chặn thực thi
+            if (currentUserEmail !== ADMIN_EMAIL && isRoot) {
+                alert("Hành động bị từ chối: Chỉ Quản trị viên mới được tạo thư mục gốc (Mega-row)!");
+                return;
+            }
+            originalUiPromptFolder(); // Cho phép chạy nếu hợp lệ
+        };
+        window.uiPromptFolder.isAdminPatched = true;
+    }
+
+    // 1. ĐÁNH CHẶN GIAO DIỆN: ẨN TOÀN BỘ NÚT TẠO FOLDER TRONG KHỐI FAB MENU NGOÀI TRANG CHỦ
     if (window.updateBreadcrumbs && !window.updateBreadcrumbs.isAdminPatched) {
         const originalUpdateBreadcrumbs = window.updateBreadcrumbs;
         window.updateBreadcrumbs = function() {
             originalUpdateBreadcrumbs(); // Chạy logic cũ gốc
             
             const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
+            const isRoot = (window.folderStack && window.folderStack.length <= 1);
             
-            // Tìm diện rộng mọi nút liên quan đến hành động tạo Thư mục hoặc Mega-row Folder trong khối FAB
+            // Tìm đích danh nút chứa uiPromptFolder và các nút Folder/Mega liên quan trong fabMenu
             const fabFolderButtons = document.querySelectorAll(
-                '#fabMenu button[onclick*="Folder"], #fabMenu button[onclick*="folder"], #fabMenu button[onclick*="Mega"], #fabMenu button[onclick*="mega"]'
+                '#fabMenu button[onclick*="uiPromptFolder"], #fabMenu button[onclick*="Folder"], #fabMenu button[onclick*="folder"], #fabMenu button[onclick*="Mega"], #fabMenu button[onclick*="mega"]'
             );
             
             if (currentUserEmail !== ADMIN_EMAIL) {
-                // Đang ở ngoài giao diện chính (Thư mục gốc / Root)
-                if (window.folderStack && window.folderStack.length <= 1) {
+                if (isRoot) {
+                    // Đang ở giao diện chính -> Xóa class hiển thị, ép ẩn hoàn toàn
                     fabFolderButtons.forEach(btn => {
-                        btn.style.display = 'none';
+                        btn.classList.remove('flex');
+                        btn.classList.add('hidden');
+                        btn.style.setProperty('display', 'none', 'important');
                     });
                 } else {
-                    // Đang ở bên trong các folder con (Hiển thị đầy đủ ở mọi cấp lớp bên trong)
+                    // Đang ở bên trong các folder con -> Hiển thị lại đầy đủ
                     fabFolderButtons.forEach(btn => {
-                        btn.style.display = 'flex';
+                        btn.classList.remove('hidden');
+                        btn.classList.add('flex');
+                        btn.style.setProperty('display', 'flex', 'important');
                     });
                 }
             } else {
-                // Nếu là Admin đăng nhập thì hiển thị đầy đủ tất cả các nút ở mọi nơi
+                // Nếu là Admin đăng nhập thì luôn hiển thị
                 fabFolderButtons.forEach(btn => {
-                    btn.style.display = 'flex';
+                    btn.classList.remove('hidden');
+                    btn.classList.add('flex');
+                    btn.style.setProperty('display', 'flex', 'important');
                 });
             }
         };
         window.updateBreadcrumbs.isAdminPatched = true;
     }
+    
     // Kích hoạt mồi lần đầu để áp dụng cấu trúc phân quyền ngay khi ứng dụng tải xong
     if (window.updateBreadcrumbs) window.updateBreadcrumbs();
 
@@ -7295,7 +7320,7 @@ setTimeout(() => {
                         if (html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) isAllowed = true;
                         
                         if (!isAllowed) {
-                            child.style.display = 'none';
+                            child.style.setProperty('display', 'none', 'important');
                         }
                     });
                 }
@@ -7314,7 +7339,7 @@ setTimeout(() => {
             if (currentUserEmail !== ADMIN_EMAIL) {
                 const menuObj = document.getElementById(`menu-${id}`);
                 if (menuObj && !menuObj.classList.contains('hidden')) {
-                    // Phân tích thứ tự phân cấp cây thư mục dựa vào cấu trúc lớp bọc DOM bao quanh
+                    // Phân tích thứ tự phân cấp cây thư mục
                     const isMega = menuObj.closest('.mega-header') !== null;
                     const isLevel2 = menuObj.closest('[id^="acc-"]') !== null;
                     const isLevel3Plus = !isMega && !isLevel2 && menuObj.closest('#folderList') !== null;
@@ -7352,7 +7377,7 @@ setTimeout(() => {
 
                         // Thực thi ẩn các mục vi phạm luồng phân quyền
                         if (!shouldShow) {
-                            child.style.display = 'none';
+                            child.style.setProperty('display', 'none', 'important');
                         }
                     });
                 }
@@ -7361,45 +7386,5 @@ setTimeout(() => {
         window.toggleItemMenu.isAdminPatched = true;
     }
 
-    console.log("✅ PATCH 60 (ĐÃ ĐỒNG BỘ FAB): Phân quyền toàn bộ menu và nút tạo thư mục đã sẵn sàng!");
+    console.log("✅ PATCH 60 (CẬP NHẬT V2): Phân quyền toàn bộ menu và ĐÃ KHÓA TRIỆT ĐỂ nút tạo mega-row ngoài giao diện chính!");
 }, 7000);
-// ==============================================================
-// PATCH: ẨN NÚT TẠO THƯ MỤC TRONG FAB MENU NGOÀI TRANG CHỦ CHO USER
-// ==============================================================
-setTimeout(() => {
-    const ADMIN_EMAIL = "admin@tudonghoavinhloc.com";
-
-    // Gắn hook vào hàm updateBreadcrumbs vì hàm này luôn chạy mỗi khi chuyển đổi giữa ngoài trang chủ và trong folder con
-    if (window.updateBreadcrumbs && !window.updateBreadcrumbs.isFabPatched) {
-        const originalUpdateBreadcrumbs = window.updateBreadcrumbs;
-        window.updateBreadcrumbs = function() {
-            originalUpdateBreadcrumbs(); // Chạy logic hiển thị đường dẫn gốc
-            
-            const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
-            
-            // Bắt chính xác nút có onclick="uiPromptFolder()" nằm trong khối #fabMenu
-            const fabAddFolderBtn = document.querySelector('#fabMenu button[onclick*="uiPromptFolder"]');
-            
-            if (fabAddFolderBtn) {
-                if (currentUserEmail !== ADMIN_EMAIL) {
-                    // folderStack.length <= 1 nghĩa là đang ở ngoài cùng (danh sách mega-row)
-                    if (window.folderStack && window.folderStack.length <= 1) {
-                        // Ép ẩn tuyệt đối (dùng !important để đè Tailwind)
-                        fabAddFolderBtn.style.setProperty('display', 'none', 'important');
-                    } else {
-                        // Vào trong folder con thì hiện lại nút dưới dạng flex
-                        fabAddFolderBtn.style.setProperty('display', 'flex', 'important');
-                    }
-                } else {
-                    // Nếu là Admin thì luôn hiển thị ở mọi nơi
-                    fabAddFolderBtn.style.setProperty('display', 'flex', 'important');
-                }
-            }
-        };
-        window.updateBreadcrumbs.isFabPatched = true;
-    }
-    
-    // Kích hoạt chạy mồi ngay 1 lần để áp dụng trạng thái ẩn/hiện hiện tại mà không cần click
-    if (window.updateBreadcrumbs) window.updateBreadcrumbs();
-    
-}, 7500);
