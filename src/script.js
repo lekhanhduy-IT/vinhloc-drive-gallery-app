@@ -7046,89 +7046,112 @@ setTimeout(() => {
 
 }, 35000);
 // ==============================================================
-// MEGA PATCH V-SHARE V3: ĐỒNG BỘ NATIVE (SẠCH, KHÔNG GIẬT LAGG)
-// Giải quyết dứt điểm: Chớp giao diện, giật khi click folder con, lỗi load lần 2
+// MEGA PATCH V-SHARE V4: NỘI BỘ FULL QUYỀN - KHÁCH BẢO MẬT & FIX RELOAD
 // ==============================================================
-
 (function() {
-    // 1. CHỚP NHOÁNG ĐỌC URL TRƯỚC KHI APP KỊP LÀM GÌ
     const urlParams = new URLSearchParams(window.location.search);
     const shareId = urlParams.get('shareId');
-    if (!shareId) return; // Nếu không phải link chia sẻ thì bỏ qua, chạy app bình thường
+    if (!shareId) return;
+
+    console.log("🚀 Kích hoạt Mega Patch Share V4: Chuẩn Nội Bộ & Khách");
 
     const shareName = urlParams.get('shareName') || "Thư mục chia sẻ";
-    // Kiểm tra xem là Người lạ (Khách) hay Người nội bộ đã đăng nhập
+    const shareType = urlParams.get('shareType') || "folder";
     const isGuest = !localStorage.getItem("vinhloc_authenticated_email");
 
     window.isPublicShareMode = true;
     window.isStranger = isGuest;
+    window.sharedRootId = shareId;
+    window.vinhloc_shared_boot_active = true;
 
-    console.log("🌟 Kích hoạt Mega Patch Share V3 - Chế độ: " + (isGuest ? "KHÁCH" : "NỘI BỘ"));
+    // 1. CHỐNG XÓA URL (FIX LỖI F5 BỊ TRẮNG DỮ LIỆU CỦA CẢ KHÁCH VÀ NỘI BỘ)
+    const originalReplaceState = window.history.replaceState;
+    window.history.replaceState = function(state, title, url) {
+        // Trình duyệt định xóa shareId ra khỏi URL lúc mới mở -> Chặn lại 100%!
+        if (window.location.search.includes('shareId') && (!url || !url.includes('shareId'))) {
+            return; 
+        }
+        return originalReplaceState.apply(this, arguments);
+    };
 
-    // 2. PHỦ KHIÊN CSS NGAY TỨC KHẮC CHO KHÁCH (Không đợi 1 giây nào)
+    const ROOT_ID = "1xWDed1IBzGdCA4r5vbds1x6AF31hSIUT";
+
+    // 2. PHỦ KHIÊN CHỐNG LỘ UI CHO KHÁCH & TẮT ĐỒNG BỘ MÂY
     if (isGuest) {
         const shield = document.createElement('style');
         shield.innerHTML = `
-            /* Ẩn toàn bộ nút chức năng quản trị, sidebar, thanh tìm kiếm */
             #btnMenu, #btn-open-design, #pasteDestBtn, #headerDropdownContainer,
             #auth-overlay, #spider-brain-loader, #sidebar, #sidebar-overlay { display: none !important; }
-            /* Khóa click vào Logo */
             header img[alt="Logo"] { pointer-events: none !important; opacity: 0.8; cursor: default !important; }
         `;
         document.head.appendChild(shield);
+        
+        // Tắt đồng bộ mây để tránh lỗi rác ổ cứng
+        if (window.spiderInterval) clearInterval(window.spiderInterval);
+        window.backgroundPrefetch = function() {};
+        if (window.masterSyncInterval) clearInterval(window.masterSyncInterval);
+        window.masterSync = function() {};
     }
 
-    // 3. TIÊM TRẠNG THÁI VÀO NÃO APP TRƯỚC KHI NÓ THỨC DẬY
-    // Điều này giúp App mở lên là nằm MẶC ĐỊNH trong thư mục chia sẻ, không bao giờ load giao diện chính rồi mới chớp giật đổi lại.
-    const ROOT_ID = "1xWDed1IBzGdCA4r5vbds1x6AF31hSIUT";
-    let targetStack = isGuest 
-        ? [{ id: shareId, name: shareName, scrollTop: 0, isShareRoot: true }] // Khách: Root là thư mục chia sẻ
-        : [
-            { id: ROOT_ID, name: "Triển khai", scrollTop: 0 }, // Người nhà: Vẫn có đường lùi về root chính
-            { id: shareId, name: shareName, scrollTop: 0 }
-          ];
-    
-    // Ghi đè vào bộ nhớ ngay lập tức
-    localStorage.setItem('appFolderStack', JSON.stringify(targetStack));
-
-    // 4. THEO DÕI VÀ MÓC NỐI CÁC HÀM CỐT LÕI (Không dùng setTimeout delay nữa)
-    // Dùng setInterval quét nhanh (10ms) để móc hàm ngay khi nó vừa được định nghĩa
-    
-    // Hook A: Chặn hàm Load Folder
+    // 3. MÓC HÀM XỬ LÝ LÕI BẰNG INTERVAL TỐC ĐỘ CAO
     const hookLoadFolder = setInterval(() => {
         if (typeof window.loadFolder === 'function') {
             clearInterval(hookLoadFolder);
             const oldLoadFolder = window.loadFolder;
             
             window.loadFolder = async function(fId, fName, isNew, isPop) {
-                // Nếu khách bị lạc và app cố gắng load ROOT chính -> Kéo đầu quay lại thư mục Share
-                if (isGuest && fId === ROOT_ID) {
-                    fId = shareId;
-                    fName = shareName;
-                    isNew = false;
-                    isPop = true; 
+                
+                // NGƯỜI NỘI BỘ: Tự do truy cập, nhưng nếu có lệnh ẩn đòi load ROOT gây chớp màn hình lúc mới boot -> Hủy lệnh!
+                if (!isGuest && fId === ROOT_ID && window.vinhloc_shared_boot_active && shareType === 'folder') {
+                    window.vinhloc_shared_boot_active = false; 
+                    return; // Vứt bỏ lệnh load giao diện chính sai trái
                 }
+
+                // KHÁCH: Cắt bỏ ROOT khỏi lịch sử, nhốt tại ShareID
+                if (isGuest) {
+                    if (fId === ROOT_ID) {
+                        fId = shareId; fName = shareName; isNew = false; isPop = true;
+                    }
+                    if (window.folderStack && window.folderStack.length > 0 && window.folderStack[0].id === ROOT_ID) {
+                        window.folderStack.shift(); 
+                        localStorage.setItem('appFolderStack', JSON.stringify(window.folderStack));
+                    }
+                }
+
+                // NỘI BỘ: Phục hồi Stack chuẩn 2 lớp để nút Back về trang chủ hoạt động đúng
+                if (!isGuest && fId === shareId && shareType === 'folder') {
+                    if (window.folderStack && window.folderStack.length === 1 && window.folderStack[0].id === shareId) {
+                        window.folderStack = [
+                            { id: ROOT_ID, name: window.currentCategory || "Triển khai", scrollTop: 0 },
+                            window.folderStack[0]
+                        ];
+                        localStorage.setItem('appFolderStack', JSON.stringify(window.folderStack));
+                    }
+                }
+
                 return oldLoadFolder(fId, fName, isNew, isPop);
             };
         }
     }, 10);
 
-    // Hook B: Điều khiển mượt mà Breadcrumbs (Tên thư mục trên Header và nút Back)
+    // Tự động giải phóng cờ boot khởi động sau 4 giây để nội bộ sử dụng bình thường
+    setTimeout(() => { window.vinhloc_shared_boot_active = false; }, 4000);
+
+    // 4. KIỂM SOÁT THANH BREADCRUMB (Tên Thư Mục trên Header)
     const hookBreadcrumbs = setInterval(() => {
         if (typeof window.updateBreadcrumbs === 'function') {
             clearInterval(hookBreadcrumbs);
             const oldUpdateBreadcrumbs = window.updateBreadcrumbs;
             
             window.updateBreadcrumbs = function() {
-                oldUpdateBreadcrumbs(); // Vẽ header mặc định trước
-                
+                oldUpdateBreadcrumbs(); 
                 if (isGuest) {
                     const btnBack = document.getElementById('btnBack');
-                    // Nếu khách đang ở ngay gốc thư mục chia sẻ (stack = 1) -> Ẩn cút nút Back đi
+                    // Ẩn nút Back nếu đang ở gốc của share
                     if (window.folderStack && window.folderStack.length <= 1) {
                         if (btnBack) btnBack.style.display = 'none';
                     } else {
-                        // Nếu khách click vào folder con bên trong (stack > 1) -> Hiện nút back để lùi về gốc chia sẻ
+                        // Hiện lại để lùi khi đi vào thư mục con bên trong
                         if (btnBack) {
                             btnBack.style.display = 'flex';
                             btnBack.classList.remove('hidden');
@@ -7139,22 +7162,36 @@ setTimeout(() => {
         }
     }, 10);
 
-    // Hook C: Tước quyền thao tác của Khách trong Menu 3 chấm
+    // 5. HIỂN THỊ ITEM GIAO DIỆN VÀ KHÓA QUYỀN KHÁCH
     const hookRenderItems = setInterval(() => {
         if (typeof window.renderItems === 'function') {
             clearInterval(hookRenderItems);
             const oldRenderItems = window.renderItems;
             
             window.renderItems = function(items, isSearchMode = false) {
-                // Vẽ lưới danh sách bình thường (Không can thiệp folderStack gây giật lag UI nữa)
-                oldRenderItems(items, isSearchMode);
+                let len = window.folderStack ? window.folderStack.length : 0;
                 
+                // Thủ thuật: Ép hiển thị dạng Folder bình thường cho Khách thay vì Mega-Row 
+                if (isGuest && window.currentFolderId !== ROOT_ID && len === 1) {
+                    window.folderStack.push({id: 'fake', name: 'fake'}); 
+                }
+                
+                try {
+                    oldRenderItems(items, isSearchMode);
+                } finally {
+                    // Dọn dẹp thủ thuật trả về nguyên trạng
+                    if (isGuest && window.currentFolderId !== ROOT_ID && len === 1) {
+                        window.folderStack.pop(); 
+                    }
+                }
+                
+                // GIẤU NÚT CHỨC NĂNG NẾU LÀ KHÁCH
                 if (isGuest) {
-                    // Dò tìm và ẩn các nút cấm (Xóa, Sửa, Chia sẻ) trong tất cả các item
                     document.querySelectorAll('.item-action-menu').forEach(menu => {
                         Array.from(menu.children).forEach(btn => {
                             const txt = btn.textContent.toLowerCase();
-                            if (txt.includes('xóa') || txt.includes('sửa') || txt.includes('chia sẻ')) {
+                            // Chặn mọi nút thay đổi / chia sẻ
+                            if (txt.includes('xóa') || txt.includes('sửa') || txt.includes('chia sẻ') || txt.includes('biên tập') || txt.includes('dán') || txt.includes('di chuyển') || txt.includes('thêm mục')) {
                                 btn.style.display = 'none';
                             }
                         });
@@ -7164,10 +7201,9 @@ setTimeout(() => {
         }
     }, 10);
 
-    // 5. ĐÁNH CHẶN PHÍM BACK VẬT LÝ TRÊN ĐIỆN THOẠI/TRÌNH DUYỆT
+    // 6. KHÓA PHÍM BACK CỦA ĐIỆN THOẠI ĐỐI VỚI KHÁCH
     window.addEventListener('popstate', function(e) {
         if (isGuest && window.folderStack && window.folderStack.length === 1) {
-            // Khách lùi quá trớn định thoát ra giao diện chính -> Ép đẩy lịch sử lên lại
             history.pushState(null, '', window.location.href);
             if (typeof showToast === 'function') showToast("Bạn không thể thoát khỏi thư mục được chia sẻ.");
         }
