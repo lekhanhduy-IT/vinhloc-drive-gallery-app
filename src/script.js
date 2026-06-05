@@ -7046,180 +7046,217 @@ setTimeout(() => {
 
 }, 35000);
 // ==============================================================
-// SUPER PATCH 99: HOÀN THIỆN PHÂN QUYỀN PUBLIC URL & BẢO TỒN CACHE
+// ULTIMATE PATCH: PUBLIC SHARING & NAVIGATION LOCKDOWN
 // ==============================================================
 (function() {
-    console.log("🚀 Kích hoạt Patch 99: Xử lý Public Share thông minh & Bẫy Sandbox...");
+    console.log("⚡ Khởi động Ultimate Patch: Khóa cứng Public Share...");
 
-    // 1. NHẬN DIỆN LINK & PHÂN LOẠI NGƯỜI DÙNG (KHACH HAY NỘI BỘ)
     const urlParams = new URLSearchParams(window.location.search);
-    let sId = urlParams.get('shareId') || sessionStorage.getItem('vl_share_id');
-    let sType = urlParams.get('shareType') || sessionStorage.getItem('vl_share_type');
-    let sName = urlParams.get('shareName') || sessionStorage.getItem('vl_share_name') || "Thư mục chia sẻ";
+    const sharedId = urlParams.get('shareId');
+    const shareType = urlParams.get('shareType');
+    
+    // NẾU ĐÂY LÀ PUBLIC LINK CHIA SẺ -> KHỞI ĐỘNG CHẾ ĐỘ ĐẶC BIỆT
+    if (sharedId) {
+        window.vinhloc_is_public_share = true;
+        window.vinhloc_shared_root_id = sharedId; // Khóa chặt ID này làm "Trần nhà"
 
-    if (urlParams.has('shareId')) {
-        sessionStorage.setItem('vl_share_id', sId);
-        sessionStorage.setItem('vl_share_type', sType);
-        sessionStorage.setItem('vl_share_name', sName);
-        // Xóa sạch thanh URL để F5 không bị lỗi
-        window.history.replaceState(null, null, window.location.pathname);
-    }
-
-    const isPublicShare = !!sId;
-    // Kiểm tra xem trình duyệt này đã từng đăng nhập Google thành công chưa
-    const loggedInEmail = localStorage.getItem("vinhloc_authenticated_email");
-    const isGuest = isPublicShare && !loggedInEmail; // Người ngoài (Ẩn danh/Chưa đăng nhập)
-    const isMember = isPublicShare && !!loggedInEmail; // Người trong công ty
-
-    if (!isPublicShare) {
-        console.log("✅ Truy cập hệ thống bình thường, không kích hoạt Sandbox.");
-        return; 
-    }
-
-    // ==========================================
-    // PHẦN A: THIẾT LẬP SANDBOX CHO GUEST
-    // ==========================================
-    if (isGuest) {
-        document.documentElement.classList.add('guest-sandbox-mode');
-        
-        // 1. CHẶN ĐĂNG NHẬP (BYPASS AUTH)
-        const killAuth = setInterval(() => {
-            const auth = document.getElementById("auth-overlay");
-            const loader = document.getElementById("spider-brain-loader");
-            if (auth) auth.style.setProperty('display', 'none', 'important');
-            if (loader) loader.style.setProperty('display', 'none', 'important');
-        }, 10);
-        setTimeout(() => clearInterval(killAuth), 5000);
-        
-        window.initGoogleAuth = function() { window.initDatabase(); };
-        window.initSpiderLoaderFlow = function() {};
-
-        // 2. CSS BỨC TƯỜNG THÉP (Ẩn lối ra, vẫn giữ nút Add Folder & Upload)
-        const style = document.createElement('style');
-        style.innerHTML = `
-            /* Ẩn Sidebar, Menu Hamburger, Menu 3 chấm Header, Nút Pen Design */
-            .guest-sandbox-mode #sidebar,
-            .guest-sandbox-mode #sidebar-overlay,
-            .guest-sandbox-mode #btnMenu,
-            .guest-sandbox-mode #headerDropdownContainer,
-            .guest-sandbox-mode #btn-open-design { 
-                display: none !important; 
-                pointer-events: none !important; 
+        // 1. TẮT HOÀN TOÀN HỆ THỐNG CACHE OFFLINE ĐỂ TRÁNH GHI ĐÈ
+        const disableCache = () => {
+            if (window.localforage) {
+                window.localforage.setItem = async function() { return true; }; // Chặn ghi
+                window.localforage.getItem = async function() { return null; }; // Chặn đọc
             }
-            /* Khóa Logo, cấm bấm */
-            .guest-sandbox-mode header img[src*="vlimage.png"] {
-                pointer-events: none !important;
-                cursor: default !important;
-            }
-            /* Giấu đường dẫn cây thư mục trên Header */
-            .guest-sandbox-mode #currentFolderName {
-                opacity: 0 !important;
-                pointer-events: none !important;
-            }
-        `;
-        document.head.appendChild(style);
-
-        // 3. BẪY NÚT BACK VẬT LÝ VÀ TRÌNH DUYỆT ẨN DANH (VÒNG LẶP LỊCH SỬ)
-        history.replaceState({ atSharedRoot: true }, '', window.location.pathname);
-        history.pushState({ atSharedRoot: true }, '', window.location.pathname);
-        
-        window.addEventListener('popstate', function(e) {
-            // Nếu đang đứng ở gốc của Link chia sẻ (không nằm trong folder con)
-            if (window.folderStack && window.folderStack.length <= 1) {
-                // Nhồi lại trạng thái cũ ngay lập tức để bẫy trình duyệt
-                history.pushState({ atSharedRoot: true }, '', window.location.pathname);
-                // Nạp lại giao diện tại chỗ
-                if (window.loadFolder) window.loadFolder(sId, sName, false, true);
-            }
-        });
-    }
-
-    // ==========================================
-    // PHẦN B: CAN THIỆP LUỒNG KHỞI TẠO CHUNG 
-    // ==========================================
-    setTimeout(() => {
-        // 1. SỬA HÀM KHỞI TẠO (GIỮ NGUYÊN CACHE ĐỂ KHÔNG BỊ NHÁY 10S)
-        const origInitDB = window.initDatabase;
-        window.initDatabase = async function() {
-            try {
-                // Load Cache hệ thống chuẩn
-                appMeta = (await localforage.getItem('vinhloc_meta')) || {};
-                folderDataCache = (await localforage.getItem('vinhloc_folder_cache')) || {};
-
-                if (isGuest) {
-                    // GUEST: Khởi tạo Root tại chính thư mục chia sẻ
-                    window.folderStack = [{ id: sId, name: sName, scrollTop: 0 }];
-                    window.currentFolderId = sId;
-                    localStorage.setItem('appFolderStack', JSON.stringify(window.folderStack));
-                    if (window.loadFolder) window.loadFolder(sId, sName, false, false);
-                } 
-                else if (isMember) {
-                    // NỘI BỘ: Tạo bậc thang từ Gốc thật -> Thư mục chia sẻ (Cho phép back ra Gốc)
-                    const category = appMeta[sId]?.type || "Triển khai";
-                    const realRootId = window.ROOT_FOLDER_ID || "1xWDed1IBzGdCA4r5vbds1x6AF31hSIUT";
-                    
-                    window.folderStack = [
-                        { id: realRootId, name: category, scrollTop: 0 },
-                        { id: sId, name: sName, scrollTop: 0 }
-                    ];
-                    window.currentFolderId = sId;
-                    localStorage.setItem('appFolderStack', JSON.stringify(window.folderStack));
-                    
-                    if (window.switchCategory) window.switchCategory(category, false);
-                    if (window.loadFolder) window.loadFolder(sId, sName, false, false);
-                }
-            } catch(e) { console.error("Lỗi InitDB Sandbox:", e); }
+            folderDataCache = {};
+            subFolderCache = {};
+            appMeta = {};
+            window.masterSync = async function() {}; // Tắt tự động đồng bộ
+            if (window.masterSyncInterval) clearInterval(window.masterSyncInterval);
         };
+        disableCache();
+        setTimeout(disableCache, 1000); // Khóa lại lần 2 để chắc chắn
 
-        // 2. ẨN/HIỆN NÚT BACK TRÊN HEADER THÔNG MINH
-        const origUpdateBC = window.updateBreadcrumbs;
-        window.updateBreadcrumbs = function() {
-            if (origUpdateBC) origUpdateBC.apply(this, arguments);
-            
-            if (isGuest) {
+        // 2. KHÓA GIAO DIỆN (UI LOCKDOWN) LÀM CHO NGƯỜI LẠ KHÔNG THỂ THOÁT RA
+        const enforceShareUI = () => {
+            // A. Khóa thanh Menu Header (Ẩn các đường dẫn, nút back, avatar)
+            const header = document.querySelector('header');
+            if (header) {
+                // Ẩn Menu 3 chấm trên Header
+                const headerMenuBtn = document.getElementById('headerDropdownContainer');
+                if (headerMenuBtn) headerMenuBtn.style.display = 'none';
+
+                // Ẩn nút Back trên header
                 const btnBack = document.getElementById('btnBack');
-                if (window.folderStack && window.folderStack.length <= 1) {
-                    if (btnBack) btnBack.classList.add('hidden'); // Ở gốc Share: Tắt
-                } else {
-                    if (btnBack) btnBack.classList.remove('hidden'); // Vào folder con: Mở lại
+                if (btnBack) btnBack.style.display = 'none';
+
+                // Khóa sự kiện click vào Logo
+                const logoImg = header.querySelector('img[alt="Logo"]');
+                if (logoImg) {
+                    logoImg.style.pointerEvents = 'none';
+                    logoImg.removeAttribute('onclick');
+                    const newLogo = logoImg.cloneNode(true);
+                    logoImg.parentNode.replaceChild(newLogo, logoImg);
                 }
+
+                // Ẩn thanh đường dẫn (Breadcrumbs)
+                const folderNameDisplay = document.getElementById('currentFolderName');
+                if (folderNameDisplay) {
+                    folderNameDisplay.innerHTML = '<span>Thư mục chia sẻ</span>'; // Đặt cố định 1 tên
+                    folderNameDisplay.style.pointerEvents = 'none'; // Không cho click vào đường dẫn
+                }
+
+                // Ẩn nút mở Sidebar (Nút 3 gạch)
+                const btnMenu = document.getElementById('btnMenu');
+                if (btnMenu) btnMenu.style.display = 'none';
+            }
+
+            // B. Ẩn nút Pen Design
+            const btnDesign = document.getElementById('btn-open-design');
+            if (btnDesign) btnDesign.style.display = 'none';
+
+            // C. Ẩn các tùy chọn nhạy cảm trong Menu của từng File/Folder
+            document.querySelectorAll('.item-action-menu').forEach(menu => {
+                Array.from(menu.children).forEach(btn => {
+                    const html = btn.innerHTML || "";
+                    if (html.includes('Xóa') || html.includes('Chia sẻ') || html.includes('Thông tin')) {
+                        btn.style.display = 'none';
+                    }
+                });
+            });
+            
+            // D. Ghi đè lại Breadcrumbs để luôn khóa
+            window.updateBreadcrumbs = function() {
+                const folderNameDisplay = document.getElementById('currentFolderName');
+                if (folderNameDisplay) {
+                    // Nếu đang ở một thư mục con bên trong thư mục chia sẻ
+                    if (folderStack.length > 2) {
+                        const currentF = folderStack[folderStack.length - 1];
+                        folderNameDisplay.innerHTML = `<span class="font-bold">${currentF.name}</span>`;
+                        // Hiển thị lại nút Back ĐỂ LÙI VỀ TRONG PHẠM VI CHIA SẺ
+                        const btnBack = document.getElementById('btnBack');
+                        if (btnBack) btnBack.style.display = 'block';
+                    } else {
+                        // Đang ở thư mục gốc chia sẻ
+                        folderNameDisplay.innerHTML = '<span>Thư mục chia sẻ</span>';
+                        const btnBack = document.getElementById('btnBack');
+                        if (btnBack) btnBack.style.display = 'none';
+                    }
+                }
+            };
+        };
+        
+        // Quét liên tục để đảm bảo UI không bị hiện lại
+        setInterval(enforceShareUI, 500);
+
+        // 3. KIỂM SOÁT ĐIỀU HƯỚNG (NAVIGATION LOCK)
+        const blockEscape = () => {
+            // Can thiệp nút Back của trình duyệt / Điện thoại
+            window.addEventListener('popstate', (e) => {
+                // Nếu lùi quá giới hạn (thoát ra khỏi thư mục chia sẻ)
+                if (folderStack.length <= 2) {
+                    // Đẩy lại một trạng thái giả để giữ người dùng ở lại
+                    history.pushState(null, null, window.location.href);
+                    // Ép tải lại thư mục gốc chia sẻ
+                    if(window.loadFolder) window.loadFolder(window.vinhloc_shared_root_id, "Thư mục chia sẻ", false, true);
+                }
+            });
+
+            // Ghi đè sự kiện click nút Back trên Header
+            const btnBack = document.getElementById('btnBack');
+            if (btnBack) {
+                const newBtnBack = btnBack.cloneNode(true);
+                btnBack.parentNode.replaceChild(newBtnBack, btnBack);
+                newBtnBack.addEventListener('click', () => {
+                    // Nếu bấm Back mà sắp thoát ra khỏi khu vực chia sẻ
+                    if (folderStack.length <= 2) {
+                        // Khóa lại
+                        if(window.loadFolder) window.loadFolder(window.vinhloc_shared_root_id, "Thư mục chia sẻ", false, false);
+                    } else {
+                        // Cho phép lùi 1 cấp nếu vẫn đang trong khu vực chia sẻ
+                        history.back(); 
+                    }
+                });
             }
         };
+        setTimeout(blockEscape, 500);
 
-        // 3. SỬA LỖI MEGA-ROW TRỐNG DỮ LIỆU
-        // Nguyên lý: Đánh lừa hàm render rằng stack đang > 1 để nó chịu nhả lưới File/Folder ra thay vì vẽ Accordion
-        const origRender = window.renderItems;
-        if (origRender && !window.renderItems.isHookedP99) {
-            window.renderItems = function(items, isSearchMode = false) {
-                if (isPublicShare && window.folderStack && window.folderStack.length === 1 && window.currentFolderId === sId) {
-                    let tempStack = window.folderStack;
-                    window.folderStack = [{}, {}]; // Mánh lới tạo Stack ảo
-                    origRender.call(this, items, isSearchMode);
-                    window.folderStack = tempStack; // Trả lại Stack thật
-                    return;
+        // 4. CAN THIỆP HÀM LOAD FOLDER ĐỂ LUÔN GỌI TRỰC TIẾP TỪ SERVER
+        if (window.loadFolder && !window.loadFolder.isPublicShareHooked) {
+            const origLoadFolder = window.loadFolder;
+            window.loadFolder = async function(folderId, folderName, isNewNavigation = false, isPopState = false) {
+                // CHẶN MỌI NỖ LỰC LOAD VỀ ROOT (Trang chủ chính)
+                if (folderId === ROOT_FOLDER_ID) {
+                    console.log("Đánh chặn lệnh thoát ra Trang Chủ!");
+                    // Chuyển hướng ép về lại thư mục chia sẻ
+                    return origLoadFolder(window.vinhloc_shared_root_id, "Thư mục chia sẻ", false, false);
                 }
-                origRender.call(this, items, isSearchMode);
+
+                // Luôn gọi API trực tiếp để lấy dữ liệu tươi nhất, bỏ qua Cache
+                const folderListEl = document.getElementById('folderList');
+                const fileListEl = document.getElementById('fileList');
+                if (folderListEl) folderListEl.innerHTML = '<div class="text-center text-gray-500 mt-10 w-full"><div class="loader mx-auto mb-3 border-blue-400"></div>Đang tải dữ liệu trực tiếp...</div>';
+                if (fileListEl) fileListEl.innerHTML = '';
+                
+                try {
+                    const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'list', folderId: folderId }) }).then(r => r.json());
+                    if (res && res.success) {
+                        currentDriveItems = res.data;
+                        if (window.renderItems) window.renderItems(currentDriveItems);
+                    } else {
+                        if (folderListEl) folderListEl.innerHTML = '<div class="text-center text-gray-500 mt-10 w-full italic">Lỗi kết nối hoặc thư mục trống.</div>';
+                    }
+                } catch(e) {
+                    if (folderListEl) folderListEl.innerHTML = '<div class="text-center text-red-500 mt-10 w-full italic">Lỗi mạng khi tải dữ liệu!</div>';
+                }
+
+                // Cập nhật lại Stack nội bộ của Share Mode
+                if (isNewNavigation && !isPopState) {
+                    const existingIdx = folderStack.findIndex(f => f.id === folderId);
+                    if (existingIdx !== -1) {
+                        folderStack = folderStack.slice(0, existingIdx + 1);
+                    } else {
+                        folderStack.push({ id: folderId, name: folderName, scrollTop: 0 });
+                    }
+                }
+                
+                // Thiết lập trần nhà cho Stack
+                if (folderStack.length < 2) {
+                    folderStack = [
+                        { id: 'locked_root', name: "Locked" }, 
+                        { id: window.vinhloc_shared_root_id, name: "Thư mục chia sẻ" }
+                    ];
+                }
+                
+                currentFolderId = folderId;
+                window.updateBreadcrumbs();
             };
-            window.renderItems.isHookedP99 = true;
+            window.loadFolder.isPublicShareHooked = true;
         }
 
-        // 4. CHẶN BẤM CÂY THƯ MỤC (NẾU CLICK ĐƯỢC)
-        if (isGuest && window.goToFolder) {
-            const origGoToFolder = window.goToFolder;
-            window.goToFolder = function(index) {
-                if (index === 0) {
-                    window.folderStack = [{ id: sId, name: sName, scrollTop: 0 }];
-                    window.currentFolderId = sId;
-                    if (window.loadFolder) window.loadFolder(sId, sName, false, false);
-                    return;
-                }
-                return origGoToFolder(index);
-            };
-        }
+        // 5. KHỞI ĐỘNG VÀO THƯ MỤC CHIA SẺ NGAY LẬP TỨC
+        setTimeout(() => {
+            // Tắt màn hình đăng nhập nếu vô tình hiện lên
+            const authOverlay = document.getElementById("auth-overlay");
+            if (authOverlay) authOverlay.style.display = "none";
+            
+            // Xây dựng Stack giả định khóa cứng
+            folderStack = [
+                { id: 'locked_root', name: "Locked" }, 
+                { id: window.vinhloc_shared_root_id, name: "Thư mục chia sẻ" }
+            ];
+            
+            // Ép tải thư mục chia sẻ
+            if (window.loadFolder) {
+                window.loadFolder(window.vinhloc_shared_root_id, "Thư mục chia sẻ", false, false);
+            }
+            
+            // Vô hiệu hóa tính năng lấy thông tin ảnh Mega-row nếu là Share Mega-row
+            if (shareType === 'folder') {
+                window.currentCategory = "Chia sẻ"; 
+            }
+        }, 300);
 
-        // Tẩy các cờ rác của patch cũ
-        window.vinhloc_is_sharing_boot = false;
-
-    }, 800);
-
+    } else {
+        // NẾU KHÔNG PHẢI LINK CHIA SẺ -> HOẠT ĐỘNG NHƯ BÌNH THƯỜNG
+        console.log("Truy cập nội bộ: Hoạt động bình thường.");
+    }
 })();
