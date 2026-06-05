@@ -7232,64 +7232,65 @@ setTimeout(() => {
     });
 })();
 // ==============================================================
-// SUPER PATCH 60 (V5 CHUẨN XÁC): FIX LỖI ẨN NHẦM THƯ MỤC CON
+// SUPER PATCH 60 (V6 HOÀN HẢO): ĐỊNH VỊ CSS ĐỘNG (KHÔNG LÀM CỨNG NÚT)
 // ==============================================================
 setTimeout(() => {
     const ADMIN_EMAIL = "admin@tudonghoavinhloc.com";
 
-    // HÀM QUAN TRỌNG: Dò tìm xem người dùng có đang chui vào thư mục con hay không
-    function checkIsInsideSubFolder() {
-        // 1. Nhìn vào thanh điều hướng (Breadcrumbs)
-        const breadcrumb = document.getElementById('breadcrumbs') || document.querySelector('[id*="breadcrumb"]');
-        if (breadcrumb && breadcrumb.children && breadcrumb.children.length > 1) {
-            return true; // Có nhiều hơn 1 nấc -> Đang ở trong folder con
-        }
-
-        // 2. Nhìn vào nút Quay lại (Back Button)
-        const backBtn = document.querySelector('button[onclick*="goBack"], #btnBack, .btn-back');
-        if (backBtn && !backBtn.classList.contains('hidden') && backBtn.style.display !== 'none') {
-            return true; // Nút quay lại đang hiện -> Đang ở trong folder con
-        }
-
-        // 3. Kiểm tra biến ID (nếu web có dùng)
-        if (window.currentFolderId && window.currentFolderId !== 'root' && window.currentFolderId !== '') {
-            return true; 
-        }
-
-        // Không thấy dấu hiệu nào -> Chắc chắn đang ở ngoài trang chủ (Mega-row)
-        return false;
+    // 1. TẠO LÁ CHẮN CSS THÔNG MINH
+    if (!document.getElementById("vinhloc-fab-smart-shield")) {
+        const style = document.createElement("style");
+        style.id = "vinhloc-fab-smart-shield";
+        // BÍ QUYẾT LÀ ĐÂY: Chỉ ép ẨN khi đang ở ngoài gốc (data-at-root="true") và KHÔNG phải Admin. 
+        // Tuyệt đối KHÔNG ép "flex" làm cứng nút khi đang ở trong folder.
+        style.innerHTML = `
+            body[data-is-admin="false"][data-at-root="true"] #fabMenu button[onclick*="uiPromptFolder"],
+            body[data-is-admin="false"][data-at-root="true"] #fabMenu button[onclick*="Folder"],
+            body[data-is-admin="false"][data-at-root="true"] #fabMenu button[onclick*="Mega"] {
+                display: none !important;
+            }
+        `;
+        document.head.appendChild(style);
     }
 
-    // 1. KẺ HỦY DIỆT VÀ NGƯỜI BẢO VỆ FAB MENU
+    // 2. KẺ CHỈ HUY (CHẠY NGẦM ĐỂ CẬP NHẬT TRẠNG THÁI)
     setInterval(() => {
         const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
-        const isInsideSubFolder = checkIsInsideSubFolder();
         
-        // Nắm đầu chính xác cái nút tạo thư mục
-        const folderButtons = document.querySelectorAll('#fabMenu button[onclick*="uiPromptFolder"]');
-        
-        folderButtons.forEach(btn => {
-            if (currentUserEmail !== ADMIN_EMAIL && !isInsideSubFolder) {
-                // ÉP ẨN: Khi đang ở TRANG CHỦ và KHÔNG PHẢI ADMIN
-                btn.style.setProperty('display', 'none', 'important');
-                btn.classList.remove('flex');
-                btn.classList.add('hidden');
-            } else {
-                // ÉP HIỆN: Khi đã VÀO THƯ MỤC CON hoặc LÀ ADMIN
-                btn.style.setProperty('display', 'flex', 'important');
-                btn.classList.remove('hidden');
-                btn.classList.add('flex');
-            }
-        });
-    }, 200);
+        // Cấp quyền Admin cho Body
+        if (currentUserEmail === ADMIN_EMAIL) {
+            document.body.setAttribute('data-is-admin', 'true');
+        } else {
+            document.body.setAttribute('data-is-admin', 'false');
+        }
 
-    // 2. KHÓA TẦNG LOGIC (Chặn triệt để phòng hờ User F12 vọc vạch)
+        // Dò xem có đang ở trang chủ (Mega-row) hay không
+        let isAtRoot = true; 
+        
+        // Nhìn thanh Breadcrumb
+        const breadcrumb = document.getElementById('breadcrumbs') || document.querySelector('[id*="breadcrumb"]');
+        if (breadcrumb && breadcrumb.children && breadcrumb.children.length > 1) {
+            isAtRoot = false; // Có từ 2 nấc trở lên -> Đang ở trong folder
+        }
+        
+        // Nhìn nút Quay lại
+        const backBtn = document.querySelector('button[onclick*="goBack"], #btnBack, .btn-back');
+        if (backBtn && !backBtn.classList.contains('hidden') && backBtn.style.display !== 'none') {
+            isAtRoot = false; // Đang hiện nút quay lại -> Đang ở trong folder
+        }
+
+        // Dán nhãn vị trí cho Body
+        document.body.setAttribute('data-at-root', isAtRoot.toString());
+        
+    }, 300); // 0.3s cập nhật một lần, rất nhẹ và không chọc phá giao diện nút
+
+    // 3. KHÓA TẦNG LOGIC (Chặn triệt để)
     if (window.uiPromptFolder && !window.uiPromptFolder.isAdminPatched) {
         const originalUiPromptFolder = window.uiPromptFolder;
         window.uiPromptFolder = function() {
-            const currentUserEmail = localStorage.getItem("vinhloc_authenticated_email");
-            const isInsideSubFolder = checkIsInsideSubFolder();
-            if (currentUserEmail !== ADMIN_EMAIL && !isInsideSubFolder) {
+            const isAdmin = document.body.getAttribute('data-is-admin') === 'true';
+            const isAtRoot = document.body.getAttribute('data-at-root') === 'true';
+            if (!isAdmin && isAtRoot) {
                 alert("❌ Hành động bị từ chối: Chỉ Quản trị viên mới được tạo thư mục gốc Mega-row!");
                 return;
             }
@@ -7298,7 +7299,7 @@ setTimeout(() => {
         window.uiPromptFolder.isAdminPatched = true;
     }
 
-    // 3. ĐÁNH CHẶN MENU 3 CHẤM Ở HEADER
+    // 4. ĐÁNH CHẶN MENU 3 CHẤM Ở HEADER
     if (window.toggleHeaderMenu && !window.toggleHeaderMenu.isAdminPatched) {
         const originalToggleHeaderMenu = window.toggleHeaderMenu;
         window.toggleHeaderMenu = function(e) {
@@ -7311,14 +7312,11 @@ setTimeout(() => {
                     Array.from(headerDropdown.children).forEach(child => {
                         const html = child.innerHTML || '';
                         const text = child.innerText || '';
-                        
                         let isAllowed = false;
                         if (child.id === 'vinhloc-logout-btn' || child.id === 'vinhloc-logout-splitter') isAllowed = true;
                         if (html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) isAllowed = true;
                         
-                        if (!isAllowed) {
-                            child.style.setProperty('display', 'none', 'important');
-                        }
+                        if (!isAllowed) child.style.setProperty('display', 'none', 'important');
                     });
                 }
             }
@@ -7326,7 +7324,7 @@ setTimeout(() => {
         window.toggleHeaderMenu.isAdminPatched = true;
     }
 
-    // 4. ĐÁNH CHẶN CÁC MENU 3 CHẤM CỦA THƯ MỤC & FILE
+    // 5. ĐÁNH CHẶN CÁC MENU 3 CHẤM CỦA THƯ MỤC & FILE
     if (window.toggleItemMenu && !window.toggleItemMenu.isAdminPatched) {
         const originalToggleItemMenu = window.toggleItemMenu;
         window.toggleItemMenu = function(id, e) {
@@ -7359,9 +7357,7 @@ setTimeout(() => {
                                 html.includes('fa-share-nodes') || text.toLowerCase().includes('chia sẻ') || text.toLowerCase().includes('chia sẽ')) shouldShow = true;
                         }
 
-                        if (!shouldShow) {
-                            child.style.setProperty('display', 'none', 'important');
-                        }
+                        if (!shouldShow) child.style.setProperty('display', 'none', 'important');
                     });
                 }
             }
@@ -7369,5 +7365,5 @@ setTimeout(() => {
         window.toggleItemMenu.isAdminPatched = true;
     }
 
-    console.log("✅ PATCH 60 (V5): Đã fix lỗi dò nhầm đường, thả xích cho nút thư mục con!");
+    console.log("✅ PATCH 60 (V6): Fix triệt để lỗi hiển thị cứng nút FAB, mượt mà 100%!");
 }, 7000);
