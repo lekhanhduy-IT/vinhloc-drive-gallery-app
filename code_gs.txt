@@ -202,7 +202,9 @@ function doPost(e) {
             payload.name,         // Tên thư mục
             payload.category,     // Loại (Ý tưởng/Triển khai)
             '',                   // Mô tả (để trống lúc mới tạo)
-            ''                    // Ảnh cover (để trống lúc mới tạo)
+            '',                   // Ảnh cover (để trống lúc mới tạo)
+            '',                   // Không có người ghim
+            ''                    // Không có giờ ghim
           );
         }
         
@@ -241,7 +243,7 @@ function doPost(e) {
       case 'getMeta':
         result = { success: true, meta: getMetaFromSheet() }; break;
       case 'updateSingleMeta':
-        updateMetaInSheet(payload.meta.id, payload.meta.name, payload.meta.type, payload.meta.desc, payload.meta.cover);
+        updateMetaInSheet(payload.meta.id, payload.meta.name, payload.meta.type, payload.meta.desc, payload.meta.cover, payload.meta.pinnedBy, payload.meta.pinnedAt);
         
         try {
           // Bổ sung tính năng: Cập nhật lại Description trên Drive khi người dùng bấm Lưu sửa đổi
@@ -266,6 +268,7 @@ function doPost(e) {
 }
 
 // ----------------- SHEET FUNCTIONS (QUYỀN LỰC TỐI CAO) -----------------
+// ----------------- SHEET FUNCTIONS (QUYỀN LỰC TỐI CAO) -----------------
 function getMetaFromSheet() {
   try {
     const sheet = SpreadsheetApp.openById(SHEET_ID).getSheets()[0];
@@ -273,23 +276,32 @@ function getMetaFromSheet() {
     let meta = {};
     for(let i = 1; i < data.length; i++) {
       let row = data[i];
-      if(row[0]) meta[row[0]] = { name: row[1] || '', type: row[2] || 'Triển khai', desc: row[3] || '', cover: row[4] || '' };
+      if(row[0]) {
+        meta[row[0]] = { 
+            name: row[1] || '', 
+            type: row[2] || 'Triển khai', 
+            desc: row[3] || '', 
+            cover: row[4] || '',
+            pinnedBy: row[5] || '', // Cột F: Lưu tên người ghim (Tương đương cờ 1/0)
+            pinnedAt: row[6] || ''  // Cột G: Lưu thời điểm ghim để sắp xếp
+        };
+      }
     }
     return meta;
   } catch(e) { return {}; }
 }
 
-function updateMetaInSheet(id, name, type, desc, cover) {
+function updateMetaInSheet(id, name, type, desc, cover, pinnedBy, pinnedAt) {
   const sheet = SpreadsheetApp.openById(SHEET_ID).getSheets()[0];
   const data = sheet.getDataRange().getValues();
   let found = false; const targetId = String(id).trim();
   for(let i = 1; i < data.length; i++) {
     if(String(data[i][0]).trim() === targetId) { 
-      sheet.getRange(i + 1, 2, 1, 4).setValues([[name, type, desc, cover]]);
+      sheet.getRange(i + 1, 2, 1, 6).setValues([[name, type, desc, cover, pinnedBy || '', pinnedAt || '']]);
       found = true; break;
     }
   }
-  if(!found) sheet.appendRow([targetId, name, type, desc, cover]);
+  if(!found) sheet.appendRow([targetId, name, type, desc, cover, pinnedBy || '', pinnedAt || '']);
 }
 
 // ----------------- DRIVE FUNCTIONS -----------------

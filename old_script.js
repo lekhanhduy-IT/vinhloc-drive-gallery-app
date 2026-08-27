@@ -6214,6 +6214,92 @@ setTimeout(() => {
 }, 30000); // Khởi chạy trễ nhất (30s) để bọc ra ngoài cùng của tất cả các Patch trước đó
 
 // ==============================================================
+// PATCH 48: TỰ ĐỘNG ĐỒNG BỘ KHỐI GHIM (PIN) ĐA THIẾT BỊ
+// ==============================================================
+setTimeout(() => {
+    let lastPinnedState = "";
+    
+    // Hàm nén trạng thái Ghim hiện tại thành 1 chuỗi ký tự để dễ so sánh
+    function getPinnedState() {
+        if (typeof appMeta === 'undefined') return "";
+        return Object.keys(appMeta)
+            .filter(k => appMeta[k].pinnedBy)
+            .map(k => `${k}-${appMeta[k].pinnedBy}`)
+            .sort()
+            .join(',');
+    }
+    
+    // Khởi tạo mốc trạng thái ban đầu
+    lastPinnedState = getPinnedState();
+
+    // Đặt trạm gác ngầm: Cứ 2 giây kiểm tra xem dữ liệu Ghim trong RAM có bị thay đổi do MasterSync kéo từ mây về không
+    setInterval(() => {
+        const currentPinnedState = getPinnedState();
+        
+        // Nếu phát hiện có sự khác biệt (Máy khác vừa Ghim hoặc Bỏ Ghim)
+        if (currentPinnedState !== lastPinnedState) {
+            lastPinnedState = currentPinnedState; // Cập nhật mốc mới
+            
+            // Ép giao diện render lại để vẽ/ẩn khối Ghim ngay lập tức
+            if (typeof window.renderItems === 'function' && typeof currentDriveItems !== 'undefined') {
+                window.renderItems(currentDriveItems);
+                console.log("🔄 Đã phát hiện thay đổi Ghim từ máy khác, tự động làm mới giao diện!");
+            }
+        }
+    }, 2000);
+    
+    console.log("✅ PATCH 48: Trạm gác Đồng bộ Ghim Đa thiết bị đã hoạt động!");
+}, 32000); // Khởi chạy trễ ở giây 32 để đảm bảo không xung đột với các tiến trình khởi động khác
+
+// ==============================================================
+// PATCH 49: FIX LỖI GHIM BỊ GHI ĐÈ / LƯU XUỐNG CUỐI SHEET
+// ==============================================================
+setTimeout(() => {
+    // Ghi đè lại hàm Ghim để gửi đúng ID lên Server
+    window.togglePinFolder = function(id, name, e) {
+        if(e) e.stopPropagation();
+        
+        // Đóng các menu đang mở
+        document.querySelectorAll('.item-action-menu').forEach(m => m.classList.add('hidden'));
+
+        const email = localStorage.getItem("vinhloc_authenticated_email") || "Admin";
+        const displayName = email.split('@')[0];
+
+        // Đảm bảo thư mục có tồn tại trong Meta
+        if (!appMeta[id]) {
+            appMeta[id] = { type: window.currentCategory || 'Triển khai', desc: '', cover: '', name: name };
+        }
+
+        // Logic Ghim / Bỏ Ghim
+        if (appMeta[id].pinnedBy) {
+            delete appMeta[id].pinnedBy;
+            delete appMeta[id].pinnedAt;
+            showToast(`<i class="fas fa-unlink mr-2"></i> Đã bỏ ghim thư mục`);
+        } else {
+            appMeta[id].pinnedBy = displayName;
+            appMeta[id].pinnedAt = Date.now();
+            showToast(`<i class="fas fa-thumbtack mr-2"></i> Đã ghim thư mục lên đầu`);
+        }
+
+        // Lưu vào ổ cứng 
+        localforage.setItem('vinhloc_meta', appMeta).catch(()=>{});
+        
+        // [FIX LỖI TẠI ĐÂY] - Bổ sung "id" vào gói tin gửi lên Server
+        if (typeof addActionToQueue === 'function') {
+            let metaPayload = { ...appMeta[id], id: id }; // Gắn ID thật vào object
+            addActionToQueue('updateSingleMeta', { meta: metaPayload });
+        }
+        
+        // F5 lại giao diện tức thì
+        if(window.renderItems && typeof currentDriveItems !== 'undefined') {
+            window.renderItems(currentDriveItems);
+        }
+    };
+    
+    console.log("✅ PATCH 49: Đã sửa lỗi lưu Ghim vào Sheet (Gửi đúng ID)!");
+}, 33000); // Chạy ở giây 33 để chắc chắn đè lên hàm ghim cũ
+
+// ==============================================================
 // SUPER PATCH: TÍNH NĂNG GHIM THƯ MỤC & GÔM NHÓM THÔNG MINH
 // ==============================================================
 setTimeout(() => {
