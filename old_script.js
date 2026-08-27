@@ -6212,6 +6212,187 @@ setTimeout(() => {
 
     console.log("✅ PATCH 47: Đã tối ưu bộ đếm Đa Lựa Chọn (Tự động xóa chọn khi rời khỏi màn hình)!");
 }, 30000); // Khởi chạy trễ nhất (30s) để bọc ra ngoài cùng của tất cả các Patch trước đó
+
+// ==============================================================
+// SUPER PATCH: TÍNH NĂNG GHIM THƯ MỤC & GÔM NHÓM THÔNG MINH
+// ==============================================================
+setTimeout(() => {
+    // 1. HÀM XỬ LÝ GHIM/BỎ GHIM
+    window.togglePinFolder = function(id, name, e) {
+        if(e) e.stopPropagation();
+        
+        // Đóng các menu đang mở
+        document.querySelectorAll('.item-action-menu').forEach(m => m.classList.add('hidden'));
+
+        // Lấy tên Gmail đã xác thực (Cắt bỏ @gmail.com cho đẹp)
+        const email = localStorage.getItem("vinhloc_authenticated_email") || "Admin";
+        const displayName = email.split('@')[0];
+
+        // Đảm bảo thư mục có tồn tại trong Meta
+        if (!appMeta[id]) {
+            appMeta[id] = { type: window.currentCategory || 'Triển khai', desc: '', cover: '', name: name };
+        }
+
+        // Logic Ghim / Bỏ Ghim
+        if (appMeta[id].pinnedBy) {
+            delete appMeta[id].pinnedBy;
+            delete appMeta[id].pinnedAt;
+            showToast(`<i class="fas fa-unlink mr-2"></i> Đã bỏ ghim thư mục`);
+        } else {
+            appMeta[id].pinnedBy = displayName;
+            appMeta[id].pinnedAt = Date.now();
+            showToast(`<i class="fas fa-thumbtack mr-2"></i> Đã ghim thư mục lên đầu`);
+        }
+
+        // Lưu vào ổ cứng và đồng bộ lên Drive mây
+        localforage.setItem('vinhloc_meta', appMeta).catch(()=>{});
+        if (typeof addActionToQueue === 'function') {
+            addActionToQueue('updateSingleMeta', { meta: appMeta[id] });
+        }
+        
+        // F5 lại giao diện tức thì
+        if(window.renderItems && typeof currentDriveItems !== 'undefined') {
+            window.renderItems(currentDriveItems);
+        }
+    };
+
+    // 2. BƠM NÚT "GHIM" VÀO MENU 3 CHẤM CỦA CÁC THƯ MỤC
+    if (!window.toggleItemMenu.isPinHooked) {
+        const originalToggleMenu = window.toggleItemMenu;
+        window.toggleItemMenu = function(id, e) {
+            originalToggleMenu(id, e);
+            const menuObj = document.getElementById(`menu-${id}`);
+            if (menuObj) {
+                // Nhận diện thư mục (loại trừ File)
+                const isFolder = menuObj.innerHTML.includes("'mega'") || menuObj.innerHTML.includes("'sub'") || menuObj.innerHTML.includes('"mega"') || menuObj.innerHTML.includes('"sub"');
+                
+                if (isFolder) {
+                    const meta = appMeta[id] || {};
+                    const isPinned = !!meta.pinnedBy;
+                    const pinText = isPinned ? 'Bỏ ghim' : 'Ghim lên đầu';
+                    const pinColor = isPinned ? 'text-gray-500' : 'text-orange-500';
+                    
+                    const nameEl = document.querySelector(`.item-name-${id}`);
+                    const safeName = nameEl ? nameEl.innerText.replace(/'/g, "\\'") : 'Thư mục';
+
+                    // Nếu chưa bơm nút thì bơm vào, nếu có rồi thì chỉ cập nhật trạng thái text/icon
+                    if (!menuObj.hasAttribute('data-pin-injected')) {
+                        let html = `
+                        <div class="pin-action-btn flex items-center px-5 py-3 hover:bg-orange-50 text-gray-700 cursor-pointer font-bold border-t border-gray-100 transition" onclick="window.togglePinFolder('${id}', '${safeName}', event)">
+                            <i class="fas fa-thumbtack w-5 text-center ${pinColor} mr-2 pin-icon-el"></i><span class="pin-text-el">${pinText}</span>
+                        </div>`;
+                        menuObj.insertAdjacentHTML('beforeend', html);
+                        menuObj.setAttribute('data-pin-injected', 'true');
+                    } else {
+                        const span = menuObj.querySelector('.pin-text-el');
+                        const icon = menuObj.querySelector('.pin-icon-el');
+                        if (span) span.innerText = pinText;
+                        if (icon) icon.className = `fas fa-thumbtack w-5 text-center ${pinColor} mr-2 pin-icon-el`;
+                    }
+                }
+            }
+        };
+        window.toggleItemMenu.isPinHooked = true;
+    }
+
+    // 3. THIẾT KẾ VÀ RENDER DANH SÁCH THƯ MỤC ĐÃ GHIM
+    function renderPinnedSection() {
+        let pinnedItems = [];
+        for (let id in appMeta) {
+            if (appMeta[id] && appMeta[id].pinnedBy) {
+                pinnedItems.push({
+                    id: id,
+                    name: appMeta[id].name || 'Thư mục',
+                    pinnedBy: appMeta[id].pinnedBy,
+                    pinnedAt: appMeta[id].pinnedAt || 0
+                });
+            }
+        }
+
+        if (pinnedItems.length === 0) return '';
+        
+        // Sắp xếp: Gần nhất (Mới ghim) lên trên
+        pinnedItems.sort((a, b) => b.pinnedAt - a.pinnedAt);
+
+        let html = `<div class="mb-4 bg-gradient-to-b from-orange-50 to-white border-b border-orange-100 shadow-sm pb-3 pt-2">`;
+        html += `<div class="px-4 py-1.5 text-[11px] font-extrabold text-orange-600 uppercase tracking-wider flex items-center gap-2 mb-2"><i class="fas fa-thumbtack rotate-45"></i> Mục đã ghim (${pinnedItems.length})</div>`;
+
+        // UI 1 dòng Thẻ ghim
+        const createRow = (item) => {
+            const safeName = item.name.replace(/'/g, "\\'");
+            // Tận dụng window.openSearchResult có sẵn để build đường dẫn cha/con cực kỳ chuẩn xác
+            return `
+            <div class="px-4 py-3 flex items-center justify-between bg-white mx-3 my-1.5 rounded-xl shadow-md border border-orange-100/60 cursor-pointer active:scale-95 transition relative overflow-hidden" onclick="window.openSearchResult('${item.id}', '${safeName}', 'folder', null, null)">
+                <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-orange-400"></div>
+                <div class="flex items-center gap-3 overflow-hidden pl-1">
+                    <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-500 shrink-0 shadow-inner"><i class="fas fa-folder-open"></i></div>
+                    <div class="flex flex-col overflow-hidden">
+                        <span class="font-bold text-gray-800 truncate text-sm">${item.name}</span>
+                        <span class="text-[10px] text-gray-500 truncate mt-0.5 font-medium"><i class="fas fa-user-edit mr-1 text-gray-400"></i>Tạo bởi: <span class="text-orange-600 font-bold">${item.pinnedBy}</span></span>
+                    </div>
+                </div>
+                <button onclick="window.togglePinFolder('${item.id}', '${safeName}', event)" class="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-500 shrink-0 bg-gray-50 hover:bg-red-50 rounded-full transition"><i class="fas fa-times"></i></button>
+            </div>`;
+        };
+
+        // Nếu có ít hơn hoặc bằng 2 thư mục -> Dàn ra hết
+        if (pinnedItems.length <= 2) {
+            pinnedItems.forEach(p => html += createRow(p));
+        } 
+        // Nếu có nhiều hơn 2 thư mục -> Đưa mục mới nhất lên đỉnh, gôm các mục cũ vào Dấu sổ xuống
+        else {
+            html += createRow(pinnedItems[0]); // Mục mới nhất
+            html += `
+            <div class="mx-3 mt-2">
+                <div class="flex items-center justify-center py-2.5 bg-orange-50 rounded-xl cursor-pointer text-orange-600 text-xs font-bold transition hover:bg-orange-100 border border-orange-200 border-dashed" onclick="event.stopPropagation(); const m = document.getElementById('pinned-more-list'); m.classList.toggle('hidden'); const i = this.querySelector('.chevron-icon'); i.style.transform = m.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';">
+                    <i class="fas fa-layer-group mr-2"></i> Xem thêm ${pinnedItems.length - 1} mục ghim khác <i class="fas fa-chevron-down ml-2 transition-transform duration-300 chevron-icon"></i>
+                </div>
+                <div id="pinned-more-list" class="hidden mt-2 flex-col gap-1">
+                    ${pinnedItems.slice(1).map(p => createRow(p)).join('')}
+                </div>
+            </div>`;
+        }
+        html += `</div>`;
+        return html;
+    }
+
+    // 4. GHI ĐÈ GIAO DIỆN CHÍNH (ĐẨY KHỐI GHIM LÊN TRÊN CÙNG)
+    if (!window.renderItems.isPinRenderHooked) {
+        const originalRenderItems = window.renderItems;
+        window.renderItems = function(items, isSearchMode = false) {
+            // Render nội dung chính bình thường
+            originalRenderItems(items, isSearchMode);
+
+            // Bơm khối Ghim vào vị trí dưới Header, trên Folder List
+            const folderListEl = document.getElementById('folderList');
+            let pinnedContainer = document.getElementById('global-pinned-container');
+
+            if (!pinnedContainer && folderListEl) {
+                pinnedContainer = document.createElement('div');
+                pinnedContainer.id = 'global-pinned-container';
+                folderListEl.parentNode.insertBefore(pinnedContainer, folderListEl);
+            }
+
+            if (pinnedContainer) {
+                // Ẩn các mục ghim khi người dùng đang ở chế độ gõ Tìm kiếm
+                if (!isSearchMode) {
+                    pinnedContainer.innerHTML = renderPinnedSection();
+                } else {
+                    pinnedContainer.innerHTML = ''; 
+                }
+            }
+        };
+        window.renderItems.isPinRenderHooked = true;
+    }
+
+    // Kích hoạt vẽ lại giao diện một lần để áp dụng ngay lập tức nếu dữ liệu đã tải xong
+    if (typeof currentDriveItems !== 'undefined' && currentDriveItems.length > 0) {
+        window.renderItems(currentDriveItems);
+    }
+    
+    console.log("✅ SUPER PATCH: Tính năng Ghim Thư Mục Lên Đầu đã sẵn sàng!");
+}, 32000); // Set timeout trễ nhất để chạy an toàn sau khi các hàm nền móng (Tìm kiếm/Menu) đã được thiết lập.
+
 // ==============================================================
 // SUPER PATCH 54: CHỐNG ĐƠ GIAO DIỆN CHÍNH (GIẢI PHÓNG LUỒNG MAIN)
 // ==============================================================
