@@ -6342,44 +6342,47 @@ setTimeout(() => {
         }
     };
 
-    // 2. BƠM NÚT "GHIM" VÀO MENU 3 CHẤM CỦA CÁC THƯ MỤC
-    if (!window.toggleItemMenu.isPinHooked) {
-        const originalToggleMenu = window.toggleItemMenu;
-        window.toggleItemMenu = function(id, e) {
-            originalToggleMenu(id, e);
-            const menuObj = document.getElementById(`menu-${id}`);
-            if (menuObj) {
-                // Nhận diện thư mục (loại trừ File)
-                const isFolder = menuObj.innerHTML.includes("'mega'") || menuObj.innerHTML.includes("'sub'") || menuObj.innerHTML.includes('"mega"') || menuObj.innerHTML.includes('"sub"');
+// 2. BƠM NÚT "GHIM" VÀO MENU 3 CHẤM CỦA CÁC THƯ MỤC
+if (!window.toggleItemMenu.isPinHooked) {
+    const originalToggleMenu = window.toggleItemMenu;
+    window.toggleItemMenu = function(id, e) {
+        // Chạy các hàm mở menu và phân quyền trước
+        originalToggleMenu(id, e);
+        
+        const menuObj = document.getElementById(`menu-${id}`);
+        if (menuObj) {
+            // FIX 1: Nhận diện thư mục dựa trên class thẻ cha (chính xác 100%, không bị ảnh hưởng bởi việc xóa nút bên trong)
+            const isFolder = menuObj.closest('.mega-row') !== null || menuObj.closest('.subfolder-row') !== null;
+            
+            if (isFolder) {
+                const meta = appMeta[id] || {};
+                const isPinned = !!meta.pinnedBy;
+                const pinText = isPinned ? 'Bỏ ghim' : 'Ghim lên đầu';
+                const pinColor = isPinned ? 'text-gray-500' : 'text-orange-500';
                 
-                if (isFolder) {
-                    const meta = appMeta[id] || {};
-                    const isPinned = !!meta.pinnedBy;
-                    const pinText = isPinned ? 'Bỏ ghim' : 'Ghim lên đầu';
-                    const pinColor = isPinned ? 'text-gray-500' : 'text-orange-500';
-                    
-                    const nameEl = document.querySelector(`.item-name-${id}`);
-                    const safeName = nameEl ? nameEl.innerText.replace(/'/g, "\\'") : 'Thư mục';
+                const nameEl = document.querySelector(`.item-name-${id}`);
+                const safeName = nameEl ? nameEl.innerText.replace(/'/g, "\\'") : 'Thư mục';
 
-                    // Nếu chưa bơm nút thì bơm vào, nếu có rồi thì chỉ cập nhật trạng thái text/icon
-                    if (!menuObj.hasAttribute('data-pin-injected')) {
-                        let html = `
-                        <div class="pin-action-btn flex items-center px-5 py-3 hover:bg-orange-50 text-gray-700 cursor-pointer font-bold border-t border-gray-100 transition" onclick="window.togglePinFolder('${id}', '${safeName}', event)">
-                            <i class="fas fa-thumbtack w-5 text-center ${pinColor} mr-2 pin-icon-el"></i><span class="pin-text-el">${pinText}</span>
-                        </div>`;
-                        menuObj.insertAdjacentHTML('beforeend', html);
-                        menuObj.setAttribute('data-pin-injected', 'true');
-                    } else {
-                        const span = menuObj.querySelector('.pin-text-el');
-                        const icon = menuObj.querySelector('.pin-icon-el');
-                        if (span) span.innerText = pinText;
-                        if (icon) icon.className = `fas fa-thumbtack w-5 text-center ${pinColor} mr-2 pin-icon-el`;
-                    }
+                // FIX 2: Quét trực tiếp xem nút Ghim có tồn tại vật lý trong DOM không, bỏ qua cờ data-pin-injected
+                const existingPinBtn = menuObj.querySelector('.pin-action-btn');
+                
+                if (!existingPinBtn) {
+                    let html = `
+                    <div class="pin-action-btn flex items-center px-5 py-3 hover:bg-orange-50 text-gray-700 cursor-pointer font-bold border-t border-gray-100 transition" onclick="window.togglePinFolder('${id}', '${safeName}', event)">
+                        <i class="fas fa-thumbtack w-5 text-center ${pinColor} mr-2 pin-icon-el"></i><span class="pin-text-el">${pinText}</span>
+                    </div>`;
+                    menuObj.insertAdjacentHTML('beforeend', html);
+                } else {
+                    const span = existingPinBtn.querySelector('.pin-text-el');
+                    const icon = existingPinBtn.querySelector('.pin-icon-el');
+                    if (span) span.innerText = pinText;
+                    if (icon) icon.className = `fas fa-thumbtack w-5 text-center ${pinColor} mr-2 pin-icon-el`;
                 }
             }
-        };
-        window.toggleItemMenu.isPinHooked = true;
-    }
+        }
+    };
+    window.toggleItemMenu.isPinHooked = true;
+}
 
     // 3. THIẾT KẾ VÀ RENDER DANH SÁCH THƯ MỤC ĐÃ GHIM
     function renderPinnedSection() {
@@ -7616,148 +7619,3 @@ setTimeout(() => {
 
     console.log("✅ PATCH 60 (V8): Kích hoạt bùa chú CSS tuyệt đối. Diệt tận gốc hiện tượng nhấp nháy menu!");
 }, 7000);
-// ==============================================================
-// PATCH 50 (FINAL V2): TỔNG HỢP FIX MENU, CHỐNG CHỚP & ĐỒNG BỘ GHIM
-// ==============================================================
-setTimeout(() => {
-    // 1. NÂNG CẤP KHIÊN BẢO VỆ CHỐNG GOOGLE CDN CACHE LÊN 45 GIÂY
-    if (window.masterSync) {
-        const oldMasterSync = window.masterSync;
-        window.masterSync = async function() {
-            // Tăng thời gian chặn tải dữ liệu cũ từ 15s lên 45s để đợi Google CDN đồng bộ xong
-            if (syncQueueCount > 0 || (window.lastEditTime && Date.now() - window.lastEditTime < 45000)) return;
-            if (document.querySelector('.item-action-menu:not(.hidden)') || !document.getElementById('customModal').classList.contains('hidden') || !document.getElementById('infoModal').classList.contains('hidden')) return;
-            
-            return oldMasterSync.apply(this, arguments);
-        };
-    }
-
-    // Hàm nhận diện chuẩn xác Folder từ RAM thay vì đọc HTML rác
-    function findItemSafe(id) {
-        if (typeof currentDriveItems !== 'undefined') {
-            let found = currentDriveItems.find(i => i.id === id);
-            if (found) return found;
-        }
-        if (typeof folderDataCache !== 'undefined') {
-            for (let fId in folderDataCache) {
-                let found = folderDataCache[fId].find(i => i.id === id);
-                if (found) return found;
-            }
-        }
-        if (typeof appMeta !== 'undefined' && appMeta[id]) {
-            return { id: id, name: appMeta[id].name, type: 'folder' }; 
-        }
-        return { type: 'folder' }; // Fallback
-    }
-
-    // 2. KHÓA CỨNG MENU CHỐNG KHUYẾT TẬT (Bơm lại mọi lúc)
-    const safeToggleMenu = window.toggleItemMenu;
-    window.toggleItemMenu = function(id, e) {
-        safeToggleMenu(id, e); // Gọi hàm gốc để mở/đóng menu
-        
-        const menuObj = document.getElementById(`menu-${id}`);
-        if (menuObj && !menuObj.classList.contains('hidden')) {
-            // Dọn dẹp nút ghim rác nếu bị Render Loop nhân bản lỗi
-            const existingPins = menuObj.querySelectorAll('.pin-action-btn');
-            if (existingPins.length > 1) {
-                existingPins.forEach((el, idx) => { if(idx > 0) el.remove(); });
-            }
-
-            const targetItem = findItemSafe(id);
-            const isFolder = targetItem && targetItem.type === 'folder';
-            
-            if (isFolder) {
-                const hasPinBtn = menuObj.querySelector('.pin-action-btn');
-                const meta = appMeta[id] || {};
-                const isPinned = !!meta.pinnedBy;
-                const pinText = isPinned ? 'Bỏ ghim' : 'Ghim lên đầu';
-                const pinColor = isPinned ? 'text-gray-500' : 'text-orange-500';
-                
-                const nameEl = document.querySelector(`.item-name-${id}`);
-                const safeName = nameEl ? nameEl.innerText.replace(/'/g, "\\'") : 'Thư mục';
-
-                // Nếu menu bị khuyết nút Ghim (Do giao diện vừa tự vẽ lại) -> Bơm lại ngay
-                if (!hasPinBtn) {
-                    let html = `
-                    <div class="pin-action-btn flex items-center px-5 py-3 hover:bg-orange-50 text-gray-700 cursor-pointer font-bold border-t border-gray-100 transition" onclick="window.togglePinFolder('${id}', '${safeName}', event)">
-                        <i class="fas fa-thumbtack w-5 text-center ${pinColor} mr-2 pin-icon-el"></i><span class="pin-text-el">${pinText}</span>
-                    </div>`;
-                    menuObj.insertAdjacentHTML('beforeend', html);
-                } else {
-                    // Nếu đã có nút thì chỉ cập nhật trạng thái chữ và màu
-                    const span = hasPinBtn.querySelector('.pin-text-el');
-                    const icon = hasPinBtn.querySelector('.pin-icon-el');
-                    if (span) span.innerText = pinText;
-                    if (icon) icon.className = `fas fa-thumbtack w-5 text-center ${pinColor} mr-2 pin-icon-el`;
-                }
-            }
-        }
-    };
-
-    // 3. NÂNG CẤP HÀM GHIM (Gửi ID thật và Bật khiên)
-    window.togglePinFolder = function(id, name, e) {
-        if(e) e.stopPropagation();
-        document.querySelectorAll('.item-action-menu').forEach(m => m.classList.add('hidden'));
-
-        const email = localStorage.getItem("vinhloc_authenticated_email") || "Admin";
-        const displayName = email.split('@')[0];
-
-        if (!appMeta[id]) {
-            appMeta[id] = { type: window.currentCategory || 'Triển khai', desc: '', cover: '', name: name };
-        }
-
-        if (appMeta[id].pinnedBy) {
-            delete appMeta[id].pinnedBy;
-            delete appMeta[id].pinnedAt;
-            showToast(`<i class="fas fa-unlink mr-2"></i> Đã bỏ ghim thư mục`);
-        } else {
-            appMeta[id].pinnedBy = displayName;
-            appMeta[id].pinnedAt = Date.now();
-            showToast(`<i class="fas fa-thumbtack mr-2"></i> Đã ghim thư mục lên đầu`);
-        }
-
-        // KÍCH HOẠT KHIÊN: Khóa đồng bộ trong 45 giây để Google CDN kịp nạp dữ liệu!
-        window.lastEditTime = Date.now(); 
-
-        localforage.setItem('vinhloc_meta', appMeta).catch(()=>{});
-        
-        if (typeof addActionToQueue === 'function') {
-            let metaPayload = { ...appMeta[id], id: id }; 
-            addActionToQueue('updateSingleMeta', { meta: metaPayload });
-        }
-        
-        if(window.renderItems && typeof currentDriveItems !== 'undefined') {
-            window.renderItems(currentDriveItems);
-        }
-    };
-
-    // 4. TRẠM GÁC ĐỒNG BỘ ĐA THIẾT BỊ (Cập nhật UI khi máy khác thao tác)
-    let lastPinnedState = "";
-    function getPinnedState() {
-        if (typeof appMeta === 'undefined') return "";
-        return Object.keys(appMeta).filter(k => appMeta[k].pinnedBy).map(k => `${k}-${appMeta[k].pinnedBy}`).sort().join(',');
-    }
-    
-    lastPinnedState = getPinnedState();
-
-    if (window.pinSyncInterval) clearInterval(window.pinSyncInterval); 
-    
-    window.pinSyncInterval = setInterval(() => {
-        const currentPinnedState = getPinnedState();
-        if (currentPinnedState !== lastPinnedState) {
-            lastPinnedState = currentPinnedState;
-            
-            // Chỉ render lại nếu người dùng KHÔNG đang thao tác (đang mở menu hoặc modal)
-            const isMenuOpen = document.querySelector('.item-action-menu:not(.hidden)');
-            const isModalOpen = !document.getElementById('customModal').classList.contains('hidden');
-            const isInfoOpen = !document.getElementById('infoModal').classList.contains('hidden');
-            
-            if (!isMenuOpen && !isModalOpen && !isInfoOpen && typeof window.renderItems === 'function' && typeof currentDriveItems !== 'undefined') {
-                window.renderItems(currentDriveItems);
-                console.log("🔄 Đã phát hiện thay đổi Ghim từ máy khác, tự động làm mới giao diện!");
-            }
-        }
-    }, 2000);
-    
-    console.log("✅ PATCH 50 (FINAL V2): Đã tích hợp Khiên 45s, Khóa Menu & Trạm gác đồng bộ!");
-}, 35000); // Trễ 35s để làm Kẻ Sống Sót cuối cùng, đè lên mọi Patch cũ
