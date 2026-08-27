@@ -7616,3 +7616,75 @@ setTimeout(() => {
 
     console.log("✅ PATCH 60 (V8): Kích hoạt bùa chú CSS tuyệt đối. Diệt tận gốc hiện tượng nhấp nháy menu!");
 }, 7000);
+// ==============================================================
+// PATCH 50: ĐỒNG BỘ GHIM ĐA THIẾT BỊ SIÊU TỐC & CHỐNG CHỚP NHÁY
+// ==============================================================
+setTimeout(() => {
+    // 1. HÀM XỬ LÝ GHIM / BỎ GHIM (Đã thêm khiên bảo vệ chống chớp nháy)
+    window.togglePinFolder = function(id, name, e) {
+        if(e) e.stopPropagation();
+        document.querySelectorAll('.item-action-menu').forEach(m => m.classList.add('hidden'));
+
+        const email = localStorage.getItem("vinhloc_authenticated_email") || "Admin";
+        const displayName = email.split('@')[0];
+
+        if (!appMeta[id]) {
+            appMeta[id] = { type: window.currentCategory || 'Triển khai', desc: '', cover: '', name: name };
+        }
+
+        if (appMeta[id].pinnedBy) {
+            delete appMeta[id].pinnedBy;
+            delete appMeta[id].pinnedAt;
+            showToast(`<i class="fas fa-unlink mr-2"></i> Đã bỏ ghim thư mục`);
+        } else {
+            appMeta[id].pinnedBy = displayName;
+            appMeta[id].pinnedAt = Date.now();
+            showToast(`<i class="fas fa-thumbtack mr-2"></i> Đã ghim thư mục lên đầu`);
+        }
+
+        // [KÍCH HOẠT KHIÊN]: Khóa MasterSync, cấm tải dữ liệu cũ về trong 15s tiếp theo
+        window.lastEditTime = Date.now(); 
+
+        localforage.setItem('vinhloc_meta', appMeta).catch(()=>{});
+        
+        // Gửi gói tin lên Server (Đã kèm ID thật)
+        if (typeof addActionToQueue === 'function') {
+            let metaPayload = { ...appMeta[id], id: id }; 
+            addActionToQueue('updateSingleMeta', { meta: metaPayload });
+        }
+        
+        // F5 lại giao diện tức thì cục bộ
+        if(window.renderItems && typeof currentDriveItems !== 'undefined') {
+            window.renderItems(currentDriveItems);
+        }
+    };
+
+    // 2. TRẠM GÁC ĐỒNG BỘ ĐA THIẾT BỊ (Chỉ kích hoạt khi máy khác thao tác)
+    let lastPinnedState = "";
+    function getPinnedState() {
+        if (typeof appMeta === 'undefined') return "";
+        return Object.keys(appMeta).filter(k => appMeta[k].pinnedBy).map(k => `${k}-${appMeta[k].pinnedBy}`).sort().join(',');
+    }
+    
+    lastPinnedState = getPinnedState();
+
+    if (window.pinSyncInterval) clearInterval(window.pinSyncInterval); // Dọn dẹp trạm gác cũ nếu có
+    
+    window.pinSyncInterval = setInterval(() => {
+        const currentPinnedState = getPinnedState();
+        if (currentPinnedState !== lastPinnedState) {
+            lastPinnedState = currentPinnedState;
+            
+            // Chỉ render lại nếu người dùng KHÔNG đang thao tác (đang mở menu hoặc modal)
+            const isMenuOpen = document.querySelector('.item-action-menu:not(.hidden)');
+            const isModalOpen = !document.getElementById('customModal').classList.contains('hidden');
+            const isInfoOpen = !document.getElementById('infoModal').classList.contains('hidden');
+            
+            if (!isMenuOpen && !isModalOpen && !isInfoOpen && typeof window.renderItems === 'function' && typeof currentDriveItems !== 'undefined') {
+                window.renderItems(currentDriveItems);
+            }
+        }
+    }, 2000);
+
+    console.log("✅ PATCH 50: Đã kích hoạt hệ thống Ghim chống chớp nháy và đồng bộ đa thiết bị!");
+}, 35000); // Chạy trễ nhất ở giây 35 để vô hiệu hóa mọi lỗi đè ở giữa file
