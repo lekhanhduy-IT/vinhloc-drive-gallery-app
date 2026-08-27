@@ -6343,46 +6343,43 @@ setTimeout(() => {
     };
 
 // 2. BƠM NÚT "GHIM" VÀO MENU 3 CHẤM CỦA CÁC THƯ MỤC
-if (!window.toggleItemMenu.isPinHooked) {
-    const originalToggleMenu = window.toggleItemMenu;
-    window.toggleItemMenu = function(id, e) {
-        // Chạy các hàm mở menu và phân quyền trước
-        originalToggleMenu(id, e);
-        
-        const menuObj = document.getElementById(`menu-${id}`);
-        if (menuObj) {
-            // FIX 1: Nhận diện thư mục dựa trên class thẻ cha (chính xác 100%, không bị ảnh hưởng bởi việc xóa nút bên trong)
-            const isFolder = menuObj.closest('.mega-row') !== null || menuObj.closest('.subfolder-row') !== null;
+    if (!window.toggleItemMenu.isPinHookedV3) {
+        const originalToggleMenu = window.toggleItemMenu;
+        window.toggleItemMenu = function(id, e) {
+            // Chạy hàm gốc và bộ lọc phân quyền trước
+            originalToggleMenu(id, e);
             
-            if (isFolder) {
-                const meta = appMeta[id] || {};
-                const isPinned = !!meta.pinnedBy;
-                const pinText = isPinned ? 'Bỏ ghim' : 'Ghim lên đầu';
-                const pinColor = isPinned ? 'text-gray-500' : 'text-orange-500';
+            const menuObj = document.getElementById(`menu-${id}`);
+            if (menuObj) {
+                // FIX 1: Nhận diện thư mục an toàn qua Class DOM, không bị ảnh hưởng khi HTML bị cắt xén
+                const isFolder = menuObj.closest('.mega-row') !== null || menuObj.closest('.subfolder-row') !== null;
                 
-                const nameEl = document.querySelector(`.item-name-${id}`);
-                const safeName = nameEl ? nameEl.innerText.replace(/'/g, "\\'") : 'Thư mục';
+                if (isFolder) {
+                    const meta = appMeta[id] || {};
+                    const isPinned = !!meta.pinnedBy;
+                    const pinText = isPinned ? 'Bỏ ghim' : 'Ghim lên đầu';
+                    const pinColor = isPinned ? 'text-gray-500' : 'text-orange-500';
+                    
+                    const nameEl = document.querySelector(`.item-name-${id}`);
+                    const safeName = nameEl ? nameEl.innerText.replace(/'/g, "\\'") : 'Thư mục';
 
-                // FIX 2: Quét trực tiếp xem nút Ghim có tồn tại vật lý trong DOM không, bỏ qua cờ data-pin-injected
-                const existingPinBtn = menuObj.querySelector('.pin-action-btn');
-                
-                if (!existingPinBtn) {
+                    // FIX 2: DIỆT TẬN GỐC - Xóa sạch nút Ghim cũ (nếu đang bị bộ lọc của tài khoản thường ẩn đi)
+                    const oldPinBtn = menuObj.querySelector('.pin-action-btn');
+                    if (oldPinBtn) {
+                        oldPinBtn.remove();
+                    }
+                    
+                    // Bơm lại một nút Ghim hoàn toàn mới và sạch sẽ để luôn hiển thị 100%
                     let html = `
                     <div class="pin-action-btn flex items-center px-5 py-3 hover:bg-orange-50 text-gray-700 cursor-pointer font-bold border-t border-gray-100 transition" onclick="window.togglePinFolder('${id}', '${safeName}', event)">
                         <i class="fas fa-thumbtack w-5 text-center ${pinColor} mr-2 pin-icon-el"></i><span class="pin-text-el">${pinText}</span>
                     </div>`;
                     menuObj.insertAdjacentHTML('beforeend', html);
-                } else {
-                    const span = existingPinBtn.querySelector('.pin-text-el');
-                    const icon = existingPinBtn.querySelector('.pin-icon-el');
-                    if (span) span.innerText = pinText;
-                    if (icon) icon.className = `fas fa-thumbtack w-5 text-center ${pinColor} mr-2 pin-icon-el`;
                 }
             }
-        }
-    };
-    window.toggleItemMenu.isPinHooked = true;
-}
+        };
+        window.toggleItemMenu.isPinHookedV3 = true;
+    }
 
     // 3. THIẾT KẾ VÀ RENDER DANH SÁCH THƯ MỤC ĐÃ GHIM
     function renderPinnedSection() {
