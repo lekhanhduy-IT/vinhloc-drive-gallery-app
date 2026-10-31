@@ -1,4 +1,4 @@
-import { createPublicKey, verify as verifySignature } from 'node:crypto';
+import { createPublicKey, createHmac, timingSafeEqual, verify as verifySignature } from 'node:crypto';
 import { Readable } from 'node:stream';
 
 // A first-party media gateway: Google ID token -> Shared Drive membership ->
@@ -63,6 +63,38 @@ async function verifyGoogleIdToken(token) {
     exp: Number(payload.exp)
   };
 }
+// Prefer a signed first-party media session over repeated Google/GAS checks
+// on every thumbnail. MEDIA_SESSION_SECRET is recommended; derive an isolated
+// key from the project's existing private Upstash token as a fallback.
+function signingKey() {
+  const raw = process.env.MEDIA_SESSION_SECRET || process.env.UPSTASH_REDIS_REST_TOKEN;
+  return raw ? createHmac('sha256',raw).update('vinhloc/private-media/session/v1').digest() : null;
+}
+function sealSession(identity) {
+  const key = signingKey();
+  if (!key) return null;
+  const payload = Buffer.from(JSON.stringify({
+    sub:identity.sub,email:identity.email,exp:Math.min(identity.exp,Math.floor(Date.now()/1000)+3300)
+  })).toString('base64url');
+  const signature = createHmac('sha256',key).update(payload).digest('base64url');
+  return 'vl1.'+payload+'.'+signature;
+}
+function readSignedSession(value) {
+  if (!value.startsWith('vl1.')) return null;
+  const key=signingKey();
+  if (!key) throw new Error('Phiên xem ảnh không còn hợp lệ');
+  const [,body,sig]=value.split('.');
+  if (!body || !sig || body.length>1200) throw new Error('Phiên xem ảnh bị hỏng');
+  const expected=createHmac('sha256',key).update(body).digest();
+  const actual=Buffer.from(sig,'base64url');
+  if (expected.length!==actual.length || !timingSafeEqual(expected,actual))
+    throw new Error('Phiên xem ảnh không hợp lệ');
+  const data=JSON.parse(Buffer.from(body,'base64url').toString('utf8'));
+  if (!data.sub || !data.email || Number(data.exp)<Math.floor(Date.now()/1000)+5)
+    throw new Error('Phiên xem ảnh đã hết hạn');
+  return data;
+}
+
 function cookie(req) {
   const raw = String(req.headers.cookie || '').split(';').map(x=>x.trim());
   const item = raw.find(x=>x.startsWith(COOKIE+'='));
@@ -79,7 +111,10 @@ async function callScript(action, payload={}) {
   return data;
 }
 async function requireAccount(req) {
-  const identity = await verifyGoogleIdToken(cookie(req));
+  const stored=cookie(req);
+  const sealed=readSignedSession(stored);
+  if (sealed) return sealed;
+  const identity = await verifyGoogleIdToken(stored);
   const cacheKey = identity.sub + ':' + identity.email;
   if ((authorized.get(cacheKey) || 0) < Date.now()) {
     // Only email extracted from a verified, Google-signed ID token is checked.
@@ -112,8 +147,9 @@ export default async function handler(req, res) {
       const identity = await verifyGoogleIdToken(body.credential);
       await callScript('verifyUser',{email:identity.email});
       const life = Math.min(3300, Math.max(1,identity.exp - Math.floor(Date.now()/1000) - 10));
+      const session=sealSession(identity) || body.credential;
       res.setHeader('Set-Cookie',
-        COOKIE+'='+body.credential+'; HttpOnly; Secure; SameSite=Strict; Path=/api/media; Max-Age='+life);
+        COOKIE+'='+session+'; HttpOnly; Secure; SameSite=Strict; Path=/api/media; Max-Age='+life);
       authorized.set(identity.sub+':'+identity.email,Date.now()+90000);
       return res.status(200).json({success:true, email:identity.email,expiresAt:identity.exp});
     } catch (e) { return error(res,401,'Không thể xác thực tài khoản: '+e.message); }
