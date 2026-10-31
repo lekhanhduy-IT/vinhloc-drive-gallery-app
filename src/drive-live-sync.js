@@ -1,0 +1,225 @@
+/* QL Ảnh: reconcile external Google Drive changes with IndexedDB caches.
+   This file runs after the existing (protected) application script. */
+(() => {
+  'use strict';
+  const REFRESH_INTERVAL = 45000;
+  const REQUEST_TIMEOUT = 15000;
+  let running = null;
+  let lastRun = 0;
+
+  // The original classic script declares these as top-level lexical variables.
+  // Reading them here (rather than window.*) follows later reassignments.
+  function stack() {
+    try { return typeof folderStack !== 'undefined' && Array.isArray(folderStack) ? folderStack : []; }
+    catch (_) { return []; }
+  }
+  function activeFolder() {
+    try { return typeof currentFolderId !== 'undefined' ? currentFolderId : null; }
+    catch (_) { return null; }
+  }
+  function folderCache() {
+    try { return typeof folderDataCache !== 'undefined' ? folderDataCache : null; }
+    catch (_) { return null; }
+  }
+  function subCache() {
+    try { return typeof subFolderCache !== 'undefined' ? subFolderCache : null; }
+    catch (_) { return null; }
+  }
+  function busy() {
+    try { return typeof syncQueueCount !== 'undefined' && syncQueueCount > 0; }
+    catch (_) { return false; }
+  }
+  function endpoint() {
+    try { return typeof SCRIPT_URL !== 'undefined' ? SCRIPT_URL : null; }
+    catch (_) { return null; }
+  }
+  function canRefresh(force) {
+    if (!force && (document.hidden || Date.now() - lastRun < 12000)) return false;
+    if (new URLSearchParams(location.search).has('shareId')) return false;
+    const overlay = document.getElementById('auth-overlay');
+    if (overlay && !overlay.classList.contains('hidden') &&
+        getComputedStyle(overlay).display !== 'none') return false;
+    if (busy() || !endpoint() || !activeFolder()) return false;
+    return !!folderCache();
+  }
+  function signature(items) {
+    return JSON.stringify(items.map(item =>
+      [item.id, item.type, item.name, item.mimeType || '', !!item.isPending]));
+  }
+  function mergePending(oldItems, freshItems) {
+    const pending = new Map(oldItems.filter(item => item && item.isPending).map(item => [item.id, item]));
+    const merged = freshItems.map(item => pending.get(item.id) || item);
+    const ids = new Set(merged.map(item => item.id));
+    pending.forEach((item, id) => { if (!ids.has(id)) merged.push(item); });
+    return merged;
+  }
+  async function liveList(id) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+    try {
+      const payload = { action: 'list', folderId: id };
+      try {
+        if (typeof currentUserEmail !== 'undefined' && currentUserEmail)
+          payload.email = currentUserEmail;
+      } catch (_) {}
+      const response = await fetch(endpoint(), {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+        cache: 'no-store'
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const result = await response.json();
+      if (!result || result.success !== true || !Array.isArray(result.data))
+        throw new Error('Drive không trả về danh sách thư mục hợp lệ');
+      return result.data;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  function mayRender() {
+    const search = document.getElementById('searchInput');
+    const modal = document.getElementById('infoModal');
+    return (!search || !search.value.trim()) &&
+      (!modal || modal.classList.contains('hidden')) &&
+      !document.querySelector('.multi-select-toolbar:not(.hidden)');
+  }
+  async function syncOne(id) {
+    const fresh = await liveList(id);
+    const cache = folderCache();
+    if (!cache) return fresh;
+    const previous = Array.isArray(cache[id]) ? cache[id] : [];
+    const merged = mergePending(previous, fresh);
+    const changed = signature(previous) !== signature(merged);
+    if (changed) {
+      cache[id] = merged;
+      const sub = subCache();
+      if (sub && Object.prototype.hasOwnProperty.call(sub, id)) {
+        sub[id] = merged.filter(item => item.type === 'folder');
+        const accordion = document.getElementById('acc-' + id);
+        if (accordion && !accordion.classList.contains('hidden') &&
+            typeof renderSubFolders === 'function') {
+          renderSubFolders(id, sub[id]);
+        }
+      }
+      if (activeFolder() === id && mayRender() && typeof window.renderItems === 'function') {
+        try { currentDriveItems = merged; } catch (_) {}
+        const container = document.getElementById('contentArea');
+        const scrollY = container ? container.scrollTop : 0;
+        window.renderItems(merged);
+        if (container) container.scrollTop = scrollY;
+      }
+      if (window.localforage) {
+        await localforage.setItem('vinhloc_folder_cache', cache);
+        if (sub) await localforage.setItem('vinhloc_subfolder_cache', sub);
+      }
+    }
+    return merged;
+  }
+  function updatePathFromParents(path, liveParents) {
+    const actual = stack();
+    if (!actual.length || actual[actual.length - 1].id !== path[path.length - 1].id)
+      return; // User navigated while requests were in flight.
+    let firstInvalid = -1;
+    let renamed = false;
+    for (let i = 1; i < actual.length; i++) {
+      const children = liveParents.get(actual[i - 1].id);
+      if (!children) continue;
+      const matchingChild = children.find(item => item.type === 'folder' && item.id === actual[i].id);
+      if (!matchingChild) { firstInvalid = i; break; }
+      if (actual[i].name !== matchingChild.name) {
+        actual[i].name = matchingChild.name;
+        renamed = true;
+      }
+    }
+    if (firstInvalid !== -1) {
+      // Parent-child relationship changed on Drive: stop displaying a false path.
+      const valid = actual[firstInvalid - 1];
+      try { folderStack = actual.slice(0, firstInvalid); } catch (_) { return; }
+      localStorage.setItem('appFolderStack', JSON.stringify(stack()));
+      if (typeof window.loadFolder === 'function')
+        window.loadFolder(valid.id, valid.name, false, true);
+      if (typeof window.showToast === 'function')
+        window.showToast('Thư mục đã được di chuyển trên Drive. Đã mở thư mục cha.');
+      return;
+    }
+    if (renamed) {
+      localStorage.setItem('appFolderStack', JSON.stringify(actual));
+      if (typeof window.updateBreadcrumbs === 'function')
+        window.updateBreadcrumbs();
+    }
+  }
+  async function refresh(force = false) {
+    if (running) return running;
+    if (!canRefresh(force)) return false;
+    running = (async () => {
+      const path = stack().map(item => ({ id: item.id, name: item.name }));
+      const originalActive = activeFolder();
+      if (!path.length || originalActive !== path[path.length - 1].id) return false;
+      const liveParents = new Map();
+      let allSucceeded = true;
+      // Refresh every ancestor; this detects renamed and moved folders.
+      for (const parent of path.slice(0, -1)) {
+        try { liveParents.set(parent.id, await syncOne(parent.id)); }
+        catch (err) { allSucceeded = false; console.warn('[QL Ảnh] Không thể kiểm tra', parent.id, err); }
+      }
+      updatePathFromParents(path, liveParents);
+      if (activeFolder() === originalActive) {
+        try { await syncOne(originalActive); }
+        catch (err) { allSucceeded = false; console.warn('[QL Ảnh] Đồng bộ Drive thất bại', err); }
+      }
+      // The root displays expanded mega-folder rows from a separate subfolder cache.
+      if (activeFolder() === originalActive && path.length === 1) {
+        const opened = Array.from(document.querySelectorAll('[id^="acc-"]:not(.hidden)'))
+          .map(element => element.id.slice(4)).filter(Boolean).slice(0, 12);
+        for (const id of opened) {
+          try { await syncOne(id); }
+          catch (err) { allSucceeded = false; console.warn('[QL Ảnh] Không thể cập nhật thư mục con', id, err); }
+        }
+      }
+      lastRun = Date.now();
+      return allSucceeded;
+    })();
+    try { return await running; }
+    finally { running = null; }
+  }
+  function installButton() {
+    if (document.getElementById('btnDriveLiveSync')) return;
+    const heading = document.getElementById('currentFolderName');
+    if (!heading || !heading.parentNode) return;
+    const button = document.createElement('button');
+    button.id = 'btnDriveLiveSync';
+    button.type = 'button';
+    button.title = 'Đồng bộ thay đổi mới nhất từ Google Drive';
+    button.setAttribute('aria-label', 'Đồng bộ thư mục từ Google Drive');
+    button.className = 'w-8 h-8 shrink-0 rounded-full text-white/90 hover:bg-white/15 flex items-center justify-center';
+    button.innerHTML = '<i class="fas fa-sync-alt"></i>';
+    heading.insertAdjacentElement('afterend', button);
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      button.querySelector('i').classList.add('fa-spin');
+      try {
+        const success = await refresh(true);
+        if (typeof window.showToast === 'function')
+          window.showToast(success ? 'Đã kiểm tra dữ liệu mới trên Drive.' :
+            'Chưa thể đồng bộ. Hãy kiểm tra kết nối hoặc quyền truy cập.', !success);
+      } finally {
+        button.disabled = false;
+        button.querySelector('i').classList.remove('fa-spin');
+      }
+    });
+  }
+  function start() {
+    installButton();
+    // Existing application initializes its protected startup in a delayed task.
+    setTimeout(() => { void refresh(true); }, 9000);
+    setInterval(() => { void refresh(false); }, REFRESH_INTERVAL);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) void refresh(true);
+    });
+    window.addEventListener('focus', () => { void refresh(false); });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+  window.vinhlocLiveDriveSync = () => refresh(true);
+})();
