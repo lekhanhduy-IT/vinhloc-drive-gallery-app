@@ -133,6 +133,13 @@ async function driveToken() {
 }
 function filenameSafe(s) { return String(s||'file').replace(/[^\p{L}\p{N}._ -]/gu,'_').slice(0,120); }
 export const config = {maxDuration: 60};
+// Reuse this verified, signed HttpOnly session for ownership-protected writes.
+export async function verifiedAccount(req) {
+  return requireAccount(req);
+}
+export async function serverDriveToken() {
+  return driveToken();
+}
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store, private');
   res.setHeader('X-Content-Type-Options','nosniff');
