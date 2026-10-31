@@ -6,6 +6,27 @@
   const REQUEST_TIMEOUT = 15000;
   let running = null;
   let lastRun = 0;
+  const driveNames = new Map();
+  let installedRenderer = null;
+  // The legacy renderer forces names from Sheets metadata, even when Drive has changed.
+  // Keep the current Drive name authoritative at render time without altering other metadata.
+  function installRendererGuard() {
+    const original = window.renderItems;
+    if (typeof original !== 'function' || original === installedRenderer) return;
+    const wrapped = function(items, ...args) {
+      if (Array.isArray(items)) items.forEach(item => {
+        const liveName = driveNames.get(item.id);
+        if (!liveName) return;
+        item.name = liveName;
+        try {
+          if (typeof appMeta !== 'undefined' && appMeta[item.id]) appMeta[item.id].name = liveName;
+        } catch (_) {}
+      });
+      return original.call(this, items, ...args);
+    };
+    installedRenderer = wrapped;
+    window.renderItems = wrapped;
+  }
 
   // The original classic script declares these as top-level lexical variables.
   // Reading them here (rather than window.*) follows later reassignments.
@@ -86,6 +107,13 @@
   }
   async function syncOne(id) {
     const fresh = await liveList(id);
+    for (const item of fresh) if (item && item.id && item.name) driveNames.set(item.id, item.name);
+    installRendererGuard();
+    try {
+      if (typeof appMeta !== 'undefined') {
+        fresh.forEach(item => { if (appMeta[item.id] && appMeta[item.id].name) appMeta[item.id].name = item.name; });
+      }
+    } catch (_) {}
     const cache = folderCache();
     if (!cache) return fresh;
     const previous = Array.isArray(cache[id]) ? cache[id] : [];
@@ -113,6 +141,12 @@
         await localforage.setItem('vinhloc_folder_cache', cache);
         if (sub) await localforage.setItem('vinhloc_subfolder_cache', sub);
       }
+    }
+    // Cached old names might have been rendered by a later global-cache response.
+    // Always reconcile the visible names from the live list, even when arrays compare equal.
+    for (const item of merged) {
+      const label = document.querySelector('.item-name-' + CSS.escape(item.id));
+      if (label && label.textContent.trim() !== item.name) label.textContent = item.name;
     }
     return merged;
   }
@@ -211,6 +245,8 @@
   }
   function start() {
     installButton();
+    installRendererGuard();
+    setInterval(installRendererGuard, 1200);
     // Existing application initializes its protected startup in a delayed task.
     setTimeout(() => { void refresh(true); }, 9000);
     setInterval(() => { void refresh(false); }, REFRESH_INTERVAL);
