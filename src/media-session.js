@@ -178,7 +178,18 @@
     if (!id) return;
     const full = !!img.closest('#mediaContent');
     const desired = proxy(id, full ? 'full':'thumb');
-    if (img.getAttribute('src') === desired) return;
+    const current = img.getAttribute('src') || '';
+    if (current === desired) return;
+    // The thumbnail recovery module adds thumbRetry=N while Drive is still
+    // processing a batch upload. Do not reset the URL from MutationObserver.
+    try {
+      const existing = new URL(current, location.href);
+      const expected = new URL(desired, location.href);
+      if (existing.pathname === expected.pathname &&
+          existing.searchParams.get('fileId') === id &&
+          existing.searchParams.get('variant') === expected.searchParams.get('variant') &&
+          existing.searchParams.get('v') === expected.searchParams.get('v')) return;
+    } catch (_) {}
     img.dataset.vlMediaProxy = '1';
     img.dataset.vlMediaId = id;
     // Old Drive-URL recovery must not overwrite our authenticated URL.
@@ -248,7 +259,10 @@
           if (!session) return;
           try {
             const response = await fetch(src, {credentials:'same-origin',cache:'no-store'});
-            if (response.ok) return;
+            if (response.ok || (
+              src.includes('variant=thumb') &&
+              [404,408,429,500,502,503,504].includes(response.status)
+            )) return; // Transient thumbnail: retry in place, no repetitive toast.
             const error = await response.json().catch(()=>({}));
             const message = 'Lỗi phát ảnh: '+(error.message || 'HTTP '+response.status);
             if (typeof window.showToast === 'function') window.showToast(message,true);
