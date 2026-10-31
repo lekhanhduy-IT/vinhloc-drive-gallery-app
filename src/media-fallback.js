@@ -7,7 +7,14 @@
   window.__vlMediaFallbackInstalled = true;
   const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
   const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
-  const MAX_OBJECT_URLS = 65;
+  const MAX_OBJECT_URLS = 32;
+  // GAS returns base64 JSON: keep the emergency path bounded for iPhone RAM.
+  const MAX_GAS_IMAGE_BYTES = 12 * 1024 * 1024;
+  const MAX_GAS_BASE64_CHARS = Math.ceil(MAX_GAS_IMAGE_BYTES / 3) * 4 + 8;
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  let failedNoticeAt = 0;
+
   const saved = new Map();
   const inflight = new Map();
   const queue = [];
@@ -34,7 +41,7 @@
     });
   }
   function drain() {
-    while (inflightCount < 3 && queue.length) {
+    while (inflightCount < (isIOS ? 2 : 3) && queue.length) {
       const task = queue.shift();
       inflightCount++;
       Promise.resolve().then(task.operation).then(task.resolve, task.reject).finally(() => {
@@ -80,6 +87,95 @@
     if (!res.ok) throw new Error('Không thể tải nội dung file (' + res.status + ')');
     return res.blob();
   }
+  // Direct Drive URLs can fail on Safari even when another device can view
+  // them. The existing Apps Script backend reads as the app's Drive owner;
+  // it does not depend on iPhone's separate Google cookie session.
+  async function appsScriptImageBlob(id) {
+    const controller = new AbortController();
+    const watchdog = setTimeout(() => controller.abort(), 30000);
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        body: JSON.stringify({action: 'getFileBase64', fileId: id}),
+        cache: 'no-store',
+        signal: controller.signal
+      });
+      if (!res.ok) throw new Error('Máy chủ ảnh (' + res.status + ')');
+      const body = await res.json();
+      if (!body || body.success !== true || typeof body.data !== 'string')
+        throw new Error(body?.message || body?.error || 'Không đọc được ảnh từ Apps Script');
+      if (!/^image\//i.test(body.mimeType || '')) {
+        throw new Error('Không phải file ảnh');
+      }
+      const encoded = body.data.replace(/\s/g, '');
+      if (encoded.length > MAX_GAS_BASE64_CHARS)
+        throw new Error('Ảnh quá lớn cho chế độ dự phòng trên iPhone');
+      // Decode in 256-KiB segments instead of one huge atob() allocation.
+      const parts = [];
+      for (let offset = 0; offset < encoded.length; offset += 262144) {
+        const textPart = atob(encoded.slice(offset, offset + 262144));
+        const bytes = new Uint8Array(textPart.length);
+        for (let i = 0; i < textPart.length; i++) bytes[i] = textPart.charCodeAt(i);
+        parts.push(bytes);
+      }
+      return new Blob(parts, {type: body.mimeType || 'image/jpeg'});
+    } finally {
+      clearTimeout(watchdog);
+    }
+  }
+
+  async function withDeadline(promise, waitMs) {
+    let timeoutId;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Kết nối Drive quá thời gian')), waitMs);
+        })
+      ]);
+    } finally { clearTimeout(timeoutId); }
+  }
+  async function resolvePreview(id, full) {
+    let token, info, oauthError = null;
+    try {
+      token = await withDeadline(getToken(), 10000);
+      info = await withDeadline(metadata(id, token), 10000);
+      if (!full && info.thumbnailLink) {
+        try {
+          const signed = await testImage(info.thumbnailLink, isIOS ? 3500 : 6500);
+          return {url: signed, isBlob: false};
+        } catch (_) {}
+      }
+      const mime = info.mimeType || '';
+      if (mime.startsWith('image/')) {
+        if (Number(info.size || 0) > MAX_IMAGE_BYTES)
+          throw new Error('Ảnh vượt quá giới hạn xem trực tiếp');
+        const original = await authenticatedBlob(id, token);
+        if (original.size > MAX_IMAGE_BYTES) throw new Error('Ảnh quá lớn');
+        const preview = full ? original : await imageThumbnailBlob(original);
+        return {url: URL.createObjectURL(preview), isBlob:true};
+      }
+      if (!full && mime.startsWith('video/') &&
+          info.size && Number(info.size) <= MAX_VIDEO_BYTES) {
+        const video = await authenticatedBlob(id, token);
+        return {url:await posterFromVideo(video), isBlob:true};
+      }
+      throw new Error('Không có thumbnail phù hợp');
+    } catch (error) {
+      oauthError = error;
+    }
+    // Do not pull full videos into base64 JSON. For an unknown MIME, the
+    // Apps Script action validates image/* before decoding it in the browser.
+    if (info?.mimeType?.startsWith('video/')) throw oauthError;
+    try {
+      const blob = await appsScriptImageBlob(id);
+      if (blob.size > MAX_GAS_IMAGE_BYTES) throw new Error('Ảnh quá lớn');
+      const thumbnail = full ? blob : await imageThumbnailBlob(blob);
+      return {url: URL.createObjectURL(thumbnail), isBlob:true};
+    } catch (gasError) {
+      throw new Error('Drive: ' + oauthError.message + '; Apps Script: ' + gasError.message);
+    }
+  }
   function remember(id, url, isBlob) {
     const old = saved.get(id);
     if (old?.isBlob && old.url !== url) URL.revokeObjectURL(old.url);
@@ -121,28 +217,8 @@
     if (prior && Date.now() - prior.recordedAt < 20 * 60000) return prior.url;
     if (inflight.has(cacheKey)) return inflight.get(cacheKey);
     const task = enqueue(async () => {
-      const token = await getToken();
-      const file = await metadata(id, token);
-      if (!full && file.thumbnailLink) {
-        try {
-          const signed = await testImage(file.thumbnailLink);
-          return remember(cacheKey, signed, false);
-        } catch (_) {} // Google may require a new signed link or a different account.
-      }
-      const isImage = (file.mimeType || '').startsWith('image/');
-      if (isImage && (!file.size || Number(file.size) <= MAX_IMAGE_BYTES)) {
-        const blob = await authenticatedBlob(id, token);
-        if (blob.size > MAX_IMAGE_BYTES) throw new Error('Ảnh quá lớn để xem trực tiếp');
-        const previewBlob = full ? blob : await imageThumbnailBlob(blob);
-        return remember(cacheKey, URL.createObjectURL(previewBlob), true);
-      }
-      if (!isImage && (file.mimeType || '').startsWith('video/') &&
-          file.size && Number(file.size) <= MAX_VIDEO_BYTES) {
-        const blob = await authenticatedBlob(id, token);
-        const poster = await posterFromVideo(blob);
-        return remember(cacheKey, poster, true);
-      }
-      throw new Error('Drive chưa tạo thumbnail hoặc tệp quá lớn');
+      const preview = await resolvePreview(id, full);
+      return remember(cacheKey, preview.url, preview.isBlob);
     }).finally(() => inflight.delete(cacheKey));
     inflight.set(cacheKey, task);
     return task;
@@ -196,9 +272,65 @@
       img.removeAttribute('src');
       img.style.objectFit = 'contain';
       img.style.backgroundColor = '#f2f4f8';
-      img.alt = 'Không có thumbnail';
+      img.alt = 'Không tải được ảnh';
+      if (Date.now() - failedNoticeAt > 30000) {
+        failedNoticeAt = Date.now();
+        console.warn('[QL Ảnh] Thumbnail không tải được trên thiết bị:', err);
+        // A concrete error makes a device-specific permission/CORS failure diagnosable.
+        if (typeof window.showToast === 'function')
+          window.showToast('Lỗi ảnh: ' + String(err.message || err).slice(0, 140), true);
+      }
     });
   }
+  // Image errors can fire before this script starts, or the legacy renderer
+  // can rebuild image cards and replace a fixed Blob URL with the old Drive URL.
+  const visibleObserver = typeof IntersectionObserver === 'function' ?
+    new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        visibleObserver.unobserve(entry.target);
+        fallbackForImage(entry.target);
+      }
+    }, {rootMargin:'150px'}) : null;
+  function inspectImage(img) {
+    if (!(img instanceof HTMLImageElement)) return;
+    const id = idFromDriveUrl(img.currentSrc || img.src || '');
+    if (!id) return;
+    const cached = saved.get(id);
+    if (cached && Date.now() - cached.recordedAt < 20 * 60000) {
+      img.dataset.vlFallback = 'loaded';
+      img.src = cached.url;
+      return;
+    }
+    if (img.complete && img.naturalWidth === 0) {
+      if (visibleObserver && !img.closest('#mediaContent')) visibleObserver.observe(img);
+      else fallbackForImage(img);
+    }
+  }
+  function inspectCurrentImages() {
+    document.querySelectorAll('#fileList img, #mediaContent img').forEach(inspectImage);
+  }
+  function watchGallery() {
+    const list = document.getElementById('fileList');
+    const viewer = document.getElementById('mediaContent');
+    let task = null;
+    const observer = new MutationObserver(() => {
+      if (task !== null) return;
+      task = setTimeout(() => { task = null; inspectCurrentImages(); }, 180);
+    });
+    for (const root of [list, viewer]) {
+      if (root) observer.observe(root, {childList:true, subtree:true});
+    }
+    setTimeout(inspectCurrentImages, 300);
+    // Intercept transient errors after the app rebuilt its list.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) setTimeout(inspectCurrentImages, 250);
+    });
+  }
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', watchGallery);
+  else watchGallery();
+
   document.addEventListener('error', event => {
     if (event.target instanceof HTMLImageElement) {
       const img = event.target;
@@ -209,7 +341,8 @@
       const id = idFromDriveUrl(img.currentSrc || img.src);
       if (id) {
         event.stopImmediatePropagation();
-        fallbackForImage(img);
+        if (visibleObserver && !img.closest('#mediaContent')) visibleObserver.observe(img);
+        else fallbackForImage(img);
       }
     }
   }, true);
@@ -232,15 +365,25 @@
     const button = document.getElementById('btnVLAuthenticatedPreview');
     if (button) button.disabled = true;
     try {
-      const token = await getToken();
-      const info = await metadata(id, token);
-      const isVideo = (info.mimeType || '').startsWith('video/');
-      const max = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
-      if (Number(info.size || 0) > max)
-        throw new Error('Tệp lớn hơn ' + Math.floor(max / 1048576) + 'MB. Hãy mở qua Drive bằng tài khoản có quyền.');
-      const blob = await authenticatedBlob(id, token);
-      if (blob.size > max) throw new Error('Tệp quá lớn để xem trong trình duyệt');
-      const url = URL.createObjectURL(blob);
+      let url;
+      let isVideo = false;
+      try {
+        const token = await withDeadline(getToken(), 10000);
+        const info = await withDeadline(metadata(id, token), 10000);
+        isVideo = (info.mimeType || '').startsWith('video/');
+        if (isVideo) {
+          if (Number(info.size || 0) > MAX_VIDEO_BYTES)
+            throw new Error('Video quá lớn để phát trực tiếp. Hãy mở qua Drive.');
+          const blob = await authenticatedBlob(id, token);
+          if (blob.size > MAX_VIDEO_BYTES) throw new Error('Video quá lớn');
+          url = URL.createObjectURL(blob);
+        } else {
+          url = await imageFallback(id, true); // Includes Apps Script fallback.
+        }
+      } catch (error) {
+        if (isVideo) throw error;
+        url = await imageFallback(id, true);
+      }
       content.innerHTML = '';
       const element = document.createElement(isVideo ? 'video' : 'img');
       element.src = url;
