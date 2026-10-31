@@ -2,7 +2,7 @@
    This file runs after the existing (protected) application script. */
 (() => {
   'use strict';
-  const REFRESH_INTERVAL = 45000;
+  const REFRESH_INTERVAL = 30000;
   const REQUEST_TIMEOUT = 15000;
   let running = null;
   let lastRun = 0;
@@ -57,10 +57,8 @@
   function canRefresh(force) {
     if (!force && (document.hidden || Date.now() - lastRun < 12000)) return false;
     if (new URLSearchParams(location.search).has('shareId')) return false;
-    const overlay = document.getElementById('auth-overlay');
-    if (overlay && !overlay.classList.contains('hidden') &&
-        getComputedStyle(overlay).display !== 'none') return false;
-    if (busy() || !endpoint() || !activeFolder()) return false;
+    // The old loading overlay can stay mounted after login; do not block Drive reads.
+    if ((!force && busy()) || !endpoint() || !activeFolder()) return false;
     return !!folderCache();
   }
   function signature(items) {
@@ -108,6 +106,7 @@
   async function syncOne(id) {
     const fresh = await liveList(id);
     for (const item of fresh) if (item && item.id && item.name) driveNames.set(item.id, item.name);
+    if (typeof window.__vinhlocRecordDriveList === 'function') window.__vinhlocRecordDriveList(fresh);
     installRendererGuard();
     try {
       if (typeof appMeta !== 'undefined') {
@@ -248,7 +247,8 @@
     installRendererGuard();
     setInterval(installRendererGuard, 1200);
     // Existing application initializes its protected startup in a delayed task.
-    setTimeout(() => { void refresh(true); }, 9000);
+    setTimeout(() => { void refresh(true); }, 3000);
+    setTimeout(() => { void refresh(true); }, 11000);
     setInterval(() => { void refresh(false); }, REFRESH_INTERVAL);
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) void refresh(true);
