@@ -92,34 +92,59 @@
     }
     return url;
   }
-  async function imageFallback(id) {
-    const prior = saved.get(id);
+  async function imageThumbnailBlob(blob) {
+    // Cache a 640px thumbnail rather than retaining every full-resolution JPG
+    // in RAM on phones with hundreds of photos.
+    const source = URL.createObjectURL(blob);
+    try {
+      return await new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onerror = () => reject(new Error('Không đọc được ảnh'));
+        image.onload = () => {
+          try {
+            const scale = Math.min(1, 640 / Math.max(image.naturalWidth, image.naturalHeight, 1));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+            canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(result => result ? resolve(result) :
+              reject(new Error('Không nén được thumbnail')), 'image/jpeg', 0.76);
+          } catch (error) { reject(error); }
+        };
+        image.src = source;
+      });
+    } finally { URL.revokeObjectURL(source); }
+  }
+  async function imageFallback(id, full = false) {
+    const cacheKey = full ? id + ':full' : id;
+    const prior = saved.get(cacheKey);
     if (prior && Date.now() - prior.recordedAt < 20 * 60000) return prior.url;
-    if (inflight.has(id)) return inflight.get(id);
+    if (inflight.has(cacheKey)) return inflight.get(cacheKey);
     const task = enqueue(async () => {
       const token = await getToken();
       const file = await metadata(id, token);
-      if (file.thumbnailLink) {
+      if (!full && file.thumbnailLink) {
         try {
           const signed = await testImage(file.thumbnailLink);
-          return remember(id, signed, false);
+          return remember(cacheKey, signed, false);
         } catch (_) {} // Google may require a new signed link or a different account.
       }
       const isImage = (file.mimeType || '').startsWith('image/');
       if (isImage && (!file.size || Number(file.size) <= MAX_IMAGE_BYTES)) {
         const blob = await authenticatedBlob(id, token);
         if (blob.size > MAX_IMAGE_BYTES) throw new Error('Ảnh quá lớn để xem trực tiếp');
-        return remember(id, URL.createObjectURL(blob), true);
+        const previewBlob = full ? blob : await imageThumbnailBlob(blob);
+        return remember(cacheKey, URL.createObjectURL(previewBlob), true);
       }
       if (!isImage && (file.mimeType || '').startsWith('video/') &&
           file.size && Number(file.size) <= MAX_VIDEO_BYTES) {
         const blob = await authenticatedBlob(id, token);
         const poster = await posterFromVideo(blob);
-        return remember(id, poster, true);
+        return remember(cacheKey, poster, true);
       }
       throw new Error('Drive chưa tạo thumbnail hoặc tệp quá lớn');
-    }).finally(() => inflight.delete(id));
-    inflight.set(id, task);
+    }).finally(() => inflight.delete(cacheKey));
+    inflight.set(cacheKey, task);
     return task;
   }
   function posterFromVideo(blob) {
@@ -159,7 +184,8 @@
     const id = idFromDriveUrl(original);
     if (!id) return;
     img.dataset.vlFallback = 'running';
-    imageFallback(id).then(url => {
+    const full = !!img.closest('#mediaContent');
+    imageFallback(id, full).then(url => {
       if (!img.isConnected) return;
       img.onload = () => { img.dataset.vlFallback = 'loaded'; };
       img.src = url;
