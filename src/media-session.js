@@ -16,6 +16,8 @@
   let lastShown = 0;
   let proxyVersion = 0;
   const idPattern = /^[\w-]{10,160}$/;
+  const mobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  let needsProxy = false;
 
   function idOf(input) {
     try {
@@ -71,8 +73,8 @@
       });
     };
     replacement.__vlCapture = true;
-    service.initialize = replacement;
-    captureInstalled = true;
+    try { service.initialize = replacement; captureInstalled = true; }
+    catch (err) { captureInstalled = true; console.warn('[QL Ảnh] Google capture unavailable',err); }
   }
   installGoogleCapture();
   const captureTimer = setInterval(() => {
@@ -198,7 +200,7 @@
     iframe.replaceWith(player);
   }
   function reconcile() {
-    if (!ready) return;
+    if (!ready || (!mobileDevice && !needsProxy)) return;
     document.querySelectorAll('#fileList img,#mediaContent img').forEach(setImageUrl);
     document.querySelectorAll('#mediaContent iframe').forEach(setVideoPlayer);
     document.querySelectorAll('#mediaContent video').forEach(video => {
@@ -234,12 +236,25 @@
       if (ready) {
         const src=img.getAttribute('src') || '';
         if (!src.startsWith(API)) {
+          needsProxy = true;
           event.stopImmediatePropagation();
           setImageUrl(img);
           return;
         }
-        // The first-party endpoint can return 401 when the session expires.
-        void checkSession(true);
+        // A failed same-origin request may be a session expiry or a Drive
+        // permission error. Surface the real HTTP error instead of a blank icon.
+        void (async () => {
+          const session = await checkSession(true);
+          if (!session) return;
+          try {
+            const response = await fetch(src, {credentials:'same-origin',cache:'no-store'});
+            if (response.ok) return;
+            const error = await response.json().catch(()=>({}));
+            const message = 'Lỗi phát ảnh: '+(error.message || 'HTTP '+response.status);
+            if (typeof window.showToast === 'function') window.showToast(message,true);
+            else console.warn(message);
+          } catch (err) { console.warn('[QL Ảnh] Media connection error',err); }
+        })();
       } else {
         showPanel();
       }
