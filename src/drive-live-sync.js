@@ -155,35 +155,29 @@
   }
   function updatePathFromParents(path, liveParents) {
     const actual = stack();
-    if (!actual.length || actual[actual.length - 1].id !== path[path.length - 1].id)
-      return; // User navigated while requests were in flight.
-    let firstInvalid = -1;
+    if (!actual.length || actual.length !== path.length ||
+        actual.some((item, i) => item.id !== path[i].id)) return;
+
+    // IMPORTANT: QL Anh intentionally flattens Drive's physical hierarchy.
+    // Example: ROOT > "SUA CHUA THIET BI" > "1. SUA BIEN TAN" > "ABB"
+    // appears in the UI as ROOT > "1. SUA BIEN TAN" > "ABB".
+    // Missing a direct child in a parent listing DOES NOT prove that
+    // a folder was moved. Never automatically navigate or truncate
+    // folderStack from a background synchronization.
     let renamed = false;
     for (let i = 1; i < actual.length; i++) {
       const children = liveParents.get(actual[i - 1].id);
-      if (!children) continue;
+      if (!Array.isArray(children)) continue;
       const matchingChild = children.find(item => item.type === 'folder' && item.id === actual[i].id);
-      if (!matchingChild) { firstInvalid = i; break; }
+      if (!matchingChild) continue; // Virtual/flattened path: retain current navigation.
       if (actual[i].name !== matchingChild.name) {
         actual[i].name = matchingChild.name;
         renamed = true;
       }
     }
-    if (firstInvalid !== -1) {
-      // Parent-child relationship changed on Drive: stop displaying a false path.
-      const valid = actual[firstInvalid - 1];
-      try { folderStack = actual.slice(0, firstInvalid); } catch (_) { return; }
-      localStorage.setItem('appFolderStack', JSON.stringify(stack()));
-      if (typeof window.loadFolder === 'function')
-        window.loadFolder(valid.id, valid.name, false, true);
-      if (typeof window.showToast === 'function')
-        window.showToast('Thư mục đã được di chuyển trên Drive. Đã mở thư mục cha.');
-      return;
-    }
     if (renamed) {
       localStorage.setItem('appFolderStack', JSON.stringify(actual));
-      if (typeof window.updateBreadcrumbs === 'function')
-        window.updateBreadcrumbs();
+      if (typeof window.updateBreadcrumbs === 'function') window.updateBreadcrumbs();
     }
   }
   async function refresh(force = false) {
