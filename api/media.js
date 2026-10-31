@@ -155,8 +155,10 @@ export default async function handler(req, res) {
       await callScript('verifyUser',{email:identity.email});
       const life = Math.min(3300, Math.max(1,identity.exp - Math.floor(Date.now()/1000) - 10));
       const session=sealSession(identity) || body.credential;
-      res.setHeader('Set-Cookie',
-        COOKIE+'='+session+'; HttpOnly; Secure; SameSite=Strict; Path=/api/media; Max-Age='+life);
+      res.setHeader('Set-Cookie',[
+        COOKIE+'=; HttpOnly; Secure; SameSite=Strict; Path=/api/media; Max-Age=0',
+        COOKIE+'='+session+'; HttpOnly; Secure; SameSite=Strict; Path=/api; Max-Age='+life
+      ]);
       authorized.set(identity.sub+':'+identity.email,Date.now()+90000);
       return res.status(200).json({success:true, email:identity.email,expiresAt:identity.exp});
     } catch (e) { return error(res,401,'Không thể xác thực tài khoản: '+e.message); }

@@ -138,6 +138,14 @@
     });
     slot.dataset.ready = '1';
   }
+  // Ownership APIs require the verified cookie scoped to /api, while old
+  // sessions may still have the legacy /api/media-only cookie.
+  window.vlMediaRequireReauth=()=>{
+    ready=false;
+    window.vlMediaProxyReady=false;
+    showPanel();
+  };
+  window.vlMediaEnsureAuth=()=>checkSession(true);
   function showPanel() {
     if (ready || Date.now()-lastShown<1200) return;
     lastShown = Date.now();

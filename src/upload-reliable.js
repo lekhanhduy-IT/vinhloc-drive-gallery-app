@@ -36,6 +36,22 @@
     if (!data || !data.success) throw new Error(data?.message || data?.error || 'Không thể xử lý trên Drive');
     return data;
   }
+  function isAdminClient() {
+    return String(localStorage.getItem('vinhloc_authenticated_email')||'').toLowerCase() === 'admin@tudonghoavinhloc.com';
+  }
+  async function ownApi(action, params = {}) {
+    const res = await fetch('/api/owned-files', {
+      method:'POST',credentials:'same-origin',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action,...params}),cache:'no-store'
+    });
+    const json=await res.json().catch(()=>({}));
+    if(!res.ok || !json.success) {
+      if(res.status===401) void window.vlMediaEnsureAuth?.();
+      throw new Error(json.message || 'Cần đăng nhập Google để ghi nhận người upload');
+    }
+    return json;
+  }
   async function driveToken(force = false) {
     if (!force && SELF.token && Date.now() - SELF.tokenAt < 15 * 60000) return SELF.token;
     if (SELF.tokenPromise && !force) return SELF.tokenPromise;
@@ -104,12 +120,14 @@
         btn.textContent = 'Đang tạo...';
         try {
           const isMegaRow = parentId === rootId;
-          const response = await api('createFolder', {
+          const response = await (isAdminClient() ? api('createFolder', {
             name, folderId: parentId, isMegaRow, category: read('category')
-          });
+          }) : ownApi('createFolder', {
+            name, folderId:parentId, category:read('category')
+          }));
           const newId = response.id;
           if (!newId || newId.startsWith('temp_')) throw new Error('Drive chưa trả về ID thật');
-          const item = {id: newId, name, type: 'folder'};
+          const item = {id: newId, name, type: 'folder', ...(isAdminClient()?{}:{uploadedBy:response.uploaderEmail})};
           const meta = read('meta');
           if (meta) meta[newId] = {
             ...(meta[newId] || {}),
@@ -176,10 +194,17 @@
   }
   async function transferFile(file, folderId, token) {
     let url;
-    try { url = await createUploadSession(file, folderId, token); }
-    catch (error) {
-      if (error.status !== 401) throw error;
-      url = await createUploadSession(file, folderId, await driveToken(true));
+    if (!isAdminClient()) {
+      const created = await ownApi('startUpload',{
+        folderId, name:file.name, mimeType:file.type, size:file.size
+      });
+      url = created.uploadUrl;
+    } else {
+      try { url = await createUploadSession(file, folderId, token); }
+      catch (error) {
+        if (error.status !== 401) throw error;
+        url = await createUploadSession(file, folderId, await driveToken(true));
+      }
     }
     let offset = 0;
     while (offset < file.size) {
@@ -236,14 +261,15 @@
     let success = 0, failure = 0;
     toast('Đang tải ' + chosen.length + ' file lên Google Drive...');
     try {
-      let token = await driveToken();
+      let token = isAdminClient() ? await driveToken() : null;
       for (const item of pending) {
         try {
           const completed = await transferFile(item.file, folderId, token);
           const fileData = {
             ...item.data, id: completed.id, name: completed.name || item.file.name,
             mimeType: completed.mimeType || item.data.mimeType,
-            isPending: false, recentlyUploadedAt: Date.now()
+            isPending: false, recentlyUploadedAt: Date.now(),
+            ...(!isAdminClient()?{uploadedBy:localStorage.getItem('vinhloc_authenticated_email')}: {})
           };
           // Retain the local preview for this session; other devices use authenticated fallback.
           upsert(folderId, fileData, item.tempId);

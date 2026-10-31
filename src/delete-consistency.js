@@ -154,7 +154,19 @@
     if(!ID_PATTERN.test(id) || id.startsWith('temp_'))
       throw new Error('Mục chưa có ID thật; hãy đợi tạo xong trước khi xóa');
     const parent=parentId || parentFor(id);
-    await api('delete',{id,type:type==='folder'?'folder':'file'});
+    if (String(localStorage.getItem('vinhloc_authenticated_email')||'').toLowerCase() === 'admin@tudonghoavinhloc.com') {
+      await api('delete',{id,type:type==='folder'?'folder':'file'});
+    } else {
+      const response=await fetch('/api/owned-files',{
+        method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'delete',id}),cache:'no-store'
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok || result.success!==true) {
+        if(response.status===401)void window.vlMediaRequireReauth?.();
+        throw new Error(result.message||'Không đủ quyền xóa tệp này');
+      }
+    }
     // The backend setTrashed(true) returned success. Verify the item is now
     // absent from its previous Drive parent before purging the local cache.
     if(parent && ID_PATTERN.test(parent)) {
@@ -284,6 +296,16 @@
       activeDialog=null;
     }
   }
+  window.vlAskOwnedDelete=(id,type='file')=>{
+    if(ID_PATTERN.test(id))confirmDialog([{id,type,parentId:parentFor(id)}]);
+  };
+  window.vlAskOwnedBatch=(items)=>{
+    if(!Array.isArray(items))return;
+    const clean=items.filter(item=>item && ID_PATTERN.test(item.id)).map(item=>({
+      id:item.id,type:item.type==='folder'?'folder':'file',parentId:parentFor(item.id)
+    }));
+    if(clean.length)confirmDialog(clean);
+  };
   loadMarkers();
   removeLegacyBlacklist();
   document.addEventListener('click',interceptClick,true);

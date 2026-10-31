@@ -106,42 +106,51 @@
     for (const data of targets(state)) data[key]=number;
     schedule();
   };
-  // Legacy touchend calls renderImages() and replaces the touched image even
-  // when only the overlay position changed. Suppress only that touchend branch,
-  // preserving touchstart/move and the state values they write.
+  // Capture the gesture on touchstart and suppress the legacy element's
+  // touchend listener unconditionally at the GRID capture phase. The previous
+  // code looked up event.target during touchend; on iOS the final target can
+  // be a control or blank card after finger movement, so the old listener
+  // still ran renderImages() and discarded every live image element.
+  let dragContext = null;
   grid.addEventListener('touchstart',event=>{
-    activeTouch=!!event.target.closest('.overlay-item');
-  },true);
-  grid.addEventListener('touchend',event=>{
-    if (!activeTouch) return;
-    activeTouch=false;
+    const overlay=event.target.closest?.('.overlay-item');
+    const card=event.target.closest?.('.image-card');
+    if(!overlay || !card || !overlay.closest('#image-grid')) {
+      dragContext=null; return;
+    }
     const state=getState();
-    if(!state) return;
-    const overlay=event.target.closest('.overlay-item');
-    const card=event.target.closest('.image-card');
-    if (!overlay || !card) return;
-    event.stopImmediatePropagation();
-    const data=state.images.find(x=>x.id===card.dataset.id);
+    const data=state?.images.find(x=>x.id===card.dataset.id);
     if(!data) return;
-    const matching=Array.from(card.querySelectorAll('.overlay-item')).indexOf(overlay);
-    const visibleLayers=state.layerOrder.filter(layer=>
+    const index=Array.from(card.querySelectorAll('.overlay-item')).indexOf(overlay);
+    const layers=state.layerOrder.filter(layer=>
       (layer.type==='text'?data.texts:data.wms).some(item=>item.id===layer.id));
-    const layer=visibleLayers[matching];
-    const current=layer && (layer.type==='text'?data.texts:data.wms).find(x=>x.id===layer.id);
-    if(current) {
-      for(const other of targets(state)) {
-        if(other===data) continue;
-        const copy=(layer.type==='text'?other.texts:other.wms).find(x=>x.id===layer.id);
-        if (!copy) continue;
-        copy.x=current.x;
-        copy.y=current.y;
-        copy.scale=current.scale;
-        copy.rotation=current.rotation;
-      }
+    dragContext={cardId:data.id,layer:layers[index]||null,overlay};
+  },true);
+  function finishGesture(event) {
+    if(!dragContext)return;
+    const ctx=dragContext;
+    dragContext=null;
+    // Stop the iOS gesture from reaching the old touchend handler, which
+    // triggers a full grid rebuild. Touchstart/move already updated the model.
+    event.stopImmediatePropagation();
+    event.stopPropagation();
+    const state=getState();
+    const data=state?.images.find(x=>x.id===ctx.cardId);
+    if(!data||!ctx.layer)return;
+    const list=ctx.layer.type==='text'?data.texts:data.wms;
+    const current=list.find(x=>x.id===ctx.layer.id);
+    if(!current)return;
+    for(const other of targets(state)){
+      if(other===data)continue;
+      const copy=(ctx.layer.type==='text'?other.texts:other.wms)
+        .find(x=>x.id===ctx.layer.id);
+      if(!copy)continue;
+      for(const p of ['x','y','scale','rotation'])copy[p]=current[p];
     }
     schedule();
-  },true);
-  grid.addEventListener('touchcancel',()=>{activeTouch=false;},true);
+  }
+  grid.addEventListener('touchend',finishGesture,true);
+  grid.addEventListener('touchcancel',finishGesture,true);
   const style=document.createElement('style');
   style.textContent = '@media (pointer:coarse) {'+
     '#watermark-overlay-container .overlay-item,'+
