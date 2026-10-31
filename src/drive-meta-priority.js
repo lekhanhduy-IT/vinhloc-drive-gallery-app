@@ -35,9 +35,10 @@
   }
 
   function remember(items, parentId = null) {
+    if (!Array.isArray(items)) return;
+    items = keepConfirmedPresent(items);
     if (parentId && typeof parentId === 'string')
       liveItems.set(parentId, items.map(item => ({...item})));
-    if (!Array.isArray(items)) return;
     for (const item of items) {
       if (item && typeof item.id === 'string' && typeof item.name === 'string' && !item.isPending)
         names[item.id] = item.name;
@@ -45,6 +46,16 @@
     applyToApp();
   }
 
+  function keepConfirmedPresent(items) {
+    const registry = window.vlVerifiedDeletions;
+    return registry && typeof registry.safe === 'function' ? registry.safe(items) : items;
+  }
+  function removeDeletedFromCache(cache) {
+    if (!cache || typeof cache !== 'object') return;
+    for (const [parentId, items] of Object.entries(cache)) {
+      if (Array.isArray(items)) cache[parentId] = keepConfirmedPresent(items);
+    }
+  }
   function correctMeta(meta) {
     if (!meta || typeof meta !== 'object') return;
     for (const id of Object.keys(names)) {
@@ -54,6 +65,7 @@
 
   function correctListCache(cache, preferLive = false, folderOnly = false) {
     if (!cache || typeof cache !== 'object') return;
+    removeDeletedFromCache(cache);
     if (preferLive) for (const [id, current] of liveItems)
       cache[id] = current.filter(item => !folderOnly || item.type === 'folder').map(item => ({...item}));
     for (const items of Object.values(cache)) {
@@ -62,6 +74,7 @@
         if (item && names[item.id]) item.name = names[item.id];
       }
     }
+    removeDeletedFromCache(cache);
   }
 
   function patchResponse(response, value) {
@@ -77,14 +90,21 @@
   window.fetch = function (input, init) {
     let action;
     let parentId = null;
+    let outgoing = init;
     try {
       if (init && typeof init.body === 'string') {
         const body = JSON.parse(init.body);
         action = body && body.action;
         parentId = body && body.folderId;
+        if (action === 'saveGlobalCache' && body.cacheData && window.vlVerifiedDeletions) {
+          const snapshot = JSON.parse(body.cacheData);
+          removeDeletedFromCache(snapshot.folderData);
+          removeDeletedFromCache(snapshot.subData);
+          outgoing = {...init, body:JSON.stringify({...body,cacheData:JSON.stringify(snapshot)})};
+        }
       }
     } catch (_) {}
-    const request = nativeFetch(input, init);
+    const request = nativeFetch(input, outgoing);
     if (!['list', 'getMeta', 'loadGlobalCache'].includes(action)) return request;
     return request.then(async (response) => {
       if (!response.ok) return response;
@@ -94,6 +114,11 @@
         if (action === 'list') {
           // The backend list action reads DriveApp.getFolders/getFiles directly.
           remember(value.data, parentId);
+          const filtered = keepConfirmedPresent(value.data);
+          if (filtered.length !== value.data.length) {
+            value.data = filtered;
+            return patchResponse(response,value);
+          }
           return response;
         }
         if (action === 'getMeta') {

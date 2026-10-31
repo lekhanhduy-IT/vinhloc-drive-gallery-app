@@ -165,7 +165,9 @@
     // Otherwise a rename can appear unchanged and suppress the real UI re-render.
     const existing = folderCache();
     const previousSignature = existing && Array.isArray(existing[id]) ? signature(existing[id]) : null;
-    const fresh = await liveList(id);
+    const fromDrive = await liveList(id);
+    const fresh = typeof window.vlVerifiedDeletions?.safe === 'function'
+      ? window.vlVerifiedDeletions.safe(fromDrive) : fromDrive;
     for (const item of fresh) if (item && item.id && item.name) driveNames.set(item.id, item.name);
     if (typeof window.__vinhlocRecordDriveList === 'function') window.__vinhlocRecordDriveList(fresh, id);
     installRendererGuard();
@@ -299,6 +301,17 @@
   }
   function start() {
     installButton();
+    // Revalidate a newly opened directory instead of waiting the 30-second
+    // crawler cycle. Keep navigation unchanged, even with flattened paths.
+    let observedFolder = activeFolder();
+    setInterval(() => {
+      const next = activeFolder();
+      if (!next || next === observedFolder) return;
+      observedFolder = next;
+      setTimeout(() => {
+        if (activeFolder() === next) void refresh(true);
+      }, 250);
+    }, 850);
     installRendererGuard();
     setInterval(installRendererGuard, 1200);
     // Existing application initializes its protected startup in a delayed task.
