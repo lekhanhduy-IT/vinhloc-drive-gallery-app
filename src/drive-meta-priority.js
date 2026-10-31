@@ -36,6 +36,7 @@
 
   function remember(items, parentId = null) {
     if (!Array.isArray(items)) return;
+    window.vlVerifiedDeletions?.reconcileLiveList?.(items);
     items = keepConfirmedPresent(items);
     if (parentId && typeof parentId === 'string')
       liveItems.set(parentId, items.map(item => ({...item})));

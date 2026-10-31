@@ -44,6 +44,21 @@
     }
     try {localStorage.setItem(KEY, JSON.stringify(confirmed));} catch(_) {}
   }
+  function reconcileLiveList(items) {
+    if(!Array.isArray(items)) return;
+    // After a confirmed Drive listing, a previously trashed ID can reappear
+    // only through an explicit restore/move. Allow those changes after a short
+    // consistency window rather than hiding restored files for 30 days.
+    let changed=false;
+    for(const item of items) {
+      if(item?.id && confirmed[item.id] &&
+         Date.now()-Number(confirmed[item.id]) > 90000) {
+        delete confirmed[item.id];
+        changed=true;
+      }
+    }
+    if(changed) cleanMarkers();
+  }
   function isDeleted(id) {
     return !!(id && confirmed[id] && Date.now()-Number(confirmed[id]) < TTL);
   }
@@ -274,5 +289,5 @@
   document.addEventListener('click',interceptClick,true);
   installRenderGuard();
   setInterval(installRenderGuard,1400);
-  window.vlVerifiedDeletions={isDeleted, safe, count:()=>Object.keys(confirmed).length};
+  window.vlVerifiedDeletions={isDeleted, safe, reconcileLiveList, count:()=>Object.keys(confirmed).length};
 })();

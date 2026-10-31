@@ -166,6 +166,7 @@
     const existing = folderCache();
     const previousSignature = existing && Array.isArray(existing[id]) ? signature(existing[id]) : null;
     const fromDrive = await liveList(id);
+    window.vlVerifiedDeletions?.reconcileLiveList?.(fromDrive);
     const fresh = typeof window.vlVerifiedDeletions?.safe === 'function'
       ? window.vlVerifiedDeletions.safe(fromDrive) : fromDrive;
     for (const item of fresh) if (item && item.id && item.name) driveNames.set(item.id, item.name);
