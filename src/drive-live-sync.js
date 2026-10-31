@@ -104,6 +104,10 @@
       !document.querySelector('.multi-select-toolbar:not(.hidden)');
   }
   async function syncOne(id) {
+    // Capture old values BEFORE the response interceptor updates in-memory names.
+    // Otherwise a rename can appear unchanged and suppress the real UI re-render.
+    const existing = folderCache();
+    const previousSignature = existing && Array.isArray(existing[id]) ? signature(existing[id]) : null;
     const fresh = await liveList(id);
     for (const item of fresh) if (item && item.id && item.name) driveNames.set(item.id, item.name);
     if (typeof window.__vinhlocRecordDriveList === 'function') window.__vinhlocRecordDriveList(fresh);
@@ -117,7 +121,7 @@
     if (!cache) return fresh;
     const previous = Array.isArray(cache[id]) ? cache[id] : [];
     const merged = mergePending(previous, fresh);
-    const changed = signature(previous) !== signature(merged);
+    const changed = previousSignature === null || previousSignature !== signature(merged);
     if (changed) {
       cache[id] = merged;
       const sub = subCache();
