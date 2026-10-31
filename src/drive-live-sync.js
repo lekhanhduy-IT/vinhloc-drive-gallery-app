@@ -61,17 +61,61 @@
     if ((!force && busy()) || !endpoint() || !activeFolder()) return false;
     return !!folderCache();
   }
+  function cleanUploadState(item) {
+    if (!item) return item;
+    // Legacy renderItems checks tempUrl rather than isPending. Real IDs with
+    // a tempUrl are finished uploads with an accidentally retained flag.
+    if (String(item.id).startsWith('temp_file_') && item.isPending) return item;
+    if (!item.tempUrl && !item.isPending) return item;
+    const clean={...item};
+    delete clean.tempUrl;
+    delete clean.isPending;
+    return clean;
+  }
   function signature(items) {
     return JSON.stringify(items.map(item =>
-      [item.id, item.type, item.name, item.mimeType || '', !!item.isPending]));
+      [item.id, item.type, item.name, item.mimeType || '',
+       !!item.isPending, !!item.tempUrl]));
   }
   function mergePending(oldItems, freshItems) {
-    const pending = new Map(oldItems.filter(item => item && (
-      item.isPending || (item.recentlyUploadedAt && Date.now() - item.recentlyUploadedAt < 120000)
-    )).map(item => [item.id, item]));
-    const merged = freshItems.map(item => pending.get(item.id) || item);
-    const ids = new Set(merged.map(item => item.id));
-    pending.forEach((item, id) => { if (!ids.has(id)) merged.push(item); });
+    const cleanedOld=oldItems.map(cleanUploadState);
+    const cleanedFresh=freshItems.map(cleanUploadState);
+    const liveIds=new Set(cleanedFresh.map(x=>x.id));
+    const pending=cleanedOld.filter(item=>item && (
+      item.isPending || (item.recentlyUploadedAt &&
+        Date.now()-item.recentlyUploadedAt<120000)
+    ));
+    const byId=new Map(pending.map(item=>[item.id,item]));
+    const merged=cleanedFresh.map(item=>byId.get(item.id) || item);
+
+    // A second device may see the finished Drive file before this device
+    // receives its upload acknowledgement. Only reconcile a fake ID with
+    // a live file if its name+size and creation time reliably match.
+    const active=window.vlActiveUploadIds;
+    const nameCounts=new Map();
+    for(const x of cleanedFresh)nameCounts.set(x.name,(nameCounts.get(x.name)||0)+1);
+    for(const item of pending) {
+      if(liveIds.has(item.id))continue;
+      if(String(item.id).startsWith('temp_file_')) {
+        if(active?.has(item.id)) {
+          merged.push(item);
+          continue;
+        }
+        const matches=cleanedFresh.filter(x=>x.type!=='folder'&&x.name===item.name&&
+          (!item.mimeType||!x.mimeType||x.mimeType===item.mimeType)&&
+          (!item.size||!x.size||Number(x.size)===Number(item.size)));
+        const started=Number(item.uploadStartedAt ||
+          String(item.id).match(/^temp_file_(?:vl_)?(\d{13})/)?.[1] || 0);
+        if(matches.length===1 && nameCounts.get(item.name)===1 &&
+           started && Date.now()-started<30*60000 &&
+           matches[0].createdTime &&
+           Math.abs(new Date(matches[0].createdTime).getTime()-started)<5*60000) {
+          continue; // Proven equivalent real file, no ghost uploading card.
+        }
+        if(started && Date.now()-started>40*60000)continue; // Abandoned pending.
+      }
+      merged.push(item);
+    }
     return merged;
   }
   async function directDriveList(id) {
@@ -84,7 +128,7 @@
       const query = new URLSearchParams({
         q: "'" + id + "' in parents and trashed = false",
         pageSize: '1000',
-        fields: 'nextPageToken,files(id,name,mimeType,size,webViewLink)',
+        fields: 'nextPageToken,files(id,name,mimeType,size,createdTime,webViewLink)',
         supportsAllDrives: 'true',
         includeItemsFromAllDrives: 'true',
         corpora: 'allDrives'
@@ -103,7 +147,8 @@
           id: file.id,
           name: file.name,
           type: isFolder ? 'folder' : 'file',
-          ...(!isFolder ? {mimeType:file.mimeType, url:file.webViewLink || ''} : {})
+          ...(!isFolder ? {mimeType:file.mimeType, size:file.size,
+            createdTime:file.createdTime, url:file.webViewLink || ''} : {})
         });
       }
       pageToken = body.nextPageToken || '';
@@ -165,7 +210,19 @@
     // Otherwise a rename can appear unchanged and suppress the real UI re-render.
     const existing = folderCache();
     const previousSignature = existing && Array.isArray(existing[id]) ? signature(existing[id]) : null;
-    const fromDrive = await liveList(id);
+    let fromDrive = await liveList(id);
+    // A pending batch on this browser and a completed file on another browser
+    // require Drive creation timestamps to pair safely. Apps Script's list()
+    // omits them, so request authoritative metadata only for this case.
+    const cachedBefore=folderCache()?.[id] || [];
+    const pendingNeedsReconcile = cachedBefore.some(item =>
+      item?.isPending && String(item.id).startsWith('temp_file_') &&
+      fromDrive.some(real => real.type!=='folder' && real.name===item.name) &&
+      !fromDrive.some(real=>real.name===item.name && real.createdTime));
+    if(pendingNeedsReconcile) {
+      try { fromDrive=await directDriveList(id); }
+      catch(err) { console.warn('[QL Ảnh] Chờ metadata đối chiếu file upload',err); }
+    }
     window.vlVerifiedDeletions?.reconcileLiveList?.(fromDrive);
     const fresh = typeof window.vlVerifiedDeletions?.safe === 'function'
       ? window.vlVerifiedDeletions.safe(fromDrive) : fromDrive;

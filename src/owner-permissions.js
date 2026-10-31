@@ -8,7 +8,7 @@
   const admin=()=>email()===adminEmail;
   const current=()=>{try{return Array.isArray(currentDriveItems)?currentDriveItems:window.currentDriveItems||[];}catch(_){return window.currentDriveItems||[];}};
   const idsCache=new Map();
-  let checkedFolder='',lastListSignature='',requesting=false,menuGeneration=0;
+  let checkedFolder='',lastListSignature='',lastCheckError='',lastChecking=false;
   const TTL=90000;
   function selected(){return window.multiSelectState?.selectedIds||new Set();}
   function can(id){const x=idsCache.get(id);return !!(x&&x.allowed&&Date.now()-x.at<TTL);}
@@ -32,27 +32,35 @@
   async function checkIds(items,force=false){
     if(admin())return;
     const fresh=items.filter(item=>item.id && (force||!idsCache.has(item.id)||Date.now()-idsCache.get(item.id).at>=TTL));
-    if(!fresh.length)return;
+    if(!fresh.length){showHeader();return;}
+    lastChecking=true;
     for(let offset=0;offset<fresh.length;offset+=50){
       const ids=fresh.slice(offset,offset+50).map(item=>item.id);
       try{
         const response=await api('check',{ids});
+        lastCheckError='';
         for(const id of ids){
           const info=response.items?.[id];
           idsCache.set(id,{allowed:!!info?.allowed,at:Date.now()});
         }
       }catch(e){
+        lastCheckError=e.message || 'Chưa xác minh được quyền xóa';
         console.warn('[QL Ảnh] Kiểm tra người upload',e);
         // Do not grant delete permission when unable to verify.
         for(const id of ids)idsCache.set(id,{allowed:false,at:Date.now()-TTL+10000});
       }
       showHeader();
     }
+    lastChecking=false;
+    showHeader();
   }
   function renderHeaderBox(){
     if(admin())return;
     const menu=document.getElementById('headerDropdown');
     if(!menu)return;
+    menu.style.maxHeight='min(70vh, 520px)';
+    menu.style.overflowY='auto';
+    menu.style.width='min(320px, calc(100vw - 24px))';
     let block=document.getElementById('vlOwnedControls');
     if(!block){
       block=document.createElement('div');
@@ -71,8 +79,12 @@
       (disabled?'disabled ':'')+
       'style="display:flex;width:100%;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;text-align:left;'+
       (disabled?'color:#aaa;':'color:#374151;')+'"><span>'+label+'</span></button>';
+    const rightsMessage=lastCheckError
+      ? '<div style="padding:8px;color:#b45309;font-size:12px;">'+String(lastCheckError).replace(/[<>&"]/g,'')+' — Đăng nhập lại Google để kiểm tra quyền.</div>'+button('Xác thực tài khoản Google','auth')
+      : (lastChecking ? '<div style="padding:8px;color:#64748b;font-size:12px;">Đang xác minh người tải lên…</div>' :
+        (!owned.length && current().length ? '<div style="padding:8px;color:#64748b;font-size:12px;">Không có mục nào có thông tin người tải lên được xác minh cho tài khoản này. File cũ chưa gắn metadata cần admin xác nhận.</div>' : ''));
     block.innerHTML=
-      '<div style="font-size:11px;font-weight:bold;color:#64748b;padding:6px 10px;">DO TÔI TẢI LÊN ('+owned.length+'/'+current().length+')</div>'+
+      '<div style="font-size:11px;font-weight:bold;color:#64748b;padding:6px 10px;">DO TÔI TẢI LÊN ('+owned.length+'/'+current().length+')</div>'+rightsMessage+
       button('Chọn tất cả file/thư mục của tôi','all',!owned.length)+
       button('Chọn thư mục của tôi ('+folders.length+')','folder',!folders.length)+
       button('Chọn ảnh/video của tôi ('+files.length+')','file',!files.length)+
@@ -116,7 +128,17 @@
     let existing=menu.querySelector('.vl-own-delete');
     if(existing)existing.remove();
     await checkIds([{id}]);
-    if(menu.classList.contains('hidden')||!can(id))return;
+    if(menu.classList.contains('hidden'))return;
+    if(!can(id)) {
+      if(menu.querySelector('.vl-own-locked'))return;
+      const hint=document.createElement('div');
+      hint.className='vl-own-locked vinhloc-safe-item';
+      hint.style.cssText='display:block!important;padding:10px 12px;color:#64748b;font:12px system-ui;';
+      hint.textContent=lastCheckError?'Chưa xác minh Google để xóa':'Không có quyền xóa: chưa xác minh người tải lên';
+      menu.appendChild(hint);
+      return;
+    }
+    menu.querySelector('.vl-own-locked')?.remove();
     const button=document.createElement('button');
     button.type='button';
     button.className='vl-own-delete vinhloc-safe-item';
@@ -156,8 +178,42 @@
     const signature=folder+'|'+items.length+'|'+items.slice(0,20).map(x=>x.id).join(',');
     if(signature===lastListSignature)return;
     checkedFolder=folder;lastListSignature=signature;
+    showHeader();
     void checkIds(items).then(()=>{if(folder===checkedFolder)showHeader()});
   }
+  // Existing scripts override these functions several seconds after load,
+  // and their legacy buildHeaderMenu() clears innerHTML each time.
+  // Attach to the function itself instead of hoping a delayed click handler
+  // runs after the last DOM rewrite.
+  let wrappedHeader=null, wrappedToggle=null;
+  function installMenuHooks(){
+    if(admin())return;
+    const build=window.buildHeaderMenu;
+    if(typeof build==='function' && build!==wrappedHeader && !build.__vlOwnerWrapped) {
+      const proxy=function(...args) {
+        const result=build.apply(this,args);
+        renderHeaderBox(); // even if it is currently hidden
+        return result;
+      };
+      proxy.__vlOwnerWrapped=true;
+      window.buildHeaderMenu=wrappedHeader=proxy;
+    }
+    const toggle=window.toggleItemMenu;
+    if(typeof toggle==='function' && toggle!==wrappedToggle && !toggle.__vlOwnerWrapped) {
+      const proxy=function(id,event) {
+        const result=toggle.apply(this,arguments);
+        const menu=document.getElementById('menu-'+id);
+        if(menu && !menu.classList.contains('hidden'))void refreshMenu(menu);
+        return result;
+      };
+      proxy.__vlOwnerWrapped=true;
+      window.toggleItemMenu=wrappedToggle=proxy;
+    }
+    if(document.getElementById('headerDropdown') &&
+       !document.getElementById('vlOwnedControls'))renderHeaderBox();
+  }
+  installMenuHooks();
+  setInterval(installMenuHooks,900);
   document.addEventListener('click',event=>{
     if(admin())return;
     const btn=event.target.closest?.('[data-vl-owner-action]');
@@ -165,6 +221,7 @@
       event.preventDefault();event.stopImmediatePropagation();
       const action=btn.dataset.vlOwnerAction;
       if(action==='delete')void menuDelete();
+      else if(action==='auth')window.vlMediaRequireReauth?.();
       else if(action!=='none')choose(action);
       return;
     }

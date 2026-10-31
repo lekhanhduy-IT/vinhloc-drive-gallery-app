@@ -68,7 +68,20 @@
     const cache = read('cache');
     return cache && Array.isArray(cache[id]) ? cache[id] : [];
   }
+  // 'tempUrl' is an upload-in-progress FLAG in the legacy renderer,
+  // not merely a preview URL. Retaining it after Drive returns an ID keeps
+  // the opaque "Đang Up..." overlay visible forever on the uploading device.
+  function normalized(item) {
+    if (!item) return item;
+    if (item.isPending && String(item.id).startsWith('temp_file_')) return item;
+    if (!item.tempUrl && !item.isPending) return item;
+    const clean = {...item};
+    delete clean.tempUrl;
+    delete clean.isPending;
+    return clean;
+  }
   function setList(id, list) {
+    list = list.map(normalized);
     const cache = read('cache');
     if (cache) {
       cache[id] = list;
@@ -86,10 +99,11 @@
     }
   }
   function upsert(id, item, oldId = null) {
-    const list = getList(id).slice();
-    const matchIndex = list.findIndex(i => i.id === (oldId || item.id));
-    if (matchIndex >= 0) list[matchIndex] = item;
-    else list.unshift(item);
+    const clean = normalized(item);
+    // A spider refresh may already have published the real Drive ID while
+    // the upload request was finishing. Remove both representations.
+    const list = getList(id).filter(i => i.id !== clean.id && i.id !== oldId);
+    list.unshift(clean);
     setList(id, list);
   }
   function remove(id, itemId) {
@@ -248,15 +262,18 @@
     }
     SELF.processing = true;
     setBusy(true);
+    const startedAt = Date.now();
     const pending = chosen.map((file, index) => {
-      const tempId = 'temp_file_vl_' + Date.now() + '_' + index;
+      const tempId = 'temp_file_vl_' + startedAt + '_' + index;
       const tempUrl = URL.createObjectURL(file);
       return {file, tempId, tempUrl, data: {
         id: tempId, name: file.name, type: 'file',
         mimeType: file.type || 'application/octet-stream',
-        isPending: true, tempUrl
+        isPending: true, tempUrl, uploadStartedAt: startedAt, size: file.size
       }};
     });
+    window.vlActiveUploadIds ||= new Set();
+    for(const item of pending)window.vlActiveUploadIds.add(item.tempId);
     setList(folderId, [...pending.map(p => p.data), ...getList(folderId)]);
     let success = 0, failure = 0;
     toast('Đang tải ' + chosen.length + ' file lên Google Drive...');
@@ -265,17 +282,22 @@
       for (const item of pending) {
         try {
           const completed = await transferFile(item.file, folderId, token);
+          const {tempUrl: discardedPreviewFlag, isPending: discardedPending, ...uploadData} = item.data;
           const fileData = {
-            ...item.data, id: completed.id, name: completed.name || item.file.name,
+            ...uploadData, id: completed.id, name: completed.name || item.file.name,
             mimeType: completed.mimeType || item.data.mimeType,
             isPending: false, recentlyUploadedAt: Date.now(),
             ...(!isAdminClient()?{uploadedBy:localStorage.getItem('vinhloc_authenticated_email')}: {})
           };
           // Retain the local preview for this session; other devices use authenticated fallback.
           upsert(folderId, fileData, item.tempId);
+          window.vlActiveUploadIds?.delete(item.tempId);
+          // Local preview no longer controls the upload state after success.
+          URL.revokeObjectURL(item.tempUrl);
           success++;
         } catch (err) {
           failure++;
+          window.vlActiveUploadIds?.delete(item.tempId);
           remove(folderId, item.tempId);
           URL.revokeObjectURL(item.tempUrl);
           toast('Lỗi ' + item.file.name + ': ' + err.message, true);
@@ -292,6 +314,7 @@
       }
       toast('Upload chưa thực hiện được: ' + error.message, true);
     } finally {
+      for(const item of pending)window.vlActiveUploadIds?.delete(item.tempId);
       SELF.processing = false;
       setBusy(false);
     }
