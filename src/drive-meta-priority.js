@@ -6,6 +6,7 @@
   window.__vinhlocDriveMetaPriorityInstalled = true;
   const names = window.__vinhlocDriveNames || (window.__vinhlocDriveNames = Object.create(null));
   const nativeFetch = window.fetch.bind(window);
+  const liveItems = new Map();
 
   function applyToApp() {
     let meta;
@@ -33,7 +34,9 @@
     }
   }
 
-  function remember(items) {
+  function remember(items, parentId = null) {
+    if (parentId && typeof parentId === 'string')
+      liveItems.set(parentId, items.map(item => ({...item})));
     if (!Array.isArray(items)) return;
     for (const item of items) {
       if (item && typeof item.id === 'string' && typeof item.name === 'string' && !item.isPending)
@@ -49,8 +52,10 @@
     }
   }
 
-  function correctListCache(cache) {
+  function correctListCache(cache, preferLive = false, folderOnly = false) {
     if (!cache || typeof cache !== 'object') return;
+    if (preferLive) for (const [id, current] of liveItems)
+      cache[id] = current.filter(item => !folderOnly || item.type === 'folder').map(item => ({...item}));
     for (const items of Object.values(cache)) {
       if (!Array.isArray(items)) continue;
       for (const item of items) {
@@ -71,10 +76,12 @@
 
   window.fetch = function (input, init) {
     let action;
+    let parentId = null;
     try {
       if (init && typeof init.body === 'string') {
         const body = JSON.parse(init.body);
         action = body && body.action;
+        parentId = body && body.folderId;
       }
     } catch (_) {}
     const request = nativeFetch(input, init);
@@ -86,7 +93,7 @@
         if (!value || value.success !== true) return response;
         if (action === 'list') {
           // The backend list action reads DriveApp.getFolders/getFiles directly.
-          remember(value.data);
+          remember(value.data, parentId);
           return response;
         }
         if (action === 'getMeta') {
@@ -95,8 +102,8 @@
         }
         if (action === 'loadGlobalCache' && value.data) {
           correctMeta(value.data.appMeta);
-          correctListCache(value.data.folderData);
-          correctListCache(value.data.subData);
+          correctListCache(value.data.folderData, true);
+          correctListCache(value.data.subData, true, true);
           return patchResponse(response, value);
         }
       } catch (error) {

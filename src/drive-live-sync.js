@@ -66,15 +66,58 @@
       [item.id, item.type, item.name, item.mimeType || '', !!item.isPending]));
   }
   function mergePending(oldItems, freshItems) {
-    const pending = new Map(oldItems.filter(item => item && item.isPending).map(item => [item.id, item]));
+    const pending = new Map(oldItems.filter(item => item && (
+      item.isPending || (item.recentlyUploadedAt && Date.now() - item.recentlyUploadedAt < 120000)
+    )).map(item => [item.id, item]));
     const merged = freshItems.map(item => pending.get(item.id) || item);
     const ids = new Set(merged.map(item => item.id));
     pending.forEach((item, id) => { if (!ids.has(id)) merged.push(item); });
     return merged;
   }
+  async function directDriveList(id) {
+    if (typeof window.vlGetMediaAccessToken !== 'function')
+      throw new Error('Không có thông tin phiên Drive');
+    const token = await window.vlGetMediaAccessToken();
+    const result = [];
+    let pageToken = '';
+    do {
+      const query = new URLSearchParams({
+        q: "'" + id + "' in parents and trashed = false",
+        pageSize: '1000',
+        fields: 'nextPageToken,files(id,name,mimeType,size,webViewLink)',
+        supportsAllDrives: 'true',
+        includeItemsFromAllDrives: 'true',
+        corpora: 'allDrives'
+      });
+      if (pageToken) query.set('pageToken', pageToken);
+      const res = await fetch('https://www.googleapis.com/drive/v3/files?' + query, {
+        headers: {Authorization: 'Bearer ' + token},
+        cache: 'no-store'
+      });
+      if (!res.ok) throw new Error('Drive API (' + res.status + ')');
+      const body = await res.json();
+      if (!Array.isArray(body.files)) throw new Error('Drive API không trả danh sách tệp');
+      for (const file of body.files) {
+        const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
+        result.push({
+          id: file.id,
+          name: file.name,
+          type: isFolder ? 'folder' : 'file',
+          ...(!isFolder ? {mimeType:file.mimeType, url:file.webViewLink || ''} : {})
+        });
+      }
+      pageToken = body.nextPageToken || '';
+    } while (pageToken);
+    result.sort((a, b) => a.type === b.type ?
+      a.name.localeCompare(b.name, 'vi') : a.type === 'folder' ? -1 : 1);
+    return result;
+  }
+
   async function liveList(id) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+    let fromAppsScript = null;
+    let appsScriptError = null;
     try {
       const payload = { action: 'list', folderId: id };
       try {
@@ -90,10 +133,24 @@
       if (!response.ok) throw new Error('HTTP ' + response.status);
       const result = await response.json();
       if (!result || result.success !== true || !Array.isArray(result.data))
-        throw new Error('Drive không trả về danh sách thư mục hợp lệ');
-      return result.data;
+        throw new Error('Apps Script không trả về danh sách thư mục hợp lệ');
+      fromAppsScript = result.data;
+      if (fromAppsScript.length) return fromAppsScript;
+    } catch (error) {
+      appsScriptError = error;
     } finally {
       clearTimeout(timeout);
+    }
+
+    // A stale 'empty' result should not erase a newly uploaded folder. A direct
+    // Drive API list is authoritative and works across devices without their
+    // browser's IndexedDB / spider-memory cache.
+    try {
+      return await directDriveList(id);
+    } catch (fallbackError) {
+      if (appsScriptError) throw appsScriptError;
+      if (fromAppsScript) return fromAppsScript; // Truly empty, or no direct permission.
+      throw fallbackError;
     }
   }
   function mayRender() {
@@ -110,7 +167,7 @@
     const previousSignature = existing && Array.isArray(existing[id]) ? signature(existing[id]) : null;
     const fresh = await liveList(id);
     for (const item of fresh) if (item && item.id && item.name) driveNames.set(item.id, item.name);
-    if (typeof window.__vinhlocRecordDriveList === 'function') window.__vinhlocRecordDriveList(fresh);
+    if (typeof window.__vinhlocRecordDriveList === 'function') window.__vinhlocRecordDriveList(fresh, id);
     installRendererGuard();
     try {
       if (typeof appMeta !== 'undefined') {
