@@ -6,6 +6,8 @@ const LIMIT=50;
 const idPattern=/^[A-Za-z0-9_-]{10,180}$/;
 const api='https://www.googleapis.com/drive/v3/files';
 const uploaderKey='vlUploadedBy';
+const uploadKeyField='vlUploadKey';
+const uploadKeyPattern=/^[A-Za-z0-9_-]{16,120}$/;
 export const config={maxDuration:60};
 function respond(res,status,message,extra={}) {
   res.setHeader('Cache-Control','no-store, private');
@@ -111,16 +113,44 @@ export default async function handler(req,res) {
       if(!name || !Number.isSafeInteger(size) || size<=0 || size>5*1024*1024*1024)
         return respond(res,400,'Tên file hoặc kích thước không hợp lệ');
       if(!/^(image|video)\//.test(mime))return respond(res,415,'Chỉ nhận ảnh và video');
+      const uploadKey=String(body.uploadKey||'');
+      if(!uploadKeyPattern.test(uploadKey))return respond(res,400,'Thiếu mã upload duy nhất');
       const session=await drive('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,mimeType,appProperties',{
         method:'POST',
         headers:{'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':mime,'X-Upload-Content-Length':String(size)},
-        body:JSON.stringify({name,mimeType:mime,parents:[parentId],appProperties:{[uploaderKey]:email}})
+        body:JSON.stringify({name,mimeType:mime,parents:[parentId],appProperties:{[uploaderKey]:email,[uploadKeyField]:uploadKey}})
       });
       if(!session.ok)return respond(res,502,'Không tạo được phiên upload lên Drive ('+session.status+')');
       const uploadUrl=session.headers.get('location');
       if(!uploadUrl||!uploadUrl.startsWith('https://www.googleapis.com/'))
         return respond(res,502,'Drive không trả địa chỉ upload hợp lệ');
       return respond(res,200,'Đã tạo phiên upload',{uploadUrl});
+    }
+    if(action==='confirmUpload'){
+      const parentId=body.folderId;
+      const uploadKey=String(body.uploadKey||'');
+      if(typeof parentId!=='string'||!idPattern.test(parentId)||
+         !uploadKeyPattern.test(uploadKey))
+        return respond(res,400,'Mã đối chiếu upload không hợp lệ');
+      await folder(parentId);
+      const escaped=uploadKey.replace(/'/g,"\\'");
+      const q=new URLSearchParams({
+        q:"'"+parentId+"' in parents and trashed=false and appProperties has { key='"+uploadKeyField+"' and value='"+escaped+"' }",
+        fields:'nextPageToken,files(id,name,mimeType,size,createdTime,appProperties,driveId,trashed)',
+        pageSize:'50',supportsAllDrives:'true',includeItemsFromAllDrives:'true'
+      });
+      const listed=await jsonDrive(api+'?'+q);
+      const matching=(listed.files||[]).filter(x=>inGallery(x)&&(admin||own(x,email))&&
+        x.appProperties?.[uploadKeyField]===uploadKey);
+      if(matching.length>1)return respond(res,409,'Mã upload bị trùng, cần kiểm tra thủ công');
+      const file=matching[0]||null;
+      return respond(res,200,file?'Drive đã nhận file':'Drive chưa xác nhận file',{
+        found:!!file,file:file?{
+          id:file.id,name:file.name,mimeType:file.mimeType,
+          size:Number(file.size||0),createdTime:file.createdTime,
+          uploaderEmail:file.appProperties?.[uploaderKey]||null
+        }:null
+      });
     }
     if(action==='delete'){
       const id=body.id;

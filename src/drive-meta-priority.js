@@ -78,6 +78,38 @@
     removeDeletedFromCache(cache);
   }
 
+  function preserveActiveUploads(data) {
+    const grid=window.vlUploadGrid;
+    if(!grid?.isActive() || !data?.folderData)return;
+    const folder=grid.folderId();
+    if(!folder)return;
+    let cache;
+    try {cache=typeof folderDataCache!=='undefined'?folderDataCache:window.folderDataCache;}catch(_){}
+    const active=cache?.[folder];
+    if(!Array.isArray(active))return;
+    const ids=window.vlActiveUploadIds;
+    // Retain all active transfer placeholders and recently confirmed files,
+    // even if the shared spider cache has not learned about them yet.
+    const protectedItems=active.filter(item=>(
+      ids?.has(item.id) ||
+      (item.recentlyUploadedAt && Date.now()-item.recentlyUploadedAt<120000)
+    ));
+    const fromServer=Array.isArray(data.folderData[folder])?data.folderData[folder]:[];
+    const known=new Set(protectedItems.map(item=>item.id));
+    data.folderData[folder]=[
+      ...protectedItems,
+      ...fromServer.filter(item=>!known.has(item.id))
+    ];
+  }
+  function discardTransientForSharedCache(cache) {
+    if(!cache||typeof cache!=='object')return;
+    for(const [folder,items] of Object.entries(cache)) {
+      if(!Array.isArray(items))continue;
+      cache[folder]=items.filter(item=>!(item?.isPending &&
+        String(item.id).startsWith('temp_file_')))
+        .map(item=>{const {tempUrl,...clean}=item;return clean;});
+    }
+  }
   function patchResponse(response, value) {
     const headers = new Headers();
     headers.set('Content-Type', 'application/json; charset=utf-8');
@@ -101,6 +133,7 @@
           const snapshot = JSON.parse(body.cacheData);
           removeDeletedFromCache(snapshot.folderData);
           removeDeletedFromCache(snapshot.subData);
+          discardTransientForSharedCache(snapshot.folderData);
           outgoing = {...init, body:JSON.stringify({...body,cacheData:JSON.stringify(snapshot)})};
         }
       }
@@ -130,6 +163,7 @@
           correctMeta(value.data.appMeta);
           correctListCache(value.data.folderData, true);
           correctListCache(value.data.subData, true, true);
+          preserveActiveUploads(value.data);
           return patchResponse(response, value);
         }
       } catch (error) {

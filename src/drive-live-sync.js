@@ -12,7 +12,8 @@
   // Keep the current Drive name authoritative at render time without altering other metadata.
   function installRendererGuard() {
     const original = window.renderItems;
-    if (typeof original !== 'function' || original === installedRenderer) return;
+    if (typeof original !== 'function' || original === installedRenderer ||
+        original.__vlStableUploadGuard) return;
     const wrapped = function(items, ...args) {
       if (Array.isArray(items)) items.forEach(item => {
         const liveName = driveNames.get(item.id);
