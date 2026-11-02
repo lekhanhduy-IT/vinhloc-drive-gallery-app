@@ -405,3 +405,48 @@ img[src*="vlimage"] {
     /* Giữ pointer-events mặc định hoặc thiết lập tự động để nhận diện cú click */
     pointer-events: auto; 
 }
+
+/* QL Ảnh: visible labels beside the five floating-add icons.
+   Keep the existing 56px circles and all upload/capture click targets intact. */
+#fabMenu > button,
+#fabMenu > label {
+    position: relative !important;
+    overflow: visible !important;
+}
+#fabMenu .fab-action-name {
+    position: absolute;
+    right: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: max-content;
+    max-width: calc(100vw - 110px);
+    min-height: 38px;
+    padding: 7px 13px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.98);
+    color: #1e293b;
+    box-shadow: 0 3px 12px rgba(15, 23, 42, 0.11);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    pointer-events: auto;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    z-index: 1;
+}
+#fabMenu .fab-action-name:active {
+    background: #f1f5f9;
+}
+@media (max-width: 360px) {
+    #fabMenu .fab-action-name {
+        right: calc(100% + 8px);
+        font-size: 12px;
+        padding: 7px 10px;
+    }
+}

@@ -22,7 +22,7 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
-    <link rel="stylesheet" href="./src/style.css?v=11">
+    <link rel="stylesheet" href="./src/style.css?v=12">
 
 </head>
 
@@ -105,27 +105,32 @@
         </button>
 
         <div id="fabMenu" class="hidden flex-col gap-3 items-end mb-2 transition-all">
-            <button onclick="uiPromptFolder()" class="bg-white text-blue-600 p-3 rounded-full shadow-lg flex items-center gap-3 font-semibold active:bg-gray-50 border border-gray-100">
+            <button onclick="uiPromptFolder()" title="Thêm thư mục" aria-label="Thêm thư mục" class="bg-white text-blue-600 p-3 rounded-full shadow-lg flex items-center gap-3 font-semibold active:bg-gray-50 border border-gray-100">
                 
+                <span class="fab-action-name">Thêm thư mục</span>
                 <div class="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center"><i class="fas fa-folder-plus"></i></div>
             </button>
-            <label class="bg-white text-green-600 p-3 rounded-full shadow-lg flex items-center gap-3 font-semibold cursor-pointer active:bg-gray-50 border border-gray-100">
+            <label title="Thêm ảnh" class="bg-white text-green-600 p-3 rounded-full shadow-lg flex items-center gap-3 font-semibold cursor-pointer active:bg-gray-50 border border-gray-100">
                 
+                <span class="fab-action-name">Thêm ảnh</span>
                 <div class="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center"><i class="fas fa-image"></i></div>
                 <input type="file" id="uploadImage" class="hidden" multiple accept="image/*" onchange="handleMultipleFileUpload(event)">
             </label>
-            <label class="bg-white text-orange-500 p-3 rounded-full shadow-lg flex items-center gap-3 font-semibold cursor-pointer active:bg-gray-50 border border-gray-100">
+            <label title="Chụp ảnh" class="bg-white text-orange-500 p-3 rounded-full shadow-lg flex items-center gap-3 font-semibold cursor-pointer active:bg-gray-50 border border-gray-100">
                 
+                <span class="fab-action-name">Chụp ảnh</span>
                 <div class="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center"><i class="fas fa-camera"></i></div>
                 <input type="file" id="captureImage" class="hidden" accept="image/*" capture="environment" onchange="handleMultipleFileUpload(event)">
             </label>
 
-            <label title="Tải nhiều video" class="bg-white text-purple-600 p-3 rounded-full shadow-lg flex items-center gap-3 font-semibold cursor-pointer active:bg-gray-50 border border-gray-100">
+            <label title="Thêm video" class="bg-white text-purple-600 p-3 rounded-full shadow-lg flex items-center gap-3 font-semibold cursor-pointer active:bg-gray-50 border border-gray-100">
+                <span class="fab-action-name">Thêm video</span>
                 <div class="w-10 h-10 bg-purple-50 rounded-full flex items-center justify-center"><i class="fas fa-film"></i></div>
                 <input type="file" id="uploadVideo" class="hidden" multiple accept="video/*">
             </label>
-            <label class="bg-white text-pink-600 p-3 rounded-full shadow-lg flex items-center gap-3 font-semibold cursor-pointer active:bg-gray-50 border border-gray-100">
+            <label title="Quay video" class="bg-white text-pink-600 p-3 rounded-full shadow-lg flex items-center gap-3 font-semibold cursor-pointer active:bg-gray-50 border border-gray-100">
                 
+                <span class="fab-action-name">Quay video</span>
                 <div class="w-10 h-10 bg-pink-50 rounded-full flex items-center justify-center"><i class="fas fa-video"></i></div>
                 <input type="file" id="captureVideo" class="hidden" accept="video/*" capture="environment" onchange="handleMultipleFileUpload(event)">
             </label>
