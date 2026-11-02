@@ -195,9 +195,15 @@
   }
   function sleep(ms) {return new Promise(resolve=>setTimeout(resolve,ms));}
   async function confirmUploaded(folderId,uploadKey,token) {
-    if(!isAdminClient()) {
+    // Same-origin verification is preferable on iOS: Drive's resumable PUT
+    // might succeed while a cross-origin final response is rejected by Safari.
+    // Also use it for admin where possible; fall back to direct Drive API only
+    // when the admin does not have a media API session.
+    try {
       const result=await ownApi('confirmUpload',{folderId,uploadKey});
       return result.found && result.file?.id ? result.file : null;
+    }catch(error){
+      if(!isAdminClient())throw error;
     }
     const q=new URLSearchParams({
       q:"'"+folderId+"' in parents and trashed=false and appProperties has { key='vlUploadKey' and value='"+uploadKey+"' }",
