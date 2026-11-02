@@ -96,10 +96,19 @@
     panel.hidden = true;
     panel.style.display = 'none';
     const info = document.createElement('span');
-    info.textContent = 'Ảnh/video cần xác thực Google để xem trên thiết bị này.';
+    info.textContent = 'Cho phép QL Ảnh xác thực tài khoản Google để xem ảnh/video trên thiết bị này.';
     panel.appendChild(info);
+    const permit = document.createElement('button');
+    permit.type = 'button';
+    permit.id = 'vlMediaAllowButton';
+    permit.textContent = 'Cho phép';
+    permit.setAttribute('aria-label','Cho phép xác thực Google');
+    permit.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;min-width:126px;min-height:44px;padding:10px 20px;border:0;border-radius:11px;background:#2563eb;color:#fff;font:700 15px system-ui;cursor:pointer;touch-action:manipulation;';
+    permit.addEventListener('click',requestMediaPermission);
+    panel.appendChild(permit);
     const slot = document.createElement('div');
     slot.id = 'vlMediaSignInButton';
+    slot.style.display = 'none';
     panel.appendChild(slot);
     const retry = document.createElement('button');
     retry.type='button';
@@ -110,33 +119,65 @@
     target.parentElement.insertBefore(panel, target);
     return panel;
   }
-  function renderGoogleButton() {
-    const slot = document.getElementById('vlMediaSignInButton');
-    if (!slot || slot.dataset.ready === '1') return;
-    if (!window.google?.accounts?.id) {
-      setTimeout(renderGoogleButton, 450);
-      return;
-    }
-    // Only initialize a media callback on existing logged-in QL Anh sessions.
-    // Otherwise preserve the application's normal sign-in callback.
-    const email = localStorage.getItem('vinhloc_authenticated_email');
-    if (!email) return;
-    window.google.accounts.id.initialize({
+  function initializeMediaAuth() {
+    if(signInInitialized)return true;
+    const sdk=window.google?.accounts?.id;
+    if(!sdk?.initialize)return false;
+    if(!localStorage.getItem('vinhloc_authenticated_email'))return false;
+    sdk.initialize({
       client_id:CLIENT_ID,
       callback:response => {
-        if (response?.credential)
-          void authorize(response.credential).catch(err => {
-            const el = panel?.querySelector('span');
-            if (el) el.textContent='Xác thực ảnh thất bại: '+err.message;
-          });
+        if(response?.credential)void authorize(response.credential).catch(err=>{
+          const el=panel?.querySelector('span');
+          if(el)el.textContent='Xác thực Google thất bại: '+err.message;
+        });
       },
       auto_select:false
     });
-    signInInitialized = true;
-    window.google.accounts.id.renderButton(slot, {
-      type:'standard',theme:'outline',size:'medium',text:'signin_with',shape:'pill'
-    });
-    slot.dataset.ready = '1';
+    signInInitialized=true;
+    return true;
+  }
+  function showGoogleFallback() {
+    if(ready)return;
+    const slot=document.getElementById('vlMediaSignInButton');
+    if(!slot)return;
+    slot.style.display='flex';
+    slot.style.justifyContent='center';
+    if(slot.dataset.ready==='1')return;
+    if(!initializeMediaAuth()) {
+      setTimeout(showGoogleFallback,450);
+      return;
+    }
+    try {
+      window.google.accounts.id.renderButton(slot,{
+        type:'standard',theme:'outline',size:'large',
+        text:'continue_with',shape:'rectangular',width:240,locale:'vi'
+      });
+      slot.dataset.ready='1';
+    }catch(err){
+      console.warn('[QL Ảnh] Không thể mở nút Google dự phòng',err);
+    }
+  }
+  function requestMediaPermission(){
+    // A custom "Cho phép" button requests the standard Google One Tap
+    // authorization. iOS Web Apps may block One Tap, so fall back to the
+    // official Google Identity Services button instead of faking a login.
+    const sdk=window.google?.accounts?.id;
+    if(!sdk?.prompt || !initializeMediaAuth()){
+      showGoogleFallback();
+      return;
+    }
+    try {
+      sdk.prompt(notification=>{
+        if(notification?.isNotDisplayed?.() || notification?.isSkippedMoment?.())
+          showGoogleFallback();
+      });
+      // Some Safari/PWA versions never dispatch the moment callback.
+      setTimeout(()=>{if(!ready)showGoogleFallback();},1700);
+    }catch(error){
+      console.warn('[QL Ảnh] Google xác thực qua nút Cho phép:',error);
+      showGoogleFallback();
+    }
   }
   // Ownership APIs require the verified cookie scoped to /api, while old
   // sessions may still have the legacy /api/media-only cookie.
@@ -153,7 +194,8 @@
     if (!element) return;
     element.hidden = false;
     element.style.display = 'flex';
-    renderGoogleButton();
+    // The primary action is Cho phép; official Google button appears only
+    // when the iOS/Google consent prompt cannot be displayed.
   }
   async function checkSession(showWhenMissing = false) {
     try {

@@ -450,3 +450,28 @@ img[src*="vlimage"] {
         padding: 7px 10px;
     }
 }
+
+/* Main Google login (not the separate media permission prompt). */
+#auth-overlay #google-login-btn {
+  min-height: 48px;
+  width: 100%;
+  max-width: 300px;
+  margin-left: auto;
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#auth-overlay .vl-google-login-wide {
+  min-width: min(240px, 100%);
+}
+#auth-overlay #google-login-btn iframe {
+  max-width: min(100%, 288px) !important;
+}
+#vlMediaAllowButton:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 3px;
+}
+@media (max-width: 390px) {
+  #auth-overlay #google-login-btn { max-width: calc(100vw - 85px); }
+}

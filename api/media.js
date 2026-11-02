@@ -150,6 +150,13 @@ export default async function handler(req, res) {
     if (origin && new URL(origin).host !== host) return error(res,403,'Nguồn đăng nhập không hợp lệ');
     let body = req.body || {};
     if (typeof body === 'string') { try {body=JSON.parse(body)}catch(_){body={}} }
+    if (body.action === 'logout') {
+      res.setHeader('Set-Cookie',[
+        COOKIE+'=; HttpOnly; Secure; SameSite=Strict; Path=/api; Max-Age=0',
+        COOKIE+'=; HttpOnly; Secure; SameSite=Strict; Path=/api/media; Max-Age=0'
+      ]);
+      return res.status(200).json({success:true, message:'Đã đăng xuất khỏi phiên media'});
+    }
     try {
       const identity = await verifyGoogleIdToken(body.credential);
       await callScript('verifyUser',{email:identity.email});
