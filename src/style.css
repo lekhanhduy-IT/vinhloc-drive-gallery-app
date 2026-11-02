@@ -492,3 +492,13 @@ img[src*="vlimage"] {
   min-height: 46px !important;
   padding: 10px 22px !important;
 }
+
+/* Google-branded label must never intercept the real iframe button.
+   Geometry is synced to iframe dimensions by login-button.js. */
+#auth-overlay .vl-google-readable-label,
+#vlSharedGoogleSignin .vl-google-readable-label {
+  pointer-events:none !important;
+  touch-action:auto;
+}
+#google-login-btn iframe,
+#vlSharedGoogleSignin iframe { pointer-events:auto !important; }

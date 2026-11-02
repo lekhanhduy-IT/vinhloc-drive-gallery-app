@@ -112,7 +112,7 @@ export default async function handler(req,res) {
       const id=String(body.folderId||'');
       if(!idPattern.test(id))return respond(res,400,'ID thư mục không hợp lệ');
       await folder(id);
-      return respond(res,200,'Liên kết chia sẻ',{shareGrant:signFolderGrant(id),root:id});
+      return respond(res,200,'Liên kết chia sẻ',{shareGrant:await signFolderGrant(id,await serverDriveToken()),root:id});
     }
     if(action==='scopeCheck'){
       const id=String(body.id||'');

@@ -8,6 +8,7 @@ const CLIENT_ID = '1034177686409-1fhm0m0tqmf58qjj1p0r2ifo018eh8o2.apps.googleuse
 const SHARED_DRIVE_ID = '0AMLRHzF05fTFUk9PVA';
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx3xI-bNWfeffsEH-iIc0yYfF9bHYvAiKZKWIfco6j7Z7GOtOAv7Q8WE1_y9xjen7c/exec';
 const COOKIE = 'vl_verified_media';
+const SHARE_COOKIE='vl_share_scope';
 const MAX_IMAGE = 40 * 1024 * 1024;
 const MAX_VIDEO = 1024 * 1024 * 1024;
 let keys = null, keysUntil = 0;
@@ -99,10 +100,10 @@ function readSignedSession(value) {
   return data;
 }
 
-function cookie(req) {
-  const raw = String(req.headers.cookie || '').split(';').map(x=>x.trim());
-  const item = raw.find(x=>x.startsWith(COOKIE+'='));
-  return item ? item.slice(COOKIE.length + 1) : '';
+function cookie(req,name=COOKIE) {
+  const raw=String(req.headers.cookie||'').split(';').map(x=>x.trim());
+  const item=raw.find(x=>x.startsWith(name+'='));
+  return item?item.slice(name.length+1):'';
 }
 async function callScript(action, payload={}) {
   const response = await request(SCRIPT_URL, {
@@ -118,14 +119,31 @@ async function requireAccount(req) {
   const stored=cookie(req);
   const sealed=readSignedSession(stored);
   if (sealed) return sealed;
-  const identity = await verifyGoogleIdToken(stored);
-  const cacheKey = identity.sub + ':' + identity.email;
-  if ((authorized.get(cacheKey) || 0) < Date.now()) {
-    // Only email extracted from a verified, Google-signed ID token is checked.
-    await callScript('verifyUser', {email:identity.email});
-    if (authorized.size > 300) authorized.clear();
-    authorized.set(cacheKey, Date.now() + 90000);
+  const identity=await verifyGoogleIdToken(stored);
+  // If the deployment lacks a signing key, Google ID tokens remain verified
+  // on every request; the separate HttpOnly scope cookie retains the grant.
+  const share=cookie(req,SHARE_COOKIE);
+  if(share){
+    const grant=await readFolderGrant(share,await driveToken());
+    if(!grant)throw new Error('Liên kết chia sẻ đã hết hạn hoặc bị thu hồi');
+    identity.scopeRoot=grant.root;
+    const memberKey='member:'+identity.sub+':'+identity.email;
+    const memberState=authorized.get(memberKey);
+    if(memberState?.until>Date.now())identity.member=memberState.member;
+    else {
+      try {await callScript('verifyUser',{email:identity.email});identity.member=true;}
+      catch(_){identity.member=false;}
+      authorized.set(memberKey,{until:Date.now()+90000,member:identity.member});
+    }
+    return identity;
   }
+  const cacheKey=identity.sub+':'+identity.email;
+  if((authorized.get(cacheKey)||0)<Date.now()){
+    await callScript('verifyUser',{email:identity.email});
+    if(authorized.size>300)authorized.clear();
+    authorized.set(cacheKey,Date.now()+90000);
+  }
+  identity.member=true;
   return identity;
 }
 async function driveToken() {
@@ -181,13 +199,14 @@ export default async function handler(req, res) {
     if (body.action === 'logout') {
       res.setHeader('Set-Cookie',[
         COOKIE+'=; HttpOnly; Secure; SameSite=Strict; Path=/api; Max-Age=0',
-        COOKIE+'=; HttpOnly; Secure; SameSite=Strict; Path=/api/media; Max-Age=0'
+        COOKIE+'=; HttpOnly; Secure; SameSite=Strict; Path=/api/media; Max-Age=0',
+        SHARE_COOKIE+'=; HttpOnly; Secure; SameSite=Strict; Path=/api; Max-Age=0'
       ]);
       return res.status(200).json({success:true, message:'Đã đăng xuất khỏi phiên media'});
     }
     try {
       const identity = await verifyGoogleIdToken(body.credential);
-      const grant=body.shareGrant ? readFolderGrant(body.shareGrant):null;
+      const grant=body.shareGrant ? await readFolderGrant(body.shareGrant,await driveToken()):null;
       if(body.shareGrant && !grant)return error(res,403,'Liên kết chia sẻ không hợp lệ hoặc đã hết hạn');
       if(grant){
         const token=await driveToken();
@@ -212,7 +231,8 @@ export default async function handler(req, res) {
       const session=sealSession(identity) || body.credential;
       res.setHeader('Set-Cookie',[
         COOKIE+'=; HttpOnly; Secure; SameSite=Strict; Path=/api/media; Max-Age=0',
-        COOKIE+'='+session+'; HttpOnly; Secure; SameSite=Strict; Path=/api; Max-Age='+life
+        COOKIE+'='+session+'; HttpOnly; Secure; SameSite=Strict; Path=/api; Max-Age='+life,
+        SHARE_COOKIE+'='+(grant?body.shareGrant:'')+'; HttpOnly; Secure; SameSite=Strict; Path=/api; Max-Age='+(grant?life:0)
       ]);
       authorized.set(identity.sub+':'+identity.email,Date.now()+90000);
       return res.status(200).json({success:true, email:identity.email,expiresAt:identity.exp,scopeRoot:identity.scopeRoot||null,isMember:identity.member===true});

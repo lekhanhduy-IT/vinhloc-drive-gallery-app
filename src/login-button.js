@@ -1,61 +1,85 @@
-/* Branded pill labels over the genuine Google Identity Services buttons.
-   The visible label never receives pointer events: the real GIS iframe
-   underneath still handles clicks and account consent securely. */
+/* The branded "Đăng nhập" pill exactly covers Google's OWN clickable iframe.
+   Never draw a larger visual button than the real Google Identity Services
+   control, and never hijack or synthesize a click on the Google widget. */
 (() => {
   'use strict';
   if(window.__vlGoogleLargeButtonInstalled)return;
   window.__vlGoogleLargeButtonInstalled=true;
-  const ids=new Map([['google-login-btn','Đăng nhập'],['vlSharedGoogleSignin','Đăng nhập']]);
-  let patched=null,original=null;
-  function config(options){
-    const width=Math.max(220,Math.min(290,(innerWidth||390)-88));
+  const labels=new Map([
+    ['google-login-btn','Đăng nhập'],
+    ['vlSharedGoogleSignin','Đăng nhập']
+  ]);
+  let patched=null;
+  function preferredWidth(){
+    return Math.max(210,Math.min(290,(window.innerWidth||390)-88));
+  }
+  function config(options={}){
     return {...options,type:'standard',size:'large',shape:'pill',
       theme:'outline',text:'signin_with',logo_alignment:'left',
-      width,locale:'vi'};
+      width:preferredWidth(),locale:'vi'};
   }
-  function skin(target,label){
-    if(!target)return;
-    target.classList.add('vl-google-login-wide');
-    target.style.position='relative';
-    target.style.minHeight='46px';
-    target.style.maxWidth='290px';
-    target.style.width='100%';
-    if(target.querySelector('.vl-google-readable-label'))return;
-    const overlay=document.createElement('div');
-    overlay.className='vl-google-readable-label';
-    overlay.style.cssText='position:absolute;inset:1px;z-index:5;border-radius:999px;background:#fff;border:1px solid #d1d5db;display:flex;justify-content:center;align-items:center;gap:11px;color:#202124;font:700 16px system-ui;pointer-events:none;white-space:nowrap;';
-    const img=document.createElement('img');
-    img.src='https://www.gstatic.com/images/branding/product/1x/googleg_48dp.png';
-    img.alt='';img.style.cssText='width:22px;height:22px;object-fit:contain;';
-    const text=document.createElement('span');text.textContent=label;
-    overlay.append(img,text);target.appendChild(overlay);
+  function skin(node,label){
+    if(!node)return;
+    const iframe=node.querySelector('iframe');
+    if(!iframe||!iframe.isConnected)return;
+    // Use the iframe as the only source of truth for the clickable geometry.
+    // A label wider/taller than the iframe would look clickable but be inert.
+    const width=iframe.offsetWidth||iframe.getBoundingClientRect().width;
+    const height=iframe.offsetHeight||iframe.getBoundingClientRect().height;
+    if(!width||!height)return;
+    node.style.position='relative';
+    node.style.boxSizing='border-box';
+    node.style.width=width+'px';
+    node.style.minHeight='0px';
+    node.style.height=height+'px';
+    node.style.maxWidth='none';
+    node.style.overflow='visible';
+    iframe.style.pointerEvents='auto';
+    const left=iframe.offsetLeft||0,top=iframe.offsetTop||0;
+    let cover=node.querySelector('.vl-google-readable-label');
+    if(!cover){
+      cover=document.createElement('span');
+      cover.className='vl-google-readable-label';
+      cover.setAttribute('aria-hidden','true');
+      cover.style.cssText='position:absolute;z-index:2;display:flex;align-items:center;justify-content:center;gap:10px;border-radius:999px;background:#fff;border:1px solid #dadce0;box-sizing:border-box;color:#202124;font:700 16px system-ui;pointer-events:none!important;white-space:nowrap;user-select:none;-webkit-user-select:none;';
+      const logo=document.createElement('img');
+      logo.src='https://www.gstatic.com/images/branding/product/1x/googleg_48dp.png';
+      logo.alt='';logo.style.cssText='width:22px;height:22px;object-fit:contain;pointer-events:none!important;';
+      const text=document.createElement('span');
+      text.textContent=label;
+      text.style.pointerEvents='none';
+      cover.append(logo,text);
+      node.appendChild(cover);
+    }
+    cover.style.left=left+'px';
+    cover.style.top=top+'px';
+    cover.style.width=width+'px';
+    cover.style.height=height+'px';
+    node.dataset.vlGoogleLabelReady='1';
   }
   function install(){
     const sdk=window.google?.accounts?.id;
     if(typeof sdk?.renderButton!=='function')return false;
-    const fn=sdk.renderButton;
-    if(fn===patched || fn.__vlLabelPatch)return true;
-    original=fn;
-    const wrap=function(element,opts){
-      const target=typeof element==='string'?document.querySelector(element):element;
-      const label=ids.get(target?.id);
-      if(!label)return fn.call(this,element,opts);
-      const result=fn.call(this,target,config(opts));
-      // The iframe may appear asynchronously after the render call.
-      setTimeout(()=>skin(target,label),50);
-      return result;
-    };
-    wrap.__vlLabelPatch=true;
-    try{sdk.renderButton=patched=wrap;return true;}catch(_){return false;}
+    const base=sdk.renderButton;
+    if(base===patched || base.__vlClickAreaPatched)return true;
+    function wrapper(target,options){
+      const node=typeof target==='string'?document.querySelector(target):target;
+      const label=labels.get(node?.id);
+      if(!label)return base.call(this,target,options);
+      const out=base.call(this,node,config(options));
+      // The Google iframe is created asynchronously on some iOS versions.
+      setTimeout(()=>skin(node,label),80);
+      return out;
+    }
+    wrapper.__vlClickAreaPatched=true;
+    try{sdk.renderButton=patched=wrapper;return true;}catch(_){return false;}
   }
   install();
-  // GIS can render the iframe asynchronously or after account selection.
-  // Reapply only the harmless visual label, never reinitialize Google auth.
   setInterval(()=>{
     install();
-    for(const [id,label] of ids){
+    for(const [id,label] of labels){
       const node=document.getElementById(id);
       if(node?.querySelector('iframe'))skin(node,label);
     }
-  },750);
+  },700);
 })();
