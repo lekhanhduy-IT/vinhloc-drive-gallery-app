@@ -154,7 +154,7 @@
     if(!ID_PATTERN.test(id) || id.startsWith('temp_'))
       throw new Error('Mục chưa có ID thật; hãy đợi tạo xong trước khi xóa');
     const parent=parentId || parentFor(id);
-    if (String(localStorage.getItem('vinhloc_authenticated_email')||'').toLowerCase() === 'admin@tudonghoavinhloc.com') {
+    if (!window.vlShareScope && String(localStorage.getItem('vinhloc_authenticated_email')||'').toLowerCase() === 'admin@tudonghoavinhloc.com') {
       await api('delete',{id,type:type==='folder'?'folder':'file'});
     } else {
       const response=await fetch('/api/owned-files',{

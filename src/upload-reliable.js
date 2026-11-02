@@ -37,6 +37,9 @@
     return data;
   }
   function isAdminClient() {
+    // A shared-link session always uses scope-checked writes, even if this
+    // browser previously had an internal/admin account signed in.
+    if(window.vlShareScope)return false;
     return String(localStorage.getItem('vinhloc_authenticated_email')||'').toLowerCase() === 'admin@tudonghoavinhloc.com';
   }
   async function ownApi(action, params = {}) {

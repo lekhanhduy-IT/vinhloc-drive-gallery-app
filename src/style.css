@@ -475,3 +475,20 @@ img[src*="vlimage"] {
 @media (max-width: 390px) {
   #auth-overlay #google-login-btn { max-width: calc(100vw - 85px); }
 }
+
+/* Google authorization controls: compact, accessible pill geometry. */
+#google-login-btn, #vlSharedGoogleSignin {
+  position: relative;
+  max-width: 290px;
+  min-height: 46px;
+  border-radius: 999px;
+}
+#google-login-btn .vl-google-readable-label,
+#vlSharedGoogleSignin .vl-google-readable-label {
+  border-radius: 999px !important;
+}
+#vlMediaAllowButton {
+  border-radius: 999px !important;
+  min-height: 46px !important;
+  padding: 10px 22px !important;
+}

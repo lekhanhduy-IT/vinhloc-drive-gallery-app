@@ -39,11 +39,13 @@
     const result = await fetch(API, {
       method:'POST', credentials:'same-origin',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({credential})
+      body:JSON.stringify({credential,...(window.vlShareScope?.grant?{shareGrant:window.vlShareScope.grant}:{})})
     });
     const data = await result.json();
     if (!result.ok || data.success !== true)
       throw new Error(data.message || 'Không thể xác thực quyền xem ảnh');
+    if(window.vlShareScope && data.scopeRoot!==window.vlShareScope.root)
+      throw new Error('Phiên Google không đúng thư mục được chia sẻ');
     ready = true;
     proxyVersion++;
     window.vlMediaProxyReady = true;
@@ -101,9 +103,14 @@
     const permit = document.createElement('button');
     permit.type = 'button';
     permit.id = 'vlMediaAllowButton';
-    permit.textContent = 'Cho phép';
+    const googleLogo=document.createElement('img');
+    googleLogo.src='https://www.gstatic.com/images/branding/product/1x/googleg_48dp.png';
+    googleLogo.alt='Google';
+    googleLogo.style.cssText='height:21px;width:21px;object-fit:contain;';
+    const label=document.createElement('span');label.textContent='Cho phép';
+    permit.append(googleLogo,label);
     permit.setAttribute('aria-label','Cho phép xác thực Google');
-    permit.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;min-width:126px;min-height:44px;padding:10px 20px;border:0;border-radius:11px;background:#2563eb;color:#fff;font:700 15px system-ui;cursor:pointer;touch-action:manipulation;';
+    permit.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;min-width:126px;min-height:44px;padding:10px 20px;border:0;border-radius:999px;background:white;color:#1f2937;gap:10px;border:1px solid #d1d5db;font:700 15px system-ui;cursor:pointer;touch-action:manipulation;';
     permit.addEventListener('click',requestMediaPermission);
     panel.appendChild(permit);
     const slot = document.createElement('div');
@@ -205,6 +212,9 @@
       if (!response.ok) throw new Error('Chưa có phiên');
       const data = await response.json();
       if (data.success !== true) throw new Error('Chưa xác thực');
+      if(window.vlShareScope &&
+         (!window.vlShareScope.ready() || data.scopeRoot!==window.vlShareScope.root))
+        throw new Error('Phiên xem ảnh không thuộc thư mục được chia sẻ');
       if (!ready) proxyVersion++;
       ready=true;window.vlMediaProxyReady=true;
       hidePanel();scheduleReconcile();

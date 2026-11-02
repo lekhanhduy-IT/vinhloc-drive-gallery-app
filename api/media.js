@@ -1,5 +1,6 @@
 import { createPublicKey, createHmac, timingSafeEqual, verify as verifySignature } from 'node:crypto';
 import { Readable } from 'node:stream';
+import {readFolderGrant} from '../lib/share-capability.js';
 
 // A first-party media gateway: Google ID token -> Shared Drive membership ->
 // Drive API with the app service token. No public Drive permissions, no URL tokens.
@@ -74,7 +75,10 @@ function sealSession(identity) {
   const key = signingKey();
   if (!key) return null;
   const payload = Buffer.from(JSON.stringify({
-    sub:identity.sub,email:identity.email,exp:Math.min(identity.exp,Math.floor(Date.now()/1000)+3300)
+    sub:identity.sub,email:identity.email,
+    ...(identity.scopeRoot?{scopeRoot:identity.scopeRoot}:{}),
+    member:identity.member===true,
+    exp:Math.min(identity.exp,Math.floor(Date.now()/1000)+3300)
   })).toString('base64url');
   const signature = createHmac('sha256',key).update(payload).digest('base64url');
   return 'vl1.'+payload+'.'+signature;
@@ -131,6 +135,30 @@ async function driveToken() {
   driveAuth = result.token; driveAuthUntil = Date.now() + 60000;
   return driveAuth;
 }
+async function scopedPath(targetId,scopeRoot,token){
+  if(!scopeRoot)return true;
+  const pattern=/^[A-Za-z0-9_-]{10,180}$/;
+  if(!pattern.test(String(targetId||'')))return false;
+  const visited=new Set();
+  let cursor=targetId;
+  for(let depth=0;depth<45;depth++){
+    if(cursor===scopeRoot)return true;
+    if(visited.has(cursor))return false;
+    visited.add(cursor);
+    const q='?supportsAllDrives=true&fields=id,parents,driveId,trashed';
+    const response=await request('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(cursor)+q,{
+      headers:{Authorization:'Bearer '+token}
+    });
+    if(!response.ok)return false;
+    const meta=await response.json();
+    if(meta.trashed||meta.driveId!==SHARED_DRIVE_ID)return false;
+    const parents=meta.parents||[];
+    if(parents.includes(scopeRoot))return true;
+    if(parents.length!==1)return false;
+    cursor=parents[0];
+  }
+  return false;
+}
 function filenameSafe(s) { return String(s||'file').replace(/[^\p{L}\p{N}._ -]/gu,'_').slice(0,120); }
 export const config = {maxDuration: 60};
 // Reuse this verified, signed HttpOnly session for ownership-protected writes.
@@ -159,7 +187,27 @@ export default async function handler(req, res) {
     }
     try {
       const identity = await verifyGoogleIdToken(body.credential);
-      await callScript('verifyUser',{email:identity.email});
+      const grant=body.shareGrant ? readFolderGrant(body.shareGrant):null;
+      if(body.shareGrant && !grant)return error(res,403,'Liên kết chia sẻ không hợp lệ hoặc đã hết hạn');
+      if(grant){
+        const token=await driveToken();
+        const url='https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(grant.root)+
+          '?supportsAllDrives=true&fields=id,mimeType,driveId,trashed';
+        const raw=await request(url,{headers:{Authorization:'Bearer '+token}});
+        if(!raw.ok)return error(res,403,'Thư mục chia sẻ không tồn tại');
+        const folder=await raw.json();
+        if(folder.driveId!==SHARED_DRIVE_ID||folder.trashed||
+           folder.mimeType!=='application/vnd.google-apps.folder')
+          return error(res,403,'Thư mục chia sẻ không được cấp quyền');
+        identity.scopeRoot=grant.root;
+        try {
+          await callScript('verifyUser',{email:identity.email});
+          identity.member=true;
+        }catch(_) {identity.member=false;}
+      }else{
+        identity.member=true;
+        await callScript('verifyUser',{email:identity.email});
+      }
       const life = Math.min(3300, Math.max(1,identity.exp - Math.floor(Date.now()/1000) - 10));
       const session=sealSession(identity) || body.credential;
       res.setHeader('Set-Cookie',[
@@ -167,14 +215,14 @@ export default async function handler(req, res) {
         COOKIE+'='+session+'; HttpOnly; Secure; SameSite=Strict; Path=/api; Max-Age='+life
       ]);
       authorized.set(identity.sub+':'+identity.email,Date.now()+90000);
-      return res.status(200).json({success:true, email:identity.email,expiresAt:identity.exp});
+      return res.status(200).json({success:true, email:identity.email,expiresAt:identity.exp,scopeRoot:identity.scopeRoot||null,isMember:identity.member===true});
     } catch (e) { return error(res,401,'Không thể xác thực tài khoản: '+e.message); }
   }
   if (req.method !== 'GET') return error(res,405,'Phương thức không hỗ trợ');
   let identity;
   try { identity = await requireAccount(req); }
   catch (e) { return error(res,401,'Cần đăng nhập lại Google để xem ảnh: '+e.message); }
-  if (req.query.status === '1') return res.status(200).json({success:true,email:identity.email});
+  if (req.query.status === '1') return res.status(200).json({success:true,email:identity.email,scopeRoot:identity.scopeRoot||null,isMember:identity.member===true||!identity.scopeRoot});
   const id = req.query.fileId;
   if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{10,160}$/.test(id))
     return error(res,400,'ID tệp không hợp lệ');
@@ -196,6 +244,8 @@ export default async function handler(req, res) {
     // Never let the Apps Script owner's OAuth token access unrelated My Drive files.
     if (info.driveId !== SHARED_DRIVE_ID || info.trashed)
       return error(res,403,'Tệp không thuộc Shared Drive của QL Ảnh');
+    if(identity.scopeRoot && !await scopedPath(id,identity.scopeRoot,token))
+      return error(res,403,'Tệp nằm ngoài thư mục được chia sẻ');
     const mime=String(info.mimeType||'');
     const image=mime.startsWith('image/');
     const video=mime.startsWith('video/');

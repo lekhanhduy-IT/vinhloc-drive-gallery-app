@@ -5,7 +5,7 @@
   'use strict';
   const adminEmail='admin@tudonghoavinhloc.com';
   const email=()=>String(localStorage.getItem('vinhloc_authenticated_email')||'').toLowerCase();
-  const admin=()=>email()===adminEmail;
+  const admin=()=>!window.vlShareScope && email()===adminEmail;
   const current=()=>{try{return Array.isArray(currentDriveItems)?currentDriveItems:window.currentDriveItems||[];}catch(_){return window.currentDriveItems||[];}};
   const idsCache=new Map();
   let checkedFolder='',lastListSignature='',lastCheckError='',lastChecking=false;
@@ -139,6 +139,31 @@
       return;
     }
     menu.querySelector('.vl-own-locked')?.remove();
+    if(window.vlShareScope?.ready()){
+      const edit=document.createElement('button');
+      edit.type='button';
+      edit.className='vl-own-rename vinhloc-safe-item';
+      edit.style.cssText='display:flex!important;width:100%!important;padding:12px 18px!important;gap:12px!important;align-items:center!important;color:#2563eb!important;font-weight:700!important;';
+      const icon=document.createElement('i');icon.className='fas fa-pen';
+      const title=document.createElement('span');title.textContent='Đổi tên mục của tôi';
+      edit.append(icon,title);
+      edit.addEventListener('click',async event=>{
+        event.preventDefault();event.stopImmediatePropagation();
+        if(!can(id))return;
+        menu.classList.add('hidden');
+        const next=window.prompt('Đổi tên file/thư mục',nameOf(id));
+        if(next===null||!next.trim()||next===nameOf(id))return;
+        try {
+          const result=await api('rename',{id,name:next.trim()});
+          const obj=current().find(x=>x.id===id);
+          if(obj)obj.name=result.name;
+          if(typeof window.renderItems==='function')window.renderItems(current());
+          window.showToast?.('Đã đổi tên mục');
+        }catch(error){window.showToast?.(error.message,true);}
+      });
+      menu.querySelector('.vl-own-rename')?.remove();
+      menu.appendChild(edit);
+    }
     const button=document.createElement('button');
     button.type='button';
     button.className='vl-own-delete vinhloc-safe-item';
