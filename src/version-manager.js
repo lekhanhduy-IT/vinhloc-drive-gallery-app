@@ -5,7 +5,7 @@
   'use strict';
   if(window.__vlVersionManager)return;
   window.__vlVersionManager=true;
-  const RELEASE='3.1.0';
+  const RELEASE='3.1.1';
   const BUILD_KEY='vinhloc_deployed_build_v1';
   const OLD_VERSION='2.9.8'; // old obfuscated script.js still checks this tag
   const knownLegacy=localStorage.getItem('vinhloc_app_version');
@@ -19,7 +19,7 @@
   }
   function short(id){return String(id||'').slice(0,8);}
   function showVersion(data){
-    const label='Phiên bản '+data.version+' · '+short(data.build);
+    const label='Phiên bản '+data.version;
     if(label===shownVersion && document.getElementById('app-version-display')?.dataset.version===label)return;
     shownVersion=label;
     const subtitle=document.getElementById('version-subtitle');
