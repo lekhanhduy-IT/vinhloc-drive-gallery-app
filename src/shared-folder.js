@@ -202,9 +202,25 @@
     caption.style.cssText='font-size:14px;max-width:360px;line-height:1.5;';
     const slot=document.createElement('div');slot.id='vlSharedGoogleSignin';
     slot.style.cssText='position:relative;width:260px;height:48px;display:flex;align-items:center;justify-content:center;';
+    const help=document.createElement('p');
+    help.textContent='Nhấn Đăng nhập để chọn tài khoản Google. Nếu không hiện cửa sổ chọn tài khoản, hãy mở liên kết bằng Safari hoặc Chrome (không dùng trình duyệt bên trong ứng dụng nhắn tin).';
+    help.style.cssText='font-size:12px;line-height:1.5;max-width:340px;color:#e9e5ff;';
+    const copy=document.createElement('button');
+    copy.type='button';
+    copy.textContent='Sao chép liên kết để mở bằng Safari';
+    copy.style.cssText='font:600 13px system-ui;border:1px solid #ffffff8a;border-radius:999px;padding:10px 16px;background:transparent;color:white;cursor:pointer;min-height:44px;';
+    copy.addEventListener('click',async()=>{
+      try {
+        if(!navigator.clipboard?.writeText)throw Error('Clipboard unavailable');
+        await navigator.clipboard.writeText(location.href);
+        copy.textContent='Đã sao chép liên kết';
+      }catch(_) {
+        window.prompt('Sao chép liên kết rồi mở bằng Safari hoặc Chrome',location.href);
+      }
+    });
     const warning=document.createElement('p');warning.id='vlShareAuthMessage';
     warning.style.cssText='font-size:13px;max-width:350px;min-height:1.5em;color:#fdd;';
-    modal.append(icon,title,caption,slot,warning);
+    modal.append(icon,title,caption,slot,help,copy,warning);
     document.body.appendChild(modal);
     if(!grant){warning.textContent='Liên kết chia sẻ cũ chưa có mã xác minh. Vui lòng yêu cầu chủ thư mục tạo liên kết mới.';return;}
     let attempts=0;
@@ -236,10 +252,12 @@
           }catch(error){warning.textContent=error.message;}
           finally{authBusy=false;}
         },
-        auto_select:false
+        auto_select:false,
+        button_auto_select:false,
+        use_fedcm_for_button:false
       });
       sdk.renderButton(slot,{type:'standard',theme:'outline',size:'large',
-        shape:'pill',text:'signin_with',width:260,locale:'vi'});
+        shape:'pill',text:'signin',width:260,locale:'vi'});
     },150);
   }
   async function checkLogin(){

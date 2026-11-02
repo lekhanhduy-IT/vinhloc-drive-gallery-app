@@ -519,3 +519,26 @@ img[src*="vlimage"] {
   user-select: none !important;
   -webkit-user-select: none !important;
 }
+
+/* v3.1.4 – one native Google button, no overlaid imitation */
+#auth-overlay #google-login-btn,
+#vlSharedGoogleSignin {
+  width: min(290px, calc(100vw - 90px));
+  max-width: 100%;
+  height: auto;
+  min-height: 44px;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+}
+#vlSharedGoogleSignin { width: min(260px, calc(100vw - 90px)); }
+#google-login-btn .vl-google-readable-label,
+#vlSharedGoogleSignin .vl-google-readable-label {
+  display: none !important;
+}
+#google-login-btn iframe,
+#vlSharedGoogleSignin iframe {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
