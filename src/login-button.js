@@ -12,8 +12,8 @@
   const isShare=!!(params.get('shareId')&&params.get('shareType')==='folder');
   const targets=new Set(['google-login-btn','vlSharedGoogleSignin']);
   const options=element=>{
-    const max=element?.id==='vlSharedGoogleSignin'?260:290;
-    const w=Math.min(max,Math.max(210,(window.innerWidth||390)-90));
+    const max=260;
+    const w=Math.min(max,Math.max(180,(window.innerWidth||390)-90));
     return {type:'standard',theme:'outline',size:'large',shape:'pill',
       text:'signin',width:w,logo_alignment:'left',locale:'vi'};
   };
@@ -39,7 +39,7 @@
          config.callback===window.handleCredentialResponse){
         return;
       }
-      return initialize({...config,auto_select:false,button_auto_select:false});
+      return initialize({...config,auto_select:false,button_auto_select:false,use_fedcm_for_button:false});
     };
 
     function renderNative(target,requested){
@@ -61,7 +61,7 @@
       element.replaceChildren();
       element.classList.add('vl-native-google-signin');
       const style=element.style;
-      style.width='min(290px, calc(100vw - 90px))';
+      style.width='min(260px, calc(100vw - 90px))';
       style.maxWidth='100%';
       style.minHeight='44px';
       style.height='auto';
