@@ -542,3 +542,21 @@ img[src*="vlimage"] {
   opacity: 1 !important;
   transform: none !important;
 }
+
+/* v3.1.5 – match the shared-folder native Google sign-in geometry. */
+#auth-overlay #google-login-btn,
+#vlSharedGoogleSignin {
+  width: min(260px, calc(100vw - 90px)) !important;
+  max-width: 100% !important;
+  min-height: 48px !important;
+  height: auto !important;
+  transform: none !important;
+  overflow: visible !important;
+  contain: none !important;
+}
+#auth-overlay #google-login-btn iframe,
+#vlSharedGoogleSignin iframe {
+  transform: none !important;
+  max-width: 100% !important;
+  pointer-events: auto !important;
+}
