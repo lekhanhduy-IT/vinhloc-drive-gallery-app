@@ -80,23 +80,10 @@
       block.id='vlOwnedControls';
       block.className='vinhloc-safe-item';
       block.style.cssText='display:block!important;position:relative!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;width:100%!important;padding:8px!important;margin:0!important;';
-      block.addEventListener('click',event=>{
-        const target=event.target.closest?.('button[data-vl-owner-action]');
-        if(!target || target.disabled)return;
-        const action=target.dataset.vlOwnerAction;
-        if(!action || action==='none')return;
-        event.preventDefault();
-        event.stopPropagation();
-        if(action==='auth'){
-          void window.vlMediaEnsureAuth?.();
-        }else if(action==='delete'){
-          void menuDelete();
-        }else if(action==='all'||action==='folder'||action==='file'||action.startsWith('ext:')){
-          choose(action);
-        }
-      });
       menu.appendChild(block);
     }
+    // Old patches rebuild #headerDropdown with innerHTML +=, which
+    // destroys element listeners. Header actions are handled on window capture.
     const all=current();
     const owned=eligible();
     const chosen=owned.filter(x=>selected().has(x.id));
@@ -142,7 +129,9 @@
     for(const item of items)if(allChosen)set.delete(item.id);else set.add(item.id);
     if(typeof window.renderItems==='function')window.renderItems(current());
     if(typeof window.buildHeaderMenu==='function')window.buildHeaderMenu();
-    showHeader();
+    // The legacy builder may replace the complete header menu subtree.
+    // Rebuild the owner section immediately from the persistent Set.
+    renderHeaderBox();
   }
   async function menuDelete(){
     const candidates=eligible().filter(x=>selected().has(x.id));
@@ -191,6 +180,11 @@
       },true);
       menu.appendChild(actions);
     }
+    // Legacy Patch 60 sets display:none!important on unknown menu children.
+    // Restore the owner action container AFTER its legacy filter has run.
+    actions.style.setProperty('display','block','important');
+    actions.style.setProperty('visibility','visible','important');
+    actions.style.setProperty('pointer-events','auto','important');
     const allowed=can(id);
     const rename=actions.querySelector('[data-vl-owned="rename"]');
     const remove=actions.querySelector('[data-vl-owned="delete"]');
@@ -203,13 +197,47 @@
     if(remove){
       // Only show Xóa for the verified uploader/creator, for both images
       // and folders. No edit/delete action is shown for another account.
-      remove.style.display=allowed?'flex':'none';
+      remove.style.setProperty('display',allowed?'flex':'none','important');
       remove.disabled=!allowed;
       remove.title=allowed?'Xóa mục do tài khoản này tải lên hoặc tạo':'';
     }
     if(!idsCache.has(id)||Date.now()-idsCache.get(id).at>=TTL)
       void checkIds([{id}]);
   }
+  // Delegation at WINDOW capture survives menu.innerHTML replacement and
+  // bypasses legacy document click handlers that hide the menu too early.
+  // Only our own data-marked controls are intercepted; native menu items
+  // and third-party Google buttons are left untouched.
+  window.addEventListener('click',event=>{
+    const button=event.target?.closest?.('#headerDropdown [data-vl-owner-action]');
+    if(!button || button.disabled || !button.isConnected)return;
+    const action=button.dataset.vlOwnerAction;
+    if(!action || action==='none')return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if(action==='auth'){
+      void window.vlMediaEnsureAuth?.();
+    }else if(action==='delete'){
+      void menuDelete();
+    }else if(action==='all'||action==='folder'||action==='file'||action.startsWith('ext:')){
+      choose(action);
+    }
+  },true);
+
+  // Item menus may be filtered *after* the legacy toggle function returns.
+  // Recheck in a microtask on every three-dot click, even if a later patch
+  // has replaced toggleItemMenu. No timer or repeated API calls are needed.
+  window.addEventListener('click',event=>{
+    const trigger=event.target?.closest?.('button[onclick*="toggleItemMenu"]');
+    if(!trigger)return;
+    const match=trigger.getAttribute('onclick')?.match(/toggleItemMenu\(['"]([A-Za-z0-9_-]{10,180})['"]/);
+    if(!match)return;
+    const id=match[1];
+    queueMicrotask(()=>{
+      const menu=document.getElementById('menu-'+id);
+      if(menu&&!menu.classList.contains('hidden'))refreshMenu(menu);
+    });
+  },true);
   // Selection is a harmless UI action: permit highlighting any visible
   // file/folder. Ownership restrictions apply only when executing a protected
   // rename/delete operation (enforced again by /api/owned-files).
