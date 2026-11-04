@@ -112,7 +112,7 @@
   function isOpen(){return !!document.querySelector('#headerDropdown:not(.hidden)');}
   async function checkIds(items,force=false){
     if(admin())return;
-    if(!await ensureSession(force)){lastChecking=false;showHeader();return;}
+    if(!await ensureSession(false)){lastChecking=false;showHeader();return;}
     const epoch=sessionEpoch;
     const fresh=items.filter(item=>item.id && !String(item.id).startsWith('temp_') &&
       !pendingIds.has(item.id) &&
