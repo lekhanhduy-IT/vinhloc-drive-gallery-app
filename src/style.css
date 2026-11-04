@@ -504,3 +504,18 @@ img[src*="vlimage"] {
   outline: 3px solid #93c5fd;
   outline-offset: 3px;
 }
+
+/* Header menu must never be clipped by the delayed decoration patch.
+   Restrict the override to the actual app header, not modal headers. */
+header.vl-header-menu-host {
+  overflow: visible !important;
+  position: relative !important;
+  z-index: 999999 !important;
+}
+header.vl-header-menu-host #headerDropdownContainer {
+  position: relative !important;
+  z-index: 9999999 !important;
+}
+header.vl-header-menu-host #headerDropdown {
+  z-index: 99999999 !important;
+}
