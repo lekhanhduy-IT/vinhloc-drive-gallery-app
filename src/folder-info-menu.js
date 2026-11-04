@@ -61,7 +61,13 @@
     for(const menu of document.querySelectorAll('.item-action-menu[id^="menu-"]:not(.hidden)'))
       restore(menu);
   }
-  document.addEventListener('click',()=>setTimeout(refresh,0),true);
-  setInterval(refresh,1000);
+  // Decorate before the three-dot menu is painted, not one second later.
   window.vlRestoreFolderInfoMenu=restore;
+  if (window.vlMenuController) {
+    window.vlMenuController.onItem(({ menu }) => restore(menu));
+    window.vlMenuController.refreshVisible();
+  } else {
+    // Fallback if the coordinator could not be loaded.
+    document.addEventListener('click', () => queueMicrotask(refresh), true);
+  }
 })();
