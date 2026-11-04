@@ -23,8 +23,10 @@
     const guard=function(items,isSearchMode=false,...rest) {
       const folderId=currentFolder();
       const batch=batches.get(folderId);
+      const list=document.getElementById('fileList');
       if(batch?.active && batch.initialPaintDone && !isSearchMode &&
-         document.getElementById('fileList')?.dataset.vlRenderedFolder===folderId) {
+         list?.dataset.vlRenderedFolder===folderId &&
+         list.childElementCount>0) {
         // During transfer, the real cache is still updated by caller. Only
         // the destructive full DOM re-render is suppressed.
         return;
@@ -47,7 +49,7 @@
     let batch=batches.get(folderId);
     const append=!!(batch?.active && batch.initialPaintDone &&
       currentFolder()===folderId &&
-      list?.dataset.vlRenderedFolder===folderId);
+      list?.dataset.vlRenderedFolder===folderId && list.childElementCount>0);
     if(!batch){
       batch={folderId,active:true,groups:0,initialPaintDone:false,
         ids:new Set(),start:Date.now(),progress:new Map()};
