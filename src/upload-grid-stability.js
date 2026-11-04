@@ -3,11 +3,14 @@
 (() => {
   'use strict';
   if (window.vlUploadGrid) return;
-  let batch=null;
+  // Each folder keeps its own active upload state. Navigating between
+  // folders must not replace the state of a different folder's queue.
+  const batches=new Map();
+  const folderOfTempId=new Map();
   let installed=null;
   const cleanupUrls=new Set();
   const pendingUrls=new Set();
-  let activeGroups=0;
+
   const currentFolder=()=>{
     try { return typeof currentFolderId!=='undefined' ? currentFolderId : window.currentFolderId; }
     catch(_) {return window.currentFolderId;}
@@ -18,9 +21,10 @@
     const current=window.renderItems;
     if(typeof current!=='function'||current===installed||current.__vlStableUploadGuard)return;
     const guard=function(items,isSearchMode=false,...rest) {
-      if(batch?.active && batch.initialPaintDone &&
-         currentFolder()===batch.folderId && !isSearchMode &&
-         document.getElementById('fileList')?.dataset.vlRenderedFolder===batch.folderId) {
+      const folderId=currentFolder();
+      const batch=batches.get(folderId);
+      if(batch?.active && batch.initialPaintDone && !isSearchMode &&
+         document.getElementById('fileList')?.dataset.vlRenderedFolder===folderId) {
         // During transfer, the real cache is still updated by caller. Only
         // the destructive full DOM re-render is suppressed.
         return;
@@ -30,8 +34,7 @@
         const list=document.getElementById('fileList');
         if(list)list.dataset.vlRenderedFolder=currentFolder()||'';
       }
-      if(batch?.active && !batch.initialPaintDone &&
-         currentFolder()===batch.folderId && !isSearchMode)batch.initialPaintDone=true;
+      if(batch?.active && !isSearchMode)batch.initialPaintDone=true;
       return result;
     };
     guard.__vlStableUploadGuard=true;
@@ -41,16 +44,19 @@
   function begin(folderId,items){
     install();
     const list=document.getElementById('fileList');
+    let batch=batches.get(folderId);
     const append=!!(batch?.active && batch.initialPaintDone &&
-      currentFolder()===folderId && batch.folderId===folderId &&
+      currentFolder()===folderId &&
       list?.dataset.vlRenderedFolder===folderId);
-    if(!batch || !batch.active || batch.folderId!==folderId){
-      batch={folderId,active:true,initialPaintDone:false,
+    if(!batch){
+      batch={folderId,active:true,groups:0,initialPaintDone:false,
         ids:new Set(),start:Date.now(),progress:new Map()};
+      batches.set(folderId,batch);
     }
-    activeGroups++;
+    batch.groups++;
     for(const item of items){
       batch.ids.add(item.tempId);
+      folderOfTempId.set(item.tempId,folderId);
       if(item.tempUrl)pendingUrls.add(item.tempUrl);
     }
     return append;
@@ -213,8 +219,11 @@
       preloader.src=window.vlMediaProxyReady?
         '/api/media?fileId='+encodeURIComponent(newId)+'&variant=thumb':thumb;
     }
+    const parent=folderOfTempId.get(tempId);
+    const batch=batches.get(parent);
     batch?.ids.delete(tempId);
     batch?.progress.set(newId,'success');
+    folderOfTempId.delete(tempId);
     return true;
   }
   function release(url){
@@ -226,30 +235,36 @@
   function drop(id){
     const card=getCard(id);
     if(card)card.remove();
-    batch?.ids.delete(id);
+    const parent=folderOfTempId.get(id);
+    batches.get(parent)?.ids.delete(id);
+    folderOfTempId.delete(id);
   }
   function failed(id,error){
     updateMessage(id,'Chưa xác nhận trên Drive',true);
     const card=getCard(id);
     if(card)card.title='Lệnh upload chưa xác nhận: '+String(error||'Kiểm tra mạng');
-    batch?.progress.set(id,'unconfirmed');
+    const parent=folderOfTempId.get(id);
+    batches.get(parent)?.progress.set(id,'unconfirmed');
     // Do not erase the card: a Drive upload can complete despite Safari's
     // fetch throwing "Load failed" after sending the request bytes.
   }
-  function finish(){
-    activeGroups=Math.max(0,activeGroups-1);
-    if(activeGroups>0)return;
-    if(batch)batch.active=false;
-    batch=null;
+  function finish(folderId){
+    const batch=batches.get(folderId);
+    if(!batch)return;
+    batch.groups=Math.max(0,batch.groups-1);
+    if(batch.groups)return;
+    batch.active=false;
+    batches.delete(folderId);
+    for(const id of batch.ids)folderOfTempId.delete(id);
   }
   window.addEventListener('pagehide',()=>{
     for(const url of pendingUrls)URL.revokeObjectURL(url);
     pendingUrls.clear();
   });
   window.vlUploadGrid={begin,appendPending,markUploading,settle,failed,drop,finish,release,install,
-    isActive:()=>!!batch?.active,
-    folderId:()=>batch?.folderId||null,
-    suppressFor:id=>!!batch?.active&&id===batch.folderId,
+    isActive:()=>batches.size>0,
+    folderId:()=>currentFolder(),
+    suppressFor:id=>batches.has(id),
     retrying:updateMessage};
   install();
   setInterval(install,900);
