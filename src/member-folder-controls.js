@@ -119,8 +119,8 @@
     }else if(sub?.[parent]&&typeof window.renderSubFolders==='function'){
       window.renderSubFolders(parent,sub[parent]);
     }
-    if(isMegaRow && typeof window.smoothUpdateUI==='function')
-      window.smoothUpdateUI(meta||{});
+    if(isMegaRow && meta?.[item.id] && typeof window.smoothUpdateUI==='function')
+      window.smoothUpdateUI({[item.id]:meta[item.id]});
   }
   async function create(parent,name,commitButton,input){
     if(creating)return;
@@ -131,10 +131,6 @@
     try{
       if(!member())throw Error('Chưa xác minh thành viên thuộc kho Drive dùng chung');
       if(!idOK(parent)||!name||name.length>180)throw Error('Tên hoặc thư mục cha không hợp lệ');
-      if(scope() && !scope().allowed?.(parent) && parent!==scope().root){
-        // Scope belongs to the signed Google session. The server still
-        // checks the full ancestry; client-side allowed() is just a hint.
-      }
       const response=await fetch('/api/owned-files',{
         method:'POST',credentials:'same-origin',cache:'no-store',
         headers:{'Content-Type':'application/json'},
@@ -225,7 +221,12 @@
     if(!action)return;
     if(!member()){
       if(scope() && scope().ready?.() && !scope().member?.())return;
+      // Don't let the old admin-only handler display a false permission error
+      // while this account is still finishing its verified media login.
+      event.preventDefault();
+      event.stopImmediatePropagation();
       void verifyMember(true);
+      toast('Đang xác minh quyền tạo thư mục…');
       return;
     }
     if(localAdmin()&&!scope())return; // Keep the normal admin flow intact.
