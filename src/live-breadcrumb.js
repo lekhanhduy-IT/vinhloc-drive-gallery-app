@@ -13,6 +13,7 @@
   const idOK=id=>typeof id==='string'&&/^[A-Za-z0-9_-]{10,180}$/.test(id);
   const paths=new Map();
   let observed=null,inFlight=null,requestSeq=0,drag=null,blockClick=false;
+  let lastAttempt=0;
 
   function folderId(){
     try{return typeof currentFolderId!=='undefined'?currentFolderId:window.currentFolderId;}
@@ -110,6 +111,7 @@
     if(cached?.path&&!force)render(id,cached.path);
     if(inFlight===id)return;
     const requestId=++requestSeq;
+    lastAttempt=Date.now();
     inFlight=id;
     try{
       const response=await fetch('/api/live-library',{
@@ -172,6 +174,7 @@
     if(!idOK(id)||!isReady())return;
     if(observed!==id)void update();
     else if(paths.has(id)&&Date.now()-paths.get(id).time>60000)void update(true);
+    else if(!paths.has(id)&&!inFlight&&Date.now()-lastAttempt>8000)void update(true);
   },650);
   window.vlPhysicalBreadcrumb={refresh:()=>update(true)};
 })();
