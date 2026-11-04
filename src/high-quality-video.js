@@ -49,7 +49,7 @@
     '<div id="vlHQMessage" class="message" aria-live="polite"></div>',
     '<div class="actions"><button type="button" id="vlHQStart" class="primary" data-act="start" disabled>Bắt đầu quay</button><button type="button" id="vlHQStop" class="danger" data-act="stop" hidden>Dừng quay</button><button type="button" id="vlHQRetake" data-act="retake" hidden>Quay lại</button><button type="button" id="vlHQUpload" class="primary" data-act="upload" hidden>Up lên Drive</button></div>',
     '<button type="button" class="choose" data-act="choose">Chọn video đã quay bằng Camera điện thoại</button>',
-    '<p class="hint">Camera gốc của iPhone có thể cho chất lượng cao hơn trình duyệt. Nếu camera web không cấp ít nhất 720p, hãy quay bằng Camera rồi chọn file từ thư viện.</p>',
+    '<p class="hint">Camera gốc của iPhone có thể cho chất lượng cao hơn trình duyệt. Nếu camera web không cấp 1080p, hãy quay bằng Camera rồi chọn video từ thư viện.</p>',
     '</div>'
   ].join('');
   document.body.appendChild(modal);
@@ -119,8 +119,8 @@
       const fps=settings.frameRate||0;
       actual.textContent='Camera thực tế: '+(w&&h?w+' × '+h:'không xác định')+
         (fps?' · '+Math.round(fps)+' FPS':'');
-      if(Math.min(w,h)<720 || Math.max(w,h)<1280){
-        setMessage('Camera web đang cấp độ phân giải thấp. Để tránh video vỡ, nút quay bị khóa. Hãy dùng Camera điện thoại rồi chọn video đã quay.',true);
+      if(Math.min(w,h)<1080 || Math.max(w,h)<1920){
+        setMessage('Camera web chưa cấp đủ 1080p. Để tránh video bị vỡ, ứng dụng không cho quay ở độ phân giải thấp. Hãy dùng Camera điện thoại rồi chọn video đã quay.',true);
         return;
       }
       state.ready=true;startBtn.disabled=false;
@@ -146,6 +146,7 @@
     recorder.onerror=e=>setMessage('Lỗi ghi video: '+(e.error?.message||'Không xác định'),true);
     recorder.onstop=()=>{
       state.recording=false;stopTimer();badge.hidden=true;stopBtn.hidden=true;quality.disabled=false;
+      const durationMs=Math.max(1000,Date.now()-state.started);
       releaseCamera();
       const chunks=state.chunks;state.chunks=[];
       if(!chunks.some(x=>x.size)){setMessage('Không tạo được file video. Vui lòng quay lại.',true);againBtn.hidden=false;return;}
@@ -157,8 +158,11 @@
       state.url=URL.createObjectURL(blob);
       preview.src=state.url;preview.hidden=false;live.hidden=true;
       startBtn.hidden=true;againBtn.hidden=false;upBtn.hidden=false;
-      actual.textContent+=' · '+(blob.size/1048576).toFixed(1)+' MB';
-      setMessage('Hãy xem lại video trước khi chọn tải lên Drive. Video không được nén lại trong ứng dụng.');
+      const bitrate=(blob.size*8/durationMs/1000);
+      actual.textContent+=' · '+(blob.size/1048576).toFixed(1)+' MB · ~'+bitrate.toFixed(1)+' Mbps';
+      if(bitrate<3)
+        setMessage('Bitrate thực tế khá thấp. Video có thể thiếu chi tiết dù camera đạt 1080p. Bạn nên quay bằng ứng dụng Camera điện thoại rồi chọn file gốc.',true);
+      else setMessage('Hãy xem lại video trước khi chọn tải lên Drive. Video không được nén lại trong ứng dụng.');
     };
     try{recorder.start(1000);}
     catch(e){state.recorder=null;setMessage('Không bắt đầu ghi hình được: '+e.message,true);return;}
@@ -182,7 +186,7 @@
       state.recorder.onstop=null;state.recorder.ondataavailable=null;
       try{state.recorder.stop();}catch(_){}
     }
-    state.recording=false;state.recorder=null;stopTimer();releaseCamera();clearRecorded();
+    state.recording=false;state.recorder=null;state.chunks=[];stopTimer();releaseCamera();clearRecorded();
     modal.hidden=true;quality.disabled=false;
   }
   function chooseFile(){
