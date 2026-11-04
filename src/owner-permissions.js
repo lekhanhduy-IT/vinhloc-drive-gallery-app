@@ -16,6 +16,12 @@
   function typeOf(id){const item=current().find(x=>x.id===id);return item?.type==='folder'?'folder':'file';}
   function nameOf(id){return current().find(x=>x.id===id)?.name||id;}
   function eligible(){return current().filter(x=>can(x.id));}
+  function isMedia(item){
+    if(!item || item.type==='folder')return false;
+    const mime=String(item.mimeType||'').toLowerCase();
+    if(mime.startsWith('image/')||mime.startsWith('video/'))return true;
+    return /\.(?:jpe?g|png|gif|webp|bmp|heic|heif|avif|tiff?|svg|mp4|mov|m4v|avi|mkv|webm|mpeg|mpg|3gp|mts|m2ts)$/i.test(String(item.name||''));
+  }
   async function api(action,args={}){
     const response=await fetch('/api/owned-files',{
       method:'POST',credentials:'same-origin',
@@ -74,13 +80,28 @@
       block.id='vlOwnedControls';
       block.className='vinhloc-safe-item';
       block.style.cssText='display:block!important;position:relative!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;width:100%!important;padding:8px!important;margin:0!important;';
+      block.addEventListener('click',event=>{
+        const target=event.target.closest?.('button[data-vl-owner-action]');
+        if(!target || target.disabled)return;
+        const action=target.dataset.vlOwnerAction;
+        if(!action || action==='none')return;
+        event.preventDefault();
+        event.stopPropagation();
+        if(action==='auth'){
+          void window.vlMediaEnsureAuth?.();
+        }else if(action==='delete'){
+          void menuDelete();
+        }else if(action==='all'||action==='folder'||action==='file'||action.startsWith('ext:')){
+          choose(action);
+        }
+      });
       menu.appendChild(block);
     }
     const all=current();
     const owned=eligible();
     const chosen=owned.filter(x=>selected().has(x.id));
     const folders=owned.filter(x=>x.type==='folder');
-    const files=owned.filter(x=>x.type!=='folder');
+    const files=owned.filter(isMedia);
     // Use the visible listing, rather than async permission results, to
     // determine which rows exist. Verification only enables the rows.
     const allFiles=all.filter(x=>x.type!=='folder');
@@ -113,7 +134,7 @@
     const items=eligible().filter(item=>{
       if(which==='all')return true;
       if(which==='folder')return item.type==='folder';
-      if(which==='file')return item.type!=='folder';
+      if(which==='file')return isMedia(item);
       if(which.startsWith('ext:'))return item.type!=='folder'&&item.name.toLowerCase().endsWith('.'+which.slice(4));
       return false;
     });
