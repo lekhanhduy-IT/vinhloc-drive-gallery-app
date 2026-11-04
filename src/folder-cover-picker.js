@@ -55,6 +55,7 @@
 
   function hidePicker() {
     generation++;
+    loading = false;
     picker.classList.add('hidden');
     picker.classList.remove('flex');
     choice = null;
@@ -174,6 +175,7 @@
     if (byId('infoModal')?.classList.contains('hidden')) return;
     focused = document.activeElement;
     generation++;
+    loading = false;
     images = [];
     page = '';
     choice = null;
