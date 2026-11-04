@@ -360,33 +360,8 @@ div.bottom-20.right-6 label {
     }
 
 }
-/* =========================================================
-   TÙY CHỈNH LƯỚI HIỂN THỊ FILE CHO DESKTOP (6 CỘT, Ô VUÔNG)
-   ========================================================= */
-@media (min-width: 1024px) {
-    /* Ép lưới hiển thị thành 6 cột đều nhau, ghi đè class của Tailwind */
-    #fileList {
-        grid-template-columns: repeat(6, 1fr) !important;
-    }
-
-    /* Ép các thẻ chứa item bên trong lưới thành hình vuông (tỷ lệ 1:1) */
-    #fileList > div {
-        aspect-ratio: 1 / 1 !important;
-        height: auto !important; /* Hủy chiều cao cố định nếu có trong JS */
-        overflow: hidden !important;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-    }
-
-    /* Đảm bảo ảnh bìa hoặc ảnh thumbnail phủ kín không gian vuông mà không bị méo */
-    #fileList > div img {
-        width: 100% !important;
-        height: 100% !important;
-        object-fit: cover !important;
-    }
-}
+/* The former desktop 1:1 crop rule was intentionally removed.
+   Masonry rules below preserve original image proportions on every device. */
 /* Chặn kéo thả và chặn menu mặc định trên một số thiết bị */
 img[src*="loaddata"],
 img[src*="load_login.GIF"],
@@ -572,4 +547,69 @@ header.vl-header-menu-host #headerDropdown {
   outline: 2px solid #ffffff;
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+
+/* Pinterest-style masonry for the FILE grid only.
+   Mega-row folders, list view, the image editor and media viewer are untouched. */
+#fileList.vl-pinterest:not(.list-view) {
+  display: block !important;
+  grid-template-columns: none !important;
+  column-count: var(--vl-pinterest-columns, 2) !important;
+  -webkit-column-count: var(--vl-pinterest-columns, 2) !important;
+  column-gap: 12px !important;
+  -webkit-column-gap: 12px !important;
+  transition: none !important;
+}
+#fileList.vl-pinterest:not(.list-view) > div {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: auto !important;
+  display: inline-flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+  align-items: stretch !important;
+  box-sizing: border-box;
+  position: relative;
+  vertical-align: top;
+  margin: 0 0 12px !important;
+  -webkit-column-break-inside: avoid;
+  break-inside: avoid-column;
+  page-break-inside: avoid;
+  overflow: visible !important;
+}
+/* Only photos expand to their true ratios. Videos keep their own preview height. */
+#fileList.vl-pinterest:not(.list-view) > div > .h-32:has(> img.drive-img-item) {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+  width: 100% !important;
+  display: block !important;
+  overflow: hidden;
+}
+#fileList.vl-pinterest:not(.list-view) > div > .h-32 > img.drive-img-item {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+  object-fit: contain !important;
+  object-position: center !important;
+}
+/* Inline upload placeholders and video posters keep a predictable size. */
+#fileList.vl-pinterest:not(.list-view) > div > .h-32:not(:has(> img.drive-img-item)) {
+  min-height: 80px;
+}
+/* Keep selected borders and three-dot menus accessible over tall/short cards. */
+#fileList.vl-pinterest:not(.list-view) > div > .absolute {
+  z-index: 20;
+}
+#fileList.vl-pinterest:not(.list-view) > div .item-action-menu {
+  z-index: 500 !important;
 }
