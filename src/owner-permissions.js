@@ -168,7 +168,7 @@
       actions.style.cssText='display:block;width:100%;';
       actions.innerHTML=
         '<button type="button" data-vl-owned="rename" disabled style="display:none;width:100%;min-height:44px;align-items:center;gap:12px;padding:12px 18px;color:#2563eb;font-weight:700;text-align:left;"><i class="fas fa-pen"></i><span>Đổi tên mục của tôi</span></button>'+
-        '<button type="button" data-vl-owned="delete" disabled style="display:flex;width:100%;min-height:44px;align-items:center;gap:12px;padding:12px 18px;color:#dc2626;font-weight:700;text-align:left;"><i class="fas fa-trash-alt"></i><span>Xóa mục tôi đã tải lên</span></button>';
+        '<button type="button" data-vl-owned="delete" disabled style="display:none;width:100%;min-height:44px;align-items:center;gap:12px;padding:12px 18px;color:#dc2626;font-weight:700;text-align:left;"><i class="fas fa-trash-alt"></i><span>Xóa</span></button>';
       actions.addEventListener('click',async event=>{
         const target=event.target.closest('button[data-vl-owned]');
         if(!target)return;
@@ -201,11 +201,14 @@
       rename.title=allowed?'':'Chưa xác minh quyền sở hữu';
     }
     if(remove){
+      // Only show Xóa for the verified uploader/creator, for both images
+      // and folders. No edit/delete action is shown for another account.
+      remove.style.display=allowed?'flex':'none';
       remove.disabled=!allowed;
-      remove.style.opacity=allowed?'1':'0.45';
-      remove.title=allowed?'':'Chưa xác minh quyền sở hữu';
+      remove.title=allowed?'Xóa mục do tài khoản này tải lên hoặc tạo':'';
     }
-    if(!idsCache.has(id))void checkIds([{id}]);
+    if(!idsCache.has(id)||Date.now()-idsCache.get(id).at>=TTL)
+      void checkIds([{id}]);
   }
   // Selection is a harmless UI action: permit highlighting any visible
   // file/folder. Ownership restrictions apply only when executing a protected
