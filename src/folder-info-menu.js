@@ -34,9 +34,15 @@
       // was being authenticated. Restore the native action for members.
       existing.style.removeProperty('display');
       existing.classList.remove('hidden');
-      const text=Array.from(existing.childNodes).find(n=>n.nodeType===3&&
-        n.nodeValue?.includes('Thông tin'));
-      if(text)text.nodeValue='Thông tin folder';
+      // Rename either legacy text-node actions or newer button/span actions.
+      for(const node of existing.childNodes){
+        if(node.nodeType===3 && node.nodeValue?.includes('Thông tin'))
+          node.nodeValue=node.nodeValue.replace(/Thông tin folder/g,'Thông tin');
+      }
+      for(const label of existing.querySelectorAll('span')){
+        if(label.textContent?.includes('Thông tin folder'))
+          label.textContent=label.textContent.replace(/Thông tin folder/g,'Thông tin');
+      }
       return;
     }
     const button=document.createElement('button');
@@ -44,7 +50,7 @@
     button.className='vl-folder-info-item vinhloc-safe-item';
     button.style.cssText='display:flex;width:100%;align-items:center;gap:12px;padding:12px 18px;color:#374151;font:600 14px system-ui;text-align:left;';
     const icon=document.createElement('i');icon.className='fas fa-info-circle text-blue-500';
-    const label=document.createElement('span');label.textContent='Thông tin folder';
+    const label=document.createElement('span');label.textContent='Thông tin';
     button.append(icon,label);
     button.addEventListener('click',event=>{
       event.stopPropagation();event.preventDefault();
