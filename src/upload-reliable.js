@@ -361,6 +361,7 @@
       for (const item of pending) {
         if (getList(folderId).some(f => f.id === item.tempId)) {
           remove(folderId,item.tempId);
+          window.vlUploadGrid?.drop(item.tempId);
           window.vlUploadGrid?.release(item.tempUrl);
           if(!window.vlUploadGrid)URL.revokeObjectURL(item.tempUrl);
         }
