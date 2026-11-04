@@ -7,6 +7,8 @@
   const heading=document.getElementById('currentFolderName');
   if(!heading)return;
   window.__vlPhysicalBreadcrumbInstalled=true;
+  heading.classList.remove('truncate');
+  heading.classList.add('vl-breadcrumb-scroll');
   const ROOT='1xWDed1IBzGdCA4r5vbds1x6AF31hSIUT';
   const idOK=id=>typeof id==='string'&&/^[A-Za-z0-9_-]{10,180}$/.test(id);
   const paths=new Map();
