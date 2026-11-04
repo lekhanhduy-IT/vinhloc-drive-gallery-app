@@ -11,8 +11,15 @@
   const pendingIds=new Set();
   let checkedFolder='',lastListSignature='',lastCheckError='',lastChecking=false;
   const TTL=90000;
+  let verifiedEmail='', verifiedScope='', sessionValid=false;
+  let sessionTask=null, sessionCheckedAt=0, lastAccessRefresh=0;
+  let lastIdentity=String(localStorage.getItem('vinhloc_authenticated_email')||'').toLowerCase();
+  let sessionEpoch=0;
   function selected(){return window.multiSelectState?.selectedIds||new Set();}
-  function can(id){const x=idsCache.get(id);return !!(x&&x.allowed&&Date.now()-x.at<TTL);}
+  function can(id){
+    const x=idsCache.get(id);
+    return !!(sessionValid&&x&&x.allowed&&Date.now()-x.at<TTL);
+  }
   function typeOf(id){const item=current().find(x=>x.id===id);return item?.type==='folder'?'folder':'file';}
   function nameOf(id){return current().find(x=>x.id===id)?.name||id;}
   function eligible(){return current().filter(x=>can(x.id));}
@@ -34,30 +41,108 @@
     }
     return data;
   }
+  async function ensureSession(force=false){
+    if(admin())return true;
+    if(window.vlShareScope && !window.vlShareScope.ready?.())return false;
+    if(sessionTask)return sessionTask;
+    if(!force && sessionValid && Date.now()-sessionCheckedAt<45000)return true;
+    sessionTask=(async()=>{
+      try{
+        const status=await api('status');
+        const localEmail=email();
+        // For internal logins, a different signed Google cookie must not
+        // authorize edits under the account label shown in the app.
+        if(!window.vlShareScope && localEmail &&
+           String(status.email||'').toLowerCase()!==localEmail){
+          sessionValid=false;
+          verifiedEmail='';
+          idsCache.clear();
+          lastCheckError='Phiên Google không khớp tài khoản đang đăng nhập. Nhấn để xác thực đúng tài khoản';
+          return false;
+        }
+        const nextEmail=String(status.email||'').toLowerCase();
+        const nextScope=String(status.scopeRoot||'');
+        if(!nextEmail)return false;
+        if(nextEmail!==verifiedEmail || nextScope!==verifiedScope){
+          idsCache.clear();
+          sessionEpoch++;
+          lastListSignature='';
+        }
+        verifiedEmail=nextEmail;
+        verifiedScope=nextScope;
+        sessionValid=true;
+        sessionCheckedAt=Date.now();
+        lastCheckError='';
+        return true;
+      }catch(error){
+        sessionValid=false;
+        sessionCheckedAt=0;
+        lastCheckError=error.message||'Cần xác thực lại Google';
+        idsCache.clear();
+        return false;
+      }
+    })().finally(()=>{sessionTask=null;});
+    return sessionTask;
+  }
+  function resetAuthorization(){
+    // Do not carry owner grants across a logout, Google-account switch,
+    // expiry, or a successful new credential exchange.
+    sessionValid=false;
+    verifiedEmail='';
+    verifiedScope='';
+    sessionCheckedAt=0;
+    lastChecking=false;
+    lastCheckError='';
+    pendingIds.clear();
+    idsCache.clear();
+    lastListSignature='';
+    sessionEpoch++;
+    lastAccessRefresh=0;
+    showHeader();
+  }
+  async function refreshAuthorization(){
+    if(admin())return;
+    const epoch=sessionEpoch;
+    const ok=await ensureSession(true);
+    if(!ok){showHeader();return;}
+    if(epoch!==sessionEpoch && !sessionValid)return;
+    await checkIds(current(),true);
+    window.vlMenuController?.refreshVisible();
+  }
   function isOpen(){return !!document.querySelector('#headerDropdown:not(.hidden)');}
   async function checkIds(items,force=false){
     if(admin())return;
-    const fresh=items.filter(item=>item.id && !pendingIds.has(item.id) && (force||!idsCache.has(item.id)||Date.now()-idsCache.get(item.id).at>=TTL));
-    if(!fresh.length){showHeader();return;}
+    if(!await ensureSession(force)){lastChecking=false;showHeader();return;}
+    const epoch=sessionEpoch;
+    const fresh=items.filter(item=>item.id && !String(item.id).startsWith('temp_') &&
+      !pendingIds.has(item.id) &&
+      (force||!idsCache.has(item.id)||Date.now()-idsCache.get(item.id).at>=TTL));
+    if(!fresh.length){lastChecking=false;showHeader();return;}
     fresh.forEach(item=>pendingIds.add(item.id));
     lastChecking=true;
     for(let offset=0;offset<fresh.length;offset+=50){
       const ids=fresh.slice(offset,offset+50).map(item=>item.id);
       try{
         const response=await api('check',{ids});
+        if(epoch!==sessionEpoch)break;
         lastCheckError='';
         for(const id of ids){
           const info=response.items?.[id];
-          idsCache.set(id,{allowed:!!info?.allowed,at:Date.now()});
+          idsCache.set(id,{allowed:!!info?.allowed,
+            provenance:info?.provenance||'unknown',
+            at:Date.now()});
         }
       }catch(e){
-        lastCheckError=e.message || 'Chưa xác minh được quyền xóa';
+        if(epoch!==sessionEpoch)break;
+        lastCheckError=e.message||'Chưa xác minh được quyền sửa/xóa';
         console.warn('[QL Ảnh] Kiểm tra người upload',e);
-        // Do not grant delete permission when unable to verify.
-        for(const id of ids)idsCache.set(id,{allowed:false,at:Date.now()-TTL+10000});
-      }finally{
-        ids.forEach(id=>pendingIds.delete(id));
-      }
+        // A failed network/auth check is NOT an ownership denial. Do not
+        // cache false results for a newly authenticated device.
+        if(/xác thực|đăng nhập|401/i.test(lastCheckError)){
+          sessionValid=false;sessionCheckedAt=0;
+          idsCache.clear();
+        }
+      }finally{ids.forEach(id=>pendingIds.delete(id));}
       showHeader();
     }
     lastChecking=pendingIds.size>0;
@@ -99,9 +184,10 @@
       (disabled?'color:#aaa;':'color:#374151;')+'"><span>'+label+'</span></button>';
     const status=lastCheckError
       ? String(lastCheckError).replace(/[<>&"]/g,'')+' — Nhấn để xác thực lại Google'
-      : (lastChecking ? 'Đang xác minh quyền thao tác…' :
-        (!owned.length && all.length ? 'Không có quyền sửa/xóa các mục này hoặc thiếu metadata người tải lên.' :
-         'Đã kiểm tra quyền cho danh sách đang hiển thị.'));
+      : (!sessionValid ? 'Đang chờ xác thực tài khoản Google để kiểm tra quyền…' :
+        (lastChecking ? 'Đang xác minh quyền thao tác…' :
+        (!owned.length && all.length ? 'Không tìm thấy metadata người tải lên hoặc tài khoản này không có quyền.' :
+         'Đã kiểm tra quyền từ Drive cho danh sách đang hiển thị.')));
     const statusAction=lastCheckError?'auth':'none';
     block.innerHTML=
       '<div style="font-size:11px;font-weight:bold;color:#64748b;padding:6px 10px;">DO TÔI TẢI LÊN ('+owned.length+'/'+all.length+')</div>'+
@@ -245,8 +331,21 @@
     if(admin())return;
     const items=current();
     const folder=String(window.currentFolderId||'');
-    const signature=folder+'|'+items.length+'|'+items.slice(0,20).map(x=>x.id).join(',');
-    if(signature===lastListSignature)return;
+    const localEmail=email();
+    if(lastIdentity!==localEmail){
+      lastIdentity=localEmail;
+      resetAuthorization();
+    }
+    const signature=localEmail+'|'+folder+'|'+items.length+'|'+
+      items.map(x=>x.id).join(',');
+    if(signature===lastListSignature){
+      // Recheck expired permissions even if the visible list is unchanged.
+      if(sessionValid&&Date.now()-lastAccessRefresh>TTL){
+        lastAccessRefresh=Date.now();
+        void checkIds(items);
+      }
+      return;
+    }
     checkedFolder=folder;lastListSignature=signature;
     showHeader();
     void checkIds(items).then(()=>{if(folder===checkedFolder)showHeader()});
@@ -278,14 +377,40 @@
     };
     install();
   }
+  // Session lifecycle is independent of IndexedDB and Drive cache. As
+  // soon as Google grants a fresh signed cookie, refill rights on this device.
+  window.addEventListener('vl:media-authorized',()=>{
+    resetAuthorization();
+    void refreshAuthorization();
+  });
+  window.addEventListener('vl:share-member-ready',()=>{
+    resetAuthorization();
+    void refreshAuthorization();
+  });
+  window.addEventListener('focus',()=>{
+    if(!document.hidden)void refreshAuthorization();
+  });
+  window.addEventListener('pageshow',()=>{
+    if(!document.hidden)void refreshAuthorization();
+  });
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden)void refreshAuthorization();
+  });
+  window.addEventListener('storage',event=>{
+    if(event.key==='vinhloc_authenticated_email'){
+      lastIdentity=email();resetAuthorization();
+      if(lastIdentity)void refreshAuthorization();
+    }
+  });
   checkPage();
+  if(!admin())void refreshAuthorization();
   setInterval(checkPage,1100);
   const style=document.createElement('style');
   style.textContent='body[data-is-admin="false"] .item-action-menu [onclick*="handleDelete("],'+
     'body[data-is-admin="false"] #headerDropdown [onclick*="deleteSelectedItems("]{display:none!important;}';
   document.head.appendChild(style);
-  window.vlOwnerAccess={can,eligible,refresh:async()=>{
-    await checkIds(current(),true);
-    window.vlMenuController?.refreshVisible();
-  }};
+  window.vlOwnerAccess={can,eligible,
+    refresh:refreshAuthorization,
+    account:()=>verifiedEmail,
+    isVerified:()=>sessionValid};
 })();
