@@ -538,3 +538,38 @@ header.vl-header-menu-host #headerDropdown {
 @media (prefers-reduced-motion: reduce) {
   #vlFabBackdrop { transition: none; }
 }
+
+/* Full physical Drive breadcrumb, with horizontal mouse-drag and touch swipe.
+   The heading is the scroll container; header buttons remain fixed. */
+#currentFolderName.vl-breadcrumb-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#currentFolderName.vl-breadcrumb-scroll::-webkit-scrollbar { display:none; }
+#currentFolderName.vl-breadcrumb-dragging { cursor: grabbing; }
+#currentFolderName [data-vl-crumb-live] { min-width: max-content; }
+#currentFolderName [data-vl-crumb-live] button {
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 5px 0;
+  white-space: nowrap;
+  cursor: pointer;
+}
+#currentFolderName [data-vl-crumb-live] button:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
