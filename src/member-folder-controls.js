@@ -15,9 +15,11 @@
   function localAdmin(){
     return !scope()&&String(localStorage.getItem('vinhloc_authenticated_email')||'').toLowerCase()==='admin@tudonghoavinhloc.com';
   }
-  function member(){
+  function authorizedToCreate(){
     const shared=scope();
-    return shared ? shared.ready?.()===true&&shared.member?.()===true : internal;
+    // A verified shared-link recipient may create children within that
+    // signed subtree. Root mega-rows still require an internal member.
+    return shared ? shared.ready?.()===true : internal;
   }
   function currentFolder(){
     let id;
@@ -32,7 +34,7 @@
     catch(_){return 'Triển khai';}
   }
   function setDisplay(){
-    const allowed=member();
+    const allowed=authorizedToCreate();
     document.body.dataset.vlAuthorizedMemberCreate=allowed?'true':'false';
     const el=button();
     if(!el)return;
@@ -47,7 +49,7 @@
     }
   }
   async function verifyMember(force=false){
-    if(scope()){setDisplay();return member();}
+    if(scope()){setDisplay();return authorizedToCreate();}
     if(!localStorage.getItem('vinhloc_authenticated_email')){
       internal=false;setDisplay();return false;
     }
@@ -129,7 +131,7 @@
     const old=commitButton.textContent;
     commitButton.textContent='Đang tạo…';
     try{
-      if(!member())throw Error('Chưa xác minh thành viên thuộc kho Drive dùng chung');
+      if(!authorizedToCreate())throw Error('Chưa xác minh quyền tạo thư mục');
       if(!idOK(parent)||!name||name.length>180)throw Error('Tên hoặc thư mục cha không hợp lệ');
       const response=await fetch('/api/owned-files',{
         method:'POST',credentials:'same-origin',cache:'no-store',
@@ -159,7 +161,7 @@
     dialog?.remove();dialog=null;
   }
   function openCreateDialog(){
-    if(dialog||!member())return;
+    if(dialog||!authorizedToCreate())return;
     const parent=currentFolder();
     if(!idOK(parent)){toast('Chưa xác định được thư mục đang mở.',true);return;}
     const isMegaRow=!scope()&&parent===ROOT;
@@ -219,8 +221,7 @@
   document.addEventListener('click',event=>{
     const action=event.target.closest?.('#fabMenu button[onclick*="uiPromptFolder"]');
     if(!action)return;
-    if(!member()){
-      if(scope() && scope().ready?.() && !scope().member?.())return;
+    if(!authorizedToCreate()){
       // Don't let the old admin-only handler display a false permission error
       // while this account is still finishing its verified media login.
       event.preventDefault();
