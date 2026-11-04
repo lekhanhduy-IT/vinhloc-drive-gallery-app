@@ -6,6 +6,7 @@ import {readFolderGrant} from '../lib/share-capability.js';
 // Drive API with the app service token. No public Drive permissions, no URL tokens.
 const CLIENT_ID = '1034177686409-1fhm0m0tqmf58qjj1p0r2ifo018eh8o2.apps.googleusercontent.com';
 const SHARED_DRIVE_ID = '0AMLRHzF05fTFUk9PVA';
+const GALLERY_ROOT_ID = '1xWDed1IBzGdCA4r5vbds1x6AF31hSIUT';
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx3xI-bNWfeffsEH-iIc0yYfF9bHYvAiKZKWIfco6j7Z7GOtOAv7Q8WE1_y9xjen7c/exec';
 const COOKIE = 'vl_verified_media';
 const SHARE_COOKIE='vl_share_scope';
@@ -177,6 +178,26 @@ async function scopedPath(targetId,scopeRoot,token){
   }
   return false;
 }
+// Some older VinhLoc folders are under the configured gallery root but
+// have no driveId (My Drive). Never allow arbitrary Drive files: trace
+// every parent all the way to this exact configured root.
+async function inManagedRoot(id,token){
+  const seen=new Set();
+  let cursor=id;
+  for(let depth=0;depth<45;depth++){
+    if(cursor===GALLERY_ROOT_ID)return true;
+    if(seen.has(cursor))return false;
+    seen.add(cursor);
+    const path='https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(cursor)+
+      '?supportsAllDrives=true&fields=id,parents,trashed';
+    const response=await request(path,{headers:{Authorization:'Bearer '+token}});
+    if(!response.ok)return false;
+    const item=await response.json();
+    if(item.trashed||!Array.isArray(item.parents)||item.parents.length!==1)return false;
+    cursor=item.parents[0];
+  }
+  return false;
+}
 function filenameSafe(s) { return String(s||'file').replace(/[^\p{L}\p{N}._ -]/gu,'_').slice(0,120); }
 export const config = {maxDuration: 60};
 // Reuse this verified, signed HttpOnly session for ownership-protected writes.
@@ -261,11 +282,19 @@ export default async function handler(req, res) {
     const metadata=await fromDrive(base+'?supportsAllDrives=true&fields=id,name,size,mimeType,driveId,thumbnailLink,trashed');
     if (!metadata.ok) return error(res,metadata.status===404?404:502,'Không thể đọc tệp trên Drive');
     const info=await metadata.json();
-    // Never let the Apps Script owner's OAuth token access unrelated My Drive files.
-    if (info.driveId !== SHARED_DRIVE_ID || info.trashed)
-      return error(res,403,'Tệp không thuộc Shared Drive của QL Ảnh');
-    if(identity.scopeRoot && !await scopedPath(id,identity.scopeRoot,token))
-      return error(res,403,'Tệp nằm ngoài thư mục được chia sẻ');
+    // Do not allow the Apps Script service token to expose arbitrary Drive
+    // files. A signed shared-link session is restricted to the official Shared
+    // Drive and its granted subtree. Normal verified members may also read
+    // files descended from the exact configured VinhLoc gallery root.
+    if(info.trashed)return error(res,404,'Tệp đã ở trong thùng rác');
+    if(identity.scopeRoot){
+      if(info.driveId!==SHARED_DRIVE_ID ||
+         !await scopedPath(id,identity.scopeRoot,token))
+        return error(res,403,'Tệp nằm ngoài phạm vi thư mục được chia sẻ');
+    }else if(info.driveId!==SHARED_DRIVE_ID &&
+      !await inManagedRoot(id,token)){
+      return error(res,403,'Tệp không nằm trong kho ảnh Vĩnh Lộc được cấp quyền');
+    }
     const mime=String(info.mimeType||'');
     const image=mime.startsWith('image/');
     const video=mime.startsWith('video/');
