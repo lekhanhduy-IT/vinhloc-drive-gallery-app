@@ -192,9 +192,9 @@
     if(modal)return;
     modal=document.createElement('section');
     modal.id='vl-share-login-gate';
-    modal.style.cssText='position:fixed;inset:0;z-index:999999999;background:#380ad7;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:24px;text-align:center;font:600 16px system-ui;';
+    modal.style.cssText='position:fixed;inset:0;z-index:999999999;background:#ffffff;color:#111111;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:24px;text-align:center;font:600 16px system-ui;';
     const icon=document.createElement('img');
-    icon.src='vlimage.png';icon.alt='QL Ảnh';icon.style.cssText='width:80px;height:80px;object-fit:contain;';
+    icon.src='load_login.GIF';icon.alt='QL Ảnh';icon.style.cssText='width:80px;height:80px;object-fit:contain;';
     const title=document.createElement('h2');
     title.textContent='TRUY CẬP THƯ MỤC ĐƯỢC CHIA SẺ';
     title.style.cssText='font-weight:800;font-size:18px;max-width:320px;';
@@ -205,11 +205,11 @@
     slot.style.cssText='position:relative;width:260px;height:48px;display:flex;align-items:center;justify-content:center;';
     const help=document.createElement('p');
     help.textContent='Nhấn Đăng nhập để chọn tài khoản Google. Nếu không hiện cửa sổ chọn tài khoản, hãy mở liên kết bằng Safari hoặc Chrome (không dùng trình duyệt bên trong ứng dụng nhắn tin).';
-    help.style.cssText='font-size:12px;line-height:1.5;max-width:340px;color:#e9e5ff;';
+    help.style.cssText='font-size:12px;line-height:1.5;max-width:340px;color:#111111;';
     const copy=document.createElement('button');
     copy.type='button';
     copy.textContent='Sao chép liên kết để mở bằng Safari';
-    copy.style.cssText='font:600 13px system-ui;border:1px solid #ffffff8a;border-radius:999px;padding:10px 16px;background:transparent;color:white;cursor:pointer;min-height:44px;';
+    copy.style.cssText='font:600 13px system-ui;border:0.5px solid #9ca3af;border-radius:999px;padding:10px 16px;background:transparent;color:#111111;cursor:pointer;min-height:44px;';
     copy.addEventListener('click',async()=>{
       try {
         if(!navigator.clipboard?.writeText)throw Error('Clipboard unavailable');
@@ -220,7 +220,7 @@
       }
     });
     const warning=document.createElement('p');warning.id='vlShareAuthMessage';
-    warning.style.cssText='font-size:13px;max-width:350px;min-height:1.5em;color:#fdd;';
+    warning.style.cssText='font-size:13px;max-width:350px;min-height:1.5em;color:#111111;';
     modal.append(icon,title,caption,slot,help,copy,warning);
     document.body.appendChild(modal);
     if(!grant){warning.textContent='Liên kết chia sẻ cũ chưa có mã xác minh. Vui lòng yêu cầu chủ thư mục tạo liên kết mới.';return;}
