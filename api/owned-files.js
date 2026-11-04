@@ -99,9 +99,15 @@ async function checkMany(ids,email,admin,root){
       const id=valid[next++];
       try {
         const info=await fileInfo(id);
-        result[id]={allowed:!!(inGallery(info)&&(admin||own(info,email))&&await inShareTree(id,root)),
-          uploaderEmail:inGallery(info)?info.appProperties?.[uploaderKey]||null:null,
-          name:inGallery(info)?info.name:null,type:inGallery(info)?fileType(info):null};
+        const uploader=String(info.appProperties?.[uploaderKey]||'').trim().toLowerCase();
+        const active=inGallery(info);
+        result[id]={allowed:!!(active&&(admin||uploader===email)&&await inShareTree(id,root)),
+          // Drive appProperties survive browser logout and device switches.
+          // Files created before provenance tracking are not automatically
+          // claimed by whoever happens to be logged in.
+          provenance:active?(uploader?'drive-app-properties':'missing'):'unavailable',
+          uploaderEmail:active?uploader||null:null,
+          name:active?info.name:null,type:active?fileType(info):null};
       }catch(error){result[id]={allowed:false,error:'Không kiểm tra được quyền'};}
     }
   }));
