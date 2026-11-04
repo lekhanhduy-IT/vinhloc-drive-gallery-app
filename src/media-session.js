@@ -18,6 +18,15 @@
   const idPattern = /^[\w-]{10,160}$/;
   const mobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
   let needsProxy = false;
+  let sessionCheckTask = null;
+  let lastSessionCheckAt = 0;
+  let lastSessionStatus = 0;
+  let authorizing = false;
+  function appSignedIn(){
+    const scope=window.vlShareScope;
+    return scope ? scope.ready?.()===true :
+      !!localStorage.getItem('vinhloc_authenticated_email');
+  }
 
   function idOf(input) {
     try {
@@ -36,6 +45,8 @@
   }
   async function authorize(credential) {
     if (!credential) throw new Error('Google chưa trả mã đăng nhập');
+    authorizing = true;
+    try {
     const result = await fetch(API, {
       method:'POST', credentials:'same-origin',
       headers:{'Content-Type':'application/json'},
@@ -49,9 +60,13 @@
     ready = true;
     proxyVersion++;
     window.vlMediaProxyReady = true;
+    lastSessionCheckAt = Date.now();
+    lastSessionStatus = 200;
     hidePanel();
     scheduleReconcile();
+    window.dispatchEvent(new CustomEvent('vl:media-authorized'));
     return data;
+    } finally {authorizing = false;}
   }
   window.vlMediaAuthorize = authorize;
 
@@ -130,7 +145,9 @@
     if(signInInitialized)return true;
     const sdk=window.google?.accounts?.id;
     if(!sdk?.initialize)return false;
-    if(!localStorage.getItem('vinhloc_authenticated_email'))return false;
+    // Shared-link members authenticate with a scoped Google cookie and
+    // must not need a separate full-workspace localStorage login.
+    if(!appSignedIn())return false;
     sdk.initialize({
       client_id:CLIENT_ID,
       callback:response => {
@@ -188,14 +205,13 @@
   }
   // Ownership APIs require the verified cookie scoped to /api, while old
   // sessions may still have the legacy /api/media-only cookie.
-  window.vlMediaRequireReauth=()=>{
-    ready=false;
-    window.vlMediaProxyReady=false;
-    showPanel();
-  };
+  window.vlMediaRequireReauth=()=>checkSession(true);
   window.vlMediaEnsureAuth=()=>checkSession(true);
   function showPanel() {
-    if (ready || Date.now()-lastShown<1200) return;
+    if (ready || !appSignedIn() || authorizing ||
+        (window.vlShareScope && !window.vlShareScope.ready?.()) ||
+        Date.now()-lastShown<1200) return;
+    if(panel?.isConnected && !panel.hidden)return;
     lastShown = Date.now();
     const element = ensurePanel();
     if (!element) return;
@@ -205,25 +221,60 @@
     // when the iOS/Google consent prompt cannot be displayed.
   }
   async function checkSession(showWhenMissing = false) {
-    try {
-      const response = await fetch(API+'?status=1', {
-        method:'GET',credentials:'same-origin',cache:'no-store'
-      });
-      if (!response.ok) throw new Error('Chưa có phiên');
-      const data = await response.json();
-      if (data.success !== true) throw new Error('Chưa xác thực');
-      if(window.vlShareScope &&
-         (!window.vlShareScope.ready() || data.scopeRoot!==window.vlShareScope.root))
-        throw new Error('Phiên xem ảnh không thuộc thư mục được chia sẻ');
-      if (!ready) proxyVersion++;
-      ready=true;window.vlMediaProxyReady=true;
-      hidePanel();scheduleReconcile();
-      return true;
-    } catch (_) {
-      ready=false;window.vlMediaProxyReady=false;
-      if (showWhenMissing) showPanel();
+    // Opening a folder can emit dozens of image errors in one frame. They
+    // must share ONE quiet status request, never dozens of consent prompts.
+    if(sessionCheckTask)return sessionCheckTask;
+    const elapsed=Date.now()-lastSessionCheckAt;
+    if(ready && elapsed<20000)return true;
+    if(!ready && lastSessionStatus===401 && elapsed<12000){
+      if(showWhenMissing)showPanel();
       return false;
     }
+    sessionCheckTask=(async()=>{
+      try {
+        const response=await fetch(API+'?status=1', {
+          method:'GET',credentials:'same-origin',cache:'no-store'
+        });
+        lastSessionCheckAt=Date.now();
+        lastSessionStatus=response.status;
+        if(response.status===401){
+          // Only an explicit invalid session may revoke media readiness.
+          ready=false;
+          window.vlMediaProxyReady=false;
+          if(showWhenMissing)showPanel();
+          return false;
+        }
+        if(!response.ok){
+          // A temporary 5xx/429/network problem is not a logout.
+          console.warn('[QL Ảnh] Không kiểm tra được phiên media: HTTP '+response.status);
+          return ready;
+        }
+        const data=await response.json();
+        if(data.success!==true)return ready;
+        const scope=window.vlShareScope;
+        if(scope && (!scope.ready?.() || data.scopeRoot!==scope.root)){
+          if(scope.ready?.() && showWhenMissing){
+            ready=false;
+            window.vlMediaProxyReady=false;
+            showPanel();
+          }
+          return false;
+        }
+        if(!ready)proxyVersion++;
+        ready=true;
+        window.vlMediaProxyReady=true;
+        hidePanel();
+        scheduleReconcile();
+        return true;
+      }catch(error){
+        // A failed network request must never trigger reauthentication.
+        console.warn('[QL Ảnh] Kiểm tra phiên media tạm thời lỗi',error);
+        lastSessionCheckAt=Date.now();
+        lastSessionStatus=0;
+        return ready;
+      }
+    })().finally(()=>{sessionCheckTask=null;});
+    return sessionCheckTask;
   }
   function selectedMediaId(el) {
     return idOf(el.getAttribute('src')) ||
@@ -330,7 +381,8 @@
           } catch (err) { console.warn('[QL Ảnh] Media connection error',err); }
         })();
       } else {
-        showPanel();
+        // Confirm a missing/expired cookie before requesting Google again.
+        void checkSession(true);
       }
     },true);
     document.addEventListener('visibilitychange',()=>{
