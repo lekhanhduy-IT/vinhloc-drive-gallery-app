@@ -5,6 +5,14 @@
   if (window.vlMenuController) return;
   const itemHooks = new Set();
   const headerHooks = new Set();
+  // The delayed legacy header-decoration patch sets overflow:hidden,
+  // cutting the dropdown until a much later patch reverses it.
+  // Mark the actual app header as early as this controller loads.
+  function markHeader() {
+    const header = document.querySelector('header');
+    header?.classList.add('vl-header-menu-host');
+  }
+  markHeader();
 
   function invoke(hooks, payload) {
     for (const hook of hooks) {
@@ -18,6 +26,7 @@
       invoke(itemHooks, { id, menu });
   }
   function headerMenu() {
+    markHeader();
     const menu = document.getElementById('headerDropdown');
     if (menu && !menu.classList.contains('hidden'))
       invoke(headerHooks, { menu });
@@ -65,6 +74,7 @@
     if(!trigger)return;
     const menu=trigger.parentElement?.querySelector('#headerDropdown');
     if(!menu)return;
+    markHeader();
     event.preventDefault();
     event.stopImmediatePropagation();
     if(!menu.classList.contains('hidden')){
