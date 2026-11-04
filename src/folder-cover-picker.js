@@ -26,6 +26,108 @@
   let generation = 0;
 
   const imageURL = id => '/api/media?fileId=' + encodeURIComponent(id) + '&variant=thumb';
+
+  // Drive appProperties are the authority for images chosen from the folder.
+  // The old obfuscated app reassigns its private appMeta object after startup,
+  // so writing window.appMeta does NOT reliably update its actual data model.
+  const driveCovers = new Map();
+  const inFlight = new Set();
+  const CACHE_TTL = 90000;
+  let scanTimer = null;
+  let saveBusy = false;
+  let replayLegacySave = false;
+
+  function applyFolderCover(id, imageId) {
+    if (!idOk(id) || !idOk(imageId)) return;
+    const src = imageURL(imageId);
+    document.querySelectorAll('.item-cover-img-' + id).forEach(img => {
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      img.classList.remove('hidden');
+    });
+    document.querySelectorAll('.item-cover-icon-' + id).forEach(icon => icon.classList.add('hidden'));
+  }
+  function applyDialogCover(id, imageId) {
+    if (edit?.id !== id || !idOk(imageId) || cover) return;
+    const modal = byId('infoModal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    const preview = byId('infoCoverPreview');
+    if (!preview) return;
+    preview.src = imageURL(imageId);
+    preview.classList.remove('hidden');
+    byId('infoCoverPlaceholder')?.classList.add('hidden');
+  }
+  function repaintKnown() {
+    for (const [id,record] of driveCovers) {
+      if (!record.imageId) continue;
+      applyFolderCover(id,record.imageId);
+    }
+  }
+  async function loadSavedCovers(ids) {
+    const now = Date.now();
+    const fresh = [...new Set(ids)].filter(id =>
+      idOk(id) && !inFlight.has(id) &&
+      (!driveCovers.has(id) || now-driveCovers.get(id).time>CACHE_TTL));
+    if (!fresh.length) return;
+    // Avoid expensive Drive GET calls for every folder every time JS renders.
+    for (let start=0;start<fresh.length;start+=80) {
+      const group=fresh.slice(start,start+80);
+      group.forEach(id=>inFlight.add(id));
+      try {
+        const res=await fetch('/api/folder-cover',{
+          method:'POST',credentials:'same-origin',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'get',folderIds:group}),cache:'no-store'
+        });
+        const data=await res.json().catch(()=>({}));
+        if (!res.ok || !data.success || !data.covers)
+          throw Error(data.message || 'Không đọc được thumbnail đã lưu');
+        for (const id of group) {
+          if (!Object.prototype.hasOwnProperty.call(data.covers,id)) continue;
+          const imageId=idOk(data.covers[id]) ? data.covers[id] : null;
+          driveCovers.set(id,{imageId,time:Date.now()});
+          if(imageId){
+            applyFolderCover(id,imageId);
+            applyDialogCover(id,imageId);
+          }
+        }
+      }catch(error){
+        console.warn('[QL Ảnh] Không thể tải thumbnail folder',error);
+      }finally {
+        group.forEach(id=>inFlight.delete(id));
+      }
+    }
+  }
+  function scanRenderedFolders(){
+    scanTimer=null;
+    const ids=new Set();
+    for(const img of document.querySelectorAll('#folderList img[class*="item-cover-img-"]')){
+      for(const name of img.classList) {
+        if(!name.startsWith('item-cover-img-'))continue;
+        const id=name.slice('item-cover-img-'.length);
+        if(idOk(id))ids.add(id);
+      }
+    }
+    for(const id of ids){
+      const known=driveCovers.get(id);
+      if(known?.imageId)applyFolderCover(id,known.imageId);
+    }
+    void loadSavedCovers([...ids]);
+  }
+  function scheduleFolderScan(){
+    if(scanTimer!==null)return;
+    scanTimer=setTimeout(scanRenderedFolders,70);
+  }
+  const folderList=byId('folderList');
+  if(folderList && window.MutationObserver){
+    new MutationObserver(scheduleFolderScan)
+      .observe(folderList,{childList:true,subtree:true});
+  }
+  scheduleFolderScan();
+  window.addEventListener('focus',()=>{
+    // Recheck only after TTL; other users may have changed the cover.
+    scheduleFolderScan();
+  });
+
   const notify = (message, error = false) => {
     if (typeof window.showToast === 'function') window.showToast(message, error);
     else if (error) console.warn('[QL Ảnh]', message);
@@ -39,7 +141,13 @@
       edit = type === 'folder' && idOk(id) ? {id, name: String(name || 'Thư mục')} : null;
       cover = null;
       choice = null;
-      return baseOpenInfo.apply(this, arguments);
+      const result=baseOpenInfo.apply(this, arguments);
+      if(edit){
+        const known=driveCovers.get(edit.id);
+        if(known?.imageId)applyDialogCover(edit.id,known.imageId);
+        void loadSavedCovers([edit.id]);
+      }
+      return result;
     };
   }
 
@@ -229,23 +337,68 @@
     }
   });
 
-  // The legacy Save handler runs at the target/bubble phase, reading
-  // appMeta[folderId].cover and queuing updateSingleMeta to Google Sheets.
-  // Inject the chosen URL only when Save is pressed; Cancel changes nothing.
-  document.addEventListener('click', event => {
-    if (!event.target.closest?.('#infoSaveBtn') || !cover || !edit) return;
+  function showSaveStatus(message,error=false){
+    const el=byId('infoCoverSaveStatus');
+    if(!el)return;
+    el.textContent=message;
+    el.classList.toggle('hidden',!message);
+    el.classList.toggle('text-red-600',error);
+    el.classList.toggle('text-blue-600',!error);
+  }
+  // Intercept only saves that changed the cover from the folder's image grid.
+  // The old click handler is replayed AFTER Drive confirms the image reference;
+  // renaming, description and all existing legacy save behavior stay intact.
+  document.addEventListener('click', async event => {
+    const target=event.target.closest?.('#infoSaveBtn');
+    if (!target || replayLegacySave || !cover || !edit) return;
     if (edit.id !== cover.folderId || !idOk(cover.fileId)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if(saveBusy)return;
+
+    const selected={...cover};
+    saveBusy=true;
+    target.disabled=true;
+    showSaveStatus('Đang lưu thumbnail vào Google Drive…');
     try {
-      const metadata = typeof appMeta !== 'undefined' ? appMeta : window.appMeta;
-      if (!metadata || typeof metadata !== 'object')
-        throw Error('Chưa có dữ liệu metadata của thư mục');
-      metadata[edit.id] = {...(metadata[edit.id] || {}), cover:cover.url};
-      window.pendingCoverBase64 = null;
-      window.pendingCoverMimeType = null;
-    } catch (error) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      notify('Không thể đặt ảnh thumbnail: ' + error.message, true);
+      const response=await fetch('/api/folder-cover',{
+        method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          action:'set',folderId:selected.folderId,imageId:selected.fileId
+        }),cache:'no-store'
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok || !result.success ||
+         result.folderId!==selected.folderId || result.imageId!==selected.fileId)
+        throw Error(result.message||'Google Drive chưa xác nhận lưu thumbnail');
+
+      driveCovers.set(selected.folderId,{imageId:selected.fileId,time:Date.now()});
+      applyFolderCover(selected.folderId,selected.fileId);
+      // Once saved, the legacy Save button can commit name/description without
+      // uploading a duplicate image or replacing the authoritative Drive cover.
+      cover=null;
+      window.pendingCoverBase64=null;
+      window.pendingCoverMimeType=null;
+      showSaveStatus('');
+      if(edit?.id===selected.folderId && !byId('infoModal')?.classList.contains('hidden')){
+        replayLegacySave=true;
+        try {
+          target.disabled=false;
+          const current=byId('infoSaveBtn');
+          current?.click();
+        } finally {replayLegacySave=false;}
+      }
+      repaintKnown();
+      setTimeout(repaintKnown,0);
+      notify('Đã lưu thumbnail của thư mục trên Google Drive.');
+    }catch(error){
+      showSaveStatus('Không lưu được ảnh thumbnail: '+error.message,true);
+      notify('Không lưu được ảnh thumbnail: '+error.message,true);
+    }finally {
+      saveBusy=false;
+      target.disabled=false;
     }
-  }, true);
+  },true);
+
 })();
