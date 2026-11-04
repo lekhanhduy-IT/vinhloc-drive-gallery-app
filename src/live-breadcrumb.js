@@ -38,10 +38,22 @@
     const item=path[index];
     if(!item||!idOK(item.id)||item.id===folderId())return;
     if(item.id===ROOT&&!window.vlShareScope){
-      // Returning home uses the existing category navigation state.
       window.loadFolder?.(ROOT,category(),true,false);
       return;
     }
+    // The native navigation stack may omit mega-rows. Restore the correct
+    // parent prefix only when the user CLICKED a breadcrumb ancestor, so Back
+    // navigates through the same physical levels shown in the header.
+    try{
+      const stack=typeof folderStack!=='undefined'?folderStack:window.folderStack;
+      if(Array.isArray(stack)){
+        const ancestors=path.slice(0,index).map(x=>({
+          id:x.id,name:x.name,scrollTop:0
+        }));
+        stack.splice(0,stack.length,...ancestors);
+        localStorage.setItem('appFolderStack',JSON.stringify(stack));
+      }
+    }catch(error){console.warn('[QL Ảnh] Không cập nhật được đường dẫn',error);}
     window.loadFolder?.(item.id,item.name,true,false);
   }
   function render(id,path){
