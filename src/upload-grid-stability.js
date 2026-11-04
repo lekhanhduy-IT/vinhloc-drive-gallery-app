@@ -6,6 +6,7 @@
   let batch=null;
   let installed=null;
   const cleanupUrls=new Set();
+  const pendingUrls=new Set();
   let activeGroups=0;
   const currentFolder=()=>{
     try { return typeof currentFolderId!=='undefined' ? currentFolderId : window.currentFolderId; }
@@ -48,7 +49,10 @@
         ids:new Set(),start:Date.now(),progress:new Map()};
     }
     activeGroups++;
-    for(const item of items)batch.ids.add(item.tempId);
+    for(const item of items){
+      batch.ids.add(item.tempId);
+      if(item.tempUrl)pendingUrls.add(item.tempUrl);
+    }
     return append;
   }
   // Add only the new cards: a complete render would replace earlier local
@@ -215,8 +219,14 @@
   }
   function release(url){
     if(!url||cleanupUrls.has(url))return;
+    pendingUrls.delete(url);
     cleanupUrls.add(url);
     try{URL.revokeObjectURL(url)}catch(_){}
+  }
+  function drop(id){
+    const card=getCard(id);
+    if(card)card.remove();
+    batch?.ids.delete(id);
   }
   function failed(id,error){
     updateMessage(id,'Chưa xác nhận trên Drive',true);
@@ -233,9 +243,10 @@
     batch=null;
   }
   window.addEventListener('pagehide',()=>{
-    for(const url of cleanupUrls)URL.revokeObjectURL(url);
+    for(const url of pendingUrls)URL.revokeObjectURL(url);
+    pendingUrls.clear();
   });
-  window.vlUploadGrid={begin,appendPending,markUploading,settle,failed,finish,release,install,
+  window.vlUploadGrid={begin,appendPending,markUploading,settle,failed,drop,finish,release,install,
     isActive:()=>!!batch?.active,
     folderId:()=>batch?.folderId||null,
     suppressFor:id=>!!batch?.active&&id===batch.folderId,
