@@ -75,12 +75,38 @@ export default async function handler(req,res){
       // keyword data-only, never part of the Drive query expression.
       const literal=keyword.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       const result=[],seen=new Set();
+      const hintIds=Array.isArray(body.hintIds)?
+        [...new Set(body.hintIds.filter(idOK))].slice(0,120):[];
+      let hintIndex=0;
+      await Promise.all(Array.from({length:Math.min(8,hintIds.length)},async()=>{
+        while(hintIndex<hintIds.length){
+          const id=hintIds[hintIndex++];
+          try {
+            const item=await file(id);
+            if(item.trashed||item.driveId!==DRIVE||!await pathFor(id))continue;
+            if(seen.has(id))continue;
+            seen.add(id);
+            const isFolder=item.mimeType===FOLDER;
+            result.push({
+              id:item.id,name:String(item.name||'').slice(0,250),
+              type:isFolder?'folder':'file',mimeType:item.mimeType||'',
+              size:Number(item.size||0),createdTime:item.createdTime||null,
+              ...(!isFolder?{url:'/api/media?fileId='+encodeURIComponent(item.id)+'&variant=full'}:{})
+            });
+          }catch(_){/* cache hints from deleted files never appear */}
+        }
+      }));
+      // Drive's name contains only matches name prefixes. Use fullText for
+      // whole-word matches elsewhere; hints above retain substring/alias search.
+      const normalize=value=>String(value||'').normalize('NFD')
+        .replace(/[\u0300-\u036f]/g,'').toLowerCase();
+      const normalized=normalize(keyword);
       let page='',round=0;
       // Search the shared drive, then scope/filter verified candidates.
       // Keep bounded costs for large libraries.
       do{
         const params=new URLSearchParams({
-          q:"name contains '"+literal+"' and trashed = false",
+          q:"(name contains '"+literal+"' or fullText contains '"+literal+"') and trashed = false",
           corpora:'drive',driveId:DRIVE,
           includeItemsFromAllDrives:'true',supportsAllDrives:'true',
           pageSize:'100',
@@ -89,7 +115,8 @@ export default async function handler(req,res){
         if(page)params.set('pageToken',page);
         const listing=await google('?'+params,token);
         const candidates=(listing.files||[]).filter(x=>
-          idOK(x.id)&&x.driveId===DRIVE&&!x.trashed&&!seen.has(x.id));
+          idOK(x.id)&&x.driveId===DRIVE&&!x.trashed&&!seen.has(x.id)&&
+          normalize(x.name).includes(normalized));
         for(const item of candidates){seen.add(item.id);memo.set(item.id,Promise.resolve(item));}
         let next=0;
         await Promise.all(Array.from({length:Math.min(8,candidates.length)},async()=>{
