@@ -6,7 +6,8 @@
   window.__vlReliableUploadInstalled = true;
   const ENDPOINT_FALLBACK = 'https://script.google.com/macros/s/AKfycbx3xI-bNWfeffsEH-iIc0yYfF9bHYvAiKZKWIfco6j7Z7GOtOAv7Q8WE1_y9xjen7c/exec';
   const CHUNK_SIZE = 5 * 1024 * 1024; // 20 * Drive's 256-KiB alignment.
-  const SELF = {token: null, tokenAt: 0, tokenPromise: null, processing: false};
+  const SELF = {token: null, tokenAt: 0, tokenPromise: null, processing: false,
+    uploadQueue: [], batchSeq: 0};
   const rootId = '1xWDed1IBzGdCA4r5vbds1x6AF31hSIUT';
   function read(name) {
     try {
@@ -309,94 +310,136 @@
       }
     } catch (_) {}
   }
-  async function uploadFiles(files) {
-    const chosen = Array.from(files || []).filter(f => f && f.size > 0);
-    if (!chosen.length) { toast('Không có file hợp lệ để tải lên.', true); return; }
-    if (SELF.processing) { toast('Đang tải một đợt file. Vui lòng hoàn tất trước khi chọn đợt khác.', true); return; }
-    const folderId = read('folder');
-    if (!folderId || folderId.startsWith('temp_folder_')) {
-      toast('Thư mục chưa có ID thật. Vui lòng tạo xong thư mục trước.', true); return;
-    }
-    SELF.processing = true;
-    setBusy(true);
-    const startedAt = Date.now();
-    const pending = chosen.map((file, index) => {
-      const tempId = 'temp_file_vl_' + startedAt + '_' + index;
-      const tempUrl = URL.createObjectURL(file);
-      const uploadKey=uniqueUploadKey();
-      return {file, tempId, tempUrl, uploadKey, data: {
-        id: tempId, name: file.name, type: 'file',
-        mimeType: file.type || 'application/octet-stream',
-        isPending: true, tempUrl, uploadStartedAt: startedAt,
-        uploadKey, size: file.size
-      }};
-    });
-    window.vlActiveUploadIds ||= new Set();
-    for(const item of pending)window.vlActiveUploadIds.add(item.tempId);
-    window.vlUploadGrid?.begin(folderId,pending);
-    setList(folderId, [...pending.map(p => p.data), ...getList(folderId)]);
+  async function processUploadBatch(job) {
+    const {folderId,pending,chosen} = job;
     let success = 0, failure = 0, uncertain = 0;
-    toast('Đang tải ' + chosen.length + ' file lên Google Drive...');
+    toast('Đang xử lý đợt ' + job.batchNo + ' (' + chosen.length + ' file)...');
     try {
       let token = isAdminClient() ? await driveToken() : null;
       for (const item of pending) {
+        window.vlUploadGrid?.markUploading(item.tempId);
         try {
           let completed;
-          try {completed=await transferFile(item.file, folderId, token,item.uploadKey);}
-          catch(transferError){
-            // Safari may say "Load failed" after Drive has already committed
-            // the bytes. Verify by unique, Drive-stored uploadKey before
-            // treating it as failed. Never start a new upload session here.
-            const verified=await verifyWithBackoff(folderId,item.uploadKey,token);
-            if(!verified)throw transferError;
-            completed=verified;
+          try { completed = await transferFile(item.file,folderId,token,item.uploadKey); }
+          catch (transferError) {
+            // The upload may already have been committed by Drive even when
+            // Safari reports a lost final response. Verify the unique key.
+            const verified = await verifyWithBackoff(folderId,item.uploadKey,token);
+            if (!verified) throw transferError;
+            completed = verified;
           }
-          const {tempUrl: discardedPreviewFlag, isPending: discardedPending, ...uploadData} = item.data;
+          const {tempUrl: discardPreview, isPending: discardPending, ...uploadData} = item.data;
           const fileData = {
-            ...uploadData, id: completed.id, name: completed.name || item.file.name,
-            mimeType: completed.mimeType || item.data.mimeType,
-            isPending: false, recentlyUploadedAt: Date.now(),
+            ...uploadData, id:completed.id, name:completed.name || item.file.name,
+            mimeType:completed.mimeType || item.data.mimeType,
+            isPending:false, recentlyUploadedAt:Date.now(),
             ...(!isAdminClient()?{uploadedBy:localStorage.getItem('vinhloc_authenticated_email')}: {})
           };
-          // Retain the local preview for this session; other devices use authenticated fallback.
           upsert(folderId,fileData,item.tempId);
           window.vlUploadGrid?.settle(item.tempId,fileData,item.tempUrl);
           window.vlActiveUploadIds?.delete(item.tempId);
-          // Blob preview remains mounted until its replacement thumbnail is
-          // loaded. The stable grid releases it later, not at upload ACK.
           if(!window.vlUploadGrid)URL.revokeObjectURL(item.tempUrl);
           success++;
-        } catch (err) {
+        } catch (error) {
           uncertain++;
           window.vlActiveUploadIds?.delete(item.tempId);
-          // Preserve this exact tile and preview. It may have been accepted
-          // by Google Drive even if Safari never received the ACK.
-          window.vlUploadGrid?.failed(item.tempId,err.message);
+          window.vlUploadGrid?.failed(item.tempId,error.message);
           if(!window.vlUploadGrid) {
             failure++;
             remove(folderId,item.tempId);
             URL.revokeObjectURL(item.tempUrl);
           }
-          toast('Chưa xác nhận '+item.file.name+': '+err.message,true);
+          toast('Chưa xác nhận '+item.file.name+': '+error.message,true);
         }
       }
-      toast('Đã xác nhận '+success+'/'+chosen.length+' file lên Drive.'+
-        (uncertain ? ' Chưa xác nhận: '+uncertain+' file; không upload lại tự động.' : '')+
+      toast('Đợt '+job.batchNo+': đã xác nhận '+success+'/'+chosen.length+' file lên Drive.'+
+        (uncertain ? ' Chưa xác nhận: '+uncertain+' file; không tự động tải lại.' : '')+
         (failure ? ' Lỗi: '+failure+' file.' : ''),uncertain>0||failure>0);
     } catch (error) {
+      // A token/session failure before sending any bytes: remove ONLY this
+      // batch's unstarted placeholders; leave all other batches intact.
       for (const item of pending) {
         if (getList(folderId).some(f => f.id === item.tempId)) {
-          remove(folderId, item.tempId);
-          URL.revokeObjectURL(item.tempUrl);
+          remove(folderId,item.tempId);
+          window.vlUploadGrid?.release(item.tempUrl);
+          if(!window.vlUploadGrid)URL.revokeObjectURL(item.tempUrl);
         }
       }
-      toast('Upload chưa thực hiện được: '+error.message,true);
+      toast('Đợt '+job.batchNo+' chưa thực hiện được: '+error.message,true);
+      return {success,failure,uncertain,error:error.message};
     } finally {
-      for(const item of pending)window.vlActiveUploadIds?.delete(item.tempId);
-      window.vlUploadGrid?.finish();
+      for (const item of pending) window.vlActiveUploadIds?.delete(item.tempId);
+    }
+    return {success,failure,uncertain};
+  }
+
+  async function drainUploadQueue() {
+    if (SELF.processing) return;
+    SELF.processing = true;
+    window.vlUploadQueueActive = true;
+    setBusy(true);
+    try {
+      // A single worker keeps uploads ordered, prevents duplicate Drive
+      // sessions, and avoids unbounded parallel transfers on iPhone.
+      while (SELF.uploadQueue.length) {
+        const job = SELF.uploadQueue.shift();
+        try {
+          job.resolve(await processUploadBatch(job));
+        } catch (error) {
+          console.warn('[QL Ảnh] Upload batch error:',error);
+          job.resolve({success:0,error:error.message});
+        } finally {
+          window.vlUploadGrid?.finish();
+        }
+      }
+    } finally {
       SELF.processing = false;
+      window.vlUploadQueueActive = false;
       setBusy(false);
     }
+  }
+
+  function uploadFiles(files) {
+    // Selecting another set of photos never cancels the earlier selection.
+    const chosen = Array.from(files || []).filter(f => f && f.size > 0);
+    if (!chosen.length) {
+      toast('Không có file hợp lệ để tải lên.',true);
+      return Promise.resolve(null);
+    }
+    const folderId = read('folder');
+    if (!folderId || folderId.startsWith('temp_folder_')) {
+      toast('Thư mục chưa có ID thật. Vui lòng tạo xong thư mục trước.',true);
+      return Promise.resolve(null);
+    }
+    const startedAt = Date.now();
+    const batchNo = ++SELF.batchSeq;
+    const pending = chosen.map((file,index) => {
+      // Include a per-tab batch sequence: two selections made in one
+      // millisecond must never create colliding placeholder IDs.
+      const tempId = 'temp_file_vl_' + startedAt + '_' + batchNo + '_' + index;
+      const tempUrl = URL.createObjectURL(file);
+      const uploadKey = uniqueUploadKey();
+      return {file,tempId,tempUrl,uploadKey,data:{
+        id:tempId,name:file.name,type:'file',
+        mimeType:file.type||'application/octet-stream',
+        isPending:true,tempUrl,uploadStartedAt:startedAt,
+        uploadKey,size:file.size
+      }};
+    });
+    window.vlActiveUploadIds ||= new Set();
+    for (const item of pending) window.vlActiveUploadIds.add(item.tempId);
+    const append = window.vlUploadGrid?.begin(folderId,pending);
+    setList(folderId,[...pending.map(p=>p.data),...getList(folderId)]);
+    if (append) window.vlUploadGrid?.appendPending(folderId,pending);
+
+    const waiting = SELF.processing || SELF.uploadQueue.length > 0;
+    const completion = new Promise(resolve => {
+      SELF.uploadQueue.push({folderId,chosen,pending,batchNo,resolve});
+    });
+    if(waiting)toast('Đã thêm '+chosen.length+' file vào hàng đợi. Đợt trước vẫn đang tải.');
+    else toast('Đang tải '+chosen.length+' file lên Google Drive...');
+    if(!SELF.processing)void drainUploadQueue();
+    return completion;
   }
   window.vlUploadFiles = uploadFiles;
 
