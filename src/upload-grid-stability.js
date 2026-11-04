@@ -169,7 +169,12 @@
   }
   function settle(tempId,item,tempUrl){
     const previous=getCard(tempId);
-    if(!previous || !item?.id)return false;
+    if(!previous || !item?.id){
+      // If the user navigated away, the completed item is already in the
+      // folder cache. Its off-screen blob preview can be released safely.
+      if(tempUrl)release(tempUrl);
+      return false;
+    }
     const newId=item.id;
     const thumb='https://drive.google.com/thumbnail?id='+encodeURIComponent(newId)+'&sz=w400';
     const full='https://drive.google.com/thumbnail?id='+encodeURIComponent(newId)+'&sz=w2000';
