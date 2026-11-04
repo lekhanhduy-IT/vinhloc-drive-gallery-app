@@ -58,6 +58,25 @@
   decorate('buildHeaderMenu', () => headerMenu());
   decorate('toggleHeaderMenu', () => headerMenu());
 
+  // Intercept the one header three-dot button before legacy DOM/inline
+  // handlers can toggle it again. The menu is built before it becomes visible.
+  window.addEventListener('click', event => {
+    const trigger=event.target?.closest?.('#headerDropdownContainer > button[onclick*="toggleHeaderMenu"]');
+    if(!trigger)return;
+    const menu=trigger.parentElement?.querySelector('#headerDropdown');
+    if(!menu)return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if(!menu.classList.contains('hidden')){
+      menu.classList.add('hidden');
+      return;
+    }
+    try { window.buildHeaderMenu?.(); }
+    catch(error) { console.warn('[QL Ảnh] Không tạo được menu header',error); }
+    menu.classList.remove('hidden');
+    headerMenu(); // Synchronize permission-aware actions in this same click.
+  }, true);
+
   window.vlMenuController = {
     onItem(handler) {
       if (typeof handler !== 'function') return () => {};
