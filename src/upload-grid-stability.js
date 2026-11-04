@@ -65,7 +65,7 @@
       anchor.className='absolute top-2 right-2 z-20';
       const marker=document.createElement('div');
       marker.id=selector(item.tempId);
-      marker.className='hidden item-action-menu';
+      marker.className='hidden absolute right-0 mt-1 w-40 bg-white rounded-2xl shadow-xl border border-gray-100 z-[500] py-1 text-sm item-action-menu';
       anchor.appendChild(marker);
       card.appendChild(anchor);
       const preview=document.createElement('div');
@@ -85,6 +85,7 @@
       const name=document.createElement('span');
       name.className='text-[13px] font-bold text-gray-800 line-clamp-2 leading-tight';
       name.textContent=item.file.name;
+      name.dataset.vlPendingName='1';
       const type=document.createElement('span');
       type.className='text-[10px] text-gray-400 mt-1 uppercase font-semibold';
       type.textContent=(item.file.type||'file').split('/').pop();
@@ -121,6 +122,51 @@
     if(warning) overlay.querySelector('.loader')?.remove();
   }
   function markUploading(id){updateMessage(id,'Đang Up...');}
+  function finalizeQueuedCard(card,menu,item,tempId){
+    if(card.dataset.vlQueuedSettled==='1')return;
+    card.dataset.vlQueuedSettled='1';
+    const name=card.querySelector('[data-vl-pending-name]');
+    if(name){
+      name.textContent=item.name;
+      name.title=item.name;
+      name.classList.add('drive-img-name','item-name-'+item.id);
+    }
+    const preview=card.querySelector('.h-32');
+    preview?.classList.add('cursor-pointer');
+    preview?.addEventListener('click',event=>{
+      if(event.target.closest('button,.item-action-menu'))return;
+      const full='https://drive.google.com/thumbnail?id='+encodeURIComponent(item.id)+'&sz=w2000';
+      window.openMedia?.(item.id,item.mimeType,item.name,full);
+    });
+    if(!menu)return;
+    const anchor=menu.parentElement;
+    const trigger=document.createElement('button');
+    trigger.type='button';
+    trigger.className='w-8 h-8 flex items-center justify-center text-gray-600 bg-white/90 rounded-full shadow-sm';
+    trigger.setAttribute('aria-label','Thao tác file');
+    trigger.textContent='⋮';
+    trigger.addEventListener('click',event=>{
+      event.stopPropagation();
+      window.toggleItemMenu?.(item.id,event);
+    });
+    anchor.insertBefore(trigger,menu);
+    const action=(label,fn)=>{
+      const row=document.createElement('button');
+      row.type='button';
+      row.className='w-full px-4 py-3 hover:bg-gray-50 cursor-pointer text-gray-700 font-semibold flex items-center text-left';
+      row.textContent=label;
+      row.addEventListener('click',event=>{
+        event.stopPropagation();menu.classList.add('hidden');
+        fn(event);
+      });
+      menu.appendChild(row);
+    };
+    action('Chia sẻ',e=>window.shareItem?.(item.id,'file',item.name,e));
+    action('Tải xuống',e=>window.downloadItem?.(item.id,'file',item.name,e));
+    action('Thông tin',e=>window.openInfo?.(item.id,item.name,'file','file',e));
+    // Use verified deletion instead of a legacy unconfirmed delete action.
+    action('Xóa',()=>window.vlAskOwnedDelete?.(item.id,'file'));
+  }
   function settle(tempId,item,tempUrl){
     const previous=getCard(tempId);
     if(!previous || !item?.id)return false;
@@ -131,6 +177,10 @@
     if(overlay)overlay.remove();
     const menu=document.getElementById(selector(tempId));
     if(menu)menu.id=selector(newId);
+    if(previous.dataset?.vlQueuedSettled!=='1' &&
+       previous.querySelector('[data-vl-pending-name]')){
+      finalizeQueuedCard(previous,menu,item,tempId);
+    }
     // Update every inline action on this single card, not other cards.
     for(const clickable of previous.querySelectorAll('[onclick]')) {
       const action=clickable.getAttribute('onclick')||'';
