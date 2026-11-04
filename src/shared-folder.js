@@ -185,6 +185,7 @@
     resetStack();
     const menu=window.vlOwnerAccess;
     void menu?.refresh?.();
+    window.dispatchEvent(new CustomEvent('vl:share-member-ready'));
   }
   function closeModal(){modal?.remove();modal=null;}
   function authScreen(message){
