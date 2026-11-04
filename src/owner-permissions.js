@@ -309,7 +309,9 @@
     event.preventDefault();
     event.stopImmediatePropagation();
     if(action==='auth'){
-      void window.vlMediaEnsureAuth?.();
+      if(lastCheckError.includes('không khớp tài khoản'))
+        void window.vlMediaSwitchAccount?.();
+      else void window.vlMediaEnsureAuth?.();
     }else if(action==='delete'){
       void menuDelete();
     }else if(action==='all'||action==='folder'||action==='file'||action.startsWith('ext:')){
