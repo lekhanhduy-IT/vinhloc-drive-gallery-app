@@ -34,10 +34,10 @@
     if(admin())return;
     const fresh=items.filter(item=>item.id && !pendingIds.has(item.id) && (force||!idsCache.has(item.id)||Date.now()-idsCache.get(item.id).at>=TTL));
     if(!fresh.length){showHeader();return;}
+    fresh.forEach(item=>pendingIds.add(item.id));
     lastChecking=true;
     for(let offset=0;offset<fresh.length;offset+=50){
       const ids=fresh.slice(offset,offset+50).map(item=>item.id);
-      ids.forEach(id=>pendingIds.add(id));
       try{
         const response=await api('check',{ids});
         lastCheckError='';
@@ -55,7 +55,7 @@
       }
       showHeader();
     }
-    lastChecking=false;
+    lastChecking=pendingIds.size>0;
     showHeader();
     window.vlMenuController?.refreshVisible();
   }
@@ -98,7 +98,7 @@
     const statusAction=lastCheckError?'auth':'none';
     block.innerHTML=
       '<div style="font-size:11px;font-weight:bold;color:#64748b;padding:6px 10px;">DO TÔI TẢI LÊN ('+owned.length+'/'+all.length+')</div>'+
-      '<button type="button" data-vl-owner-action="'+statusAction+'" style="display:block;min-height:40px;width:100%;padding:8px 10px;color:#64748b;font-size:12px;text-align:left;">'+status+'</button>'+
+      '<button type="button" data-vl-owner-action="'+statusAction+'" style="display:block;height:48px;overflow:hidden;width:100%;padding:6px 10px;color:#64748b;font-size:12px;line-height:18px;text-align:left;">'+status+'</button>'+
       button('Chọn tất cả file/thư mục của tôi','all',!owned.length)+
       button('Chọn thư mục của tôi ('+folders.length+')','folder',!folders.length)+
       button('Chọn ảnh/video của tôi ('+files.length+')','file',!files.length)+
