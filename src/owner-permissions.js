@@ -43,6 +43,13 @@
   }
   async function ensureSession(force=false){
     if(admin())return true;
+    if(!window.vlShareScope && !email()){
+      // A leftover HttpOnly session must not expose owner actions after
+      // the app's visible account has explicitly logged out.
+      sessionValid=false;
+      idsCache.clear();
+      return false;
+    }
     if(window.vlShareScope && !window.vlShareScope.ready?.())return false;
     if(sessionTask)return sessionTask;
     if(!force && sessionValid && Date.now()-sessionCheckedAt<45000)return true;
