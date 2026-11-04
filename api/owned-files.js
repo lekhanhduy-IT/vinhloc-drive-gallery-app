@@ -2,6 +2,26 @@ import { verifiedAccount, serverDriveToken } from './media.js';
 import {signFolderGrant,readFolderGrant} from '../lib/share-capability.js';
 
 const SHARED_DRIVE_ID='0AMLRHzF05fTFUk9PVA';
+const ROOT_FOLDER_ID='1xWDed1IBzGdCA4r5vbds1x6AF31hSIUT';
+const META_SCRIPT_URL='https://script.google.com/macros/s/AKfycbx3xI-bNWfeffsEH-iIc0yYfF9bHYvAiKZKWIfco6j7Z7GOtOAv7Q8WE1_y9xjen7c/exec';
+async function saveMegaRowMeta(id,name,category){
+  const abort=new AbortController();
+  const timer=setTimeout(()=>abort.abort(),16000);
+  try{
+    const res=await fetch(META_SCRIPT_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'updateSingleMeta',meta:{
+        id,name,type:category,desc:'',cover:''
+      }}),signal:abort.signal
+    });
+    if(!res.ok)throw Error('Apps Script HTTP '+res.status);
+    const data=await res.json();
+    if(data?.success!==true)throw Error(data?.message||data?.error||'Không lưu được metadata mega-row');
+    return true;
+  }finally{clearTimeout(timer);}
+}
+
 const ADMIN_EMAIL='admin@tudonghoavinhloc.com';
 const LIMIT=50;
 const idPattern=/^[A-Za-z0-9_-]{10,180}$/;
@@ -131,6 +151,10 @@ export default async function handler(req,res) {
       if(typeof parentId!=='string'||!idPattern.test(parentId))return respond(res,400,'ID thư mục cha không hợp lệ');
       await folder(parentId);
       await requireScope(parentId,scopeRoot);
+      const isMegaRow=parentId===ROOT_FOLDER_ID;
+      // A shared-folder grant never authorizes writing to the workspace root.
+      if(isMegaRow&&(scopeRoot || user.member!==true))
+        return respond(res,403,'Chỉ thành viên nội bộ được tạo mega-row tại thư mục gốc');
       const name=String(body.name||'').trim();
       if(!name||name.length>180)return respond(res,400,'Tên thư mục không hợp lệ');
       const payload={name,mimeType:'application/vnd.google-apps.folder',parents:[parentId],
@@ -140,7 +164,21 @@ export default async function handler(req,res) {
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify(payload)
       });
-      return respond(res,200,'Đã tạo thư mục',{id:created.id,name:created.name,uploaderEmail:email});
+      let megaMetaSaved=!isMegaRow;
+      let metaError='';
+      if(isMegaRow){
+        try {
+          megaMetaSaved=await saveMegaRowMeta(created.id,name,
+            body.category==='Ý tưởng'?'Ý tưởng':'Triển khai');
+        }catch(error){
+          metaError='Đã tạo thư mục trên Drive nhưng chưa ghi được thông tin mega-row vào Sheets';
+          console.warn('[QL Ảnh] Mega-row metadata',created.id,error);
+        }
+      }
+      return respond(res,200,'Đã tạo thư mục',{
+        id:created.id,name:created.name,uploaderEmail:email,
+        isMegaRow,megaMetaSaved,...(metaError?{warning:metaError}:{})
+      });
     }
     if(action==='startUpload'){
       const parentId=body.folderId;
