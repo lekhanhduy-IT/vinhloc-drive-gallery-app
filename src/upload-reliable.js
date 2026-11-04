@@ -330,6 +330,53 @@
     }
     throw new Error('Phiên upload kết thúc nhưng chưa xác nhận tệp');
   }
+  async function validateUploaded(completed,folderId,uploadKey,token){
+    if(!completed?.id || String(completed.id).startsWith('temp_'))
+      throw Error('Drive chưa trả ID file thật');
+    if(!isAdminClient()){
+      const result=await ownApi('inspectUpload',{id:completed.id,folderId,uploadKey});
+      if(result.file?.id!==completed.id)throw Error('ID file đã upload không trùng');
+      return {...completed,...result.file};
+    }
+    // Admin uploads already use a Drive OAuth token. Verify directly so a
+    // temporary /api cookie expiry cannot invalidate a completed large 4K upload.
+    let activeToken=token||await driveToken();
+    async function info(id){
+      let response=await fetch('https://www.googleapis.com/drive/v3/files/'+
+        encodeURIComponent(id)+
+        '?supportsAllDrives=true&fields=id,name,mimeType,driveId,trashed,parents,appProperties',{
+        headers:{Authorization:'Bearer '+activeToken},cache:'no-store'
+      });
+      if(response.status===401){
+        activeToken=await driveToken(true);
+        response=await fetch('https://www.googleapis.com/drive/v3/files/'+
+          encodeURIComponent(id)+
+          '?supportsAllDrives=true&fields=id,name,mimeType,driveId,trashed,parents,appProperties',{
+          headers:{Authorization:'Bearer '+activeToken},cache:'no-store'
+        });
+      }
+      if(!response.ok)throw Error('Drive chưa xác minh file (HTTP '+response.status+')');
+      return response.json();
+    }
+    const file=await info(completed.id);
+    if(file.trashed || !(file.parents||[]).includes(folderId) ||
+       file.appProperties?.vlUploadKey!==uploadKey)
+      throw Error('File chưa được xác minh trong đúng folder đã chọn');
+    if(file.driveId!=='0AMLRHzF05fTFUk9PVA'){
+      let node=folderId,matched=false;
+      const visited=new Set();
+      for(let depth=0;depth<45;depth++){
+        if(node==='1xWDed1IBzGdCA4r5vbds1x6AF31hSIUT'){matched=true;break;}
+        if(visited.has(node))break;
+        visited.add(node);
+        const data=await info(node);
+        if(data.trashed||(data.parents||[]).length!==1)break;
+        node=data.parents[0];
+      }
+      if(!matched)throw Error('File nằm ngoài kho ảnh Vĩnh Lộc');
+    }
+    return {...completed,...file};
+  }
   function setBusy(active) {
     try {
       if (typeof syncQueueCount !== 'undefined') {
@@ -357,10 +404,7 @@
             if (!verified) throw transferError;
             completed = verified;
           }
-          const inspected=await ownApi('inspectUpload',{id:completed.id,folderId,uploadKey:item.uploadKey});
-          if(inspected.file?.id!==completed.id)
-            throw new Error('Drive chưa xác minh file trong đúng thư mục');
-          completed={...completed,...inspected.file};
+          completed=await validateUploaded(completed,folderId,item.uploadKey,token);
           const {tempUrl: discardPreview, isPending: discardPending, ...uploadData} = item.data;
           const fileData = {
             ...uploadData, id:completed.id, name:completed.name || item.file.name,
