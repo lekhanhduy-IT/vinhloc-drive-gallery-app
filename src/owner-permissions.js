@@ -249,7 +249,6 @@
   style.textContent='body[data-is-admin="false"] .item-action-menu [onclick*="handleDelete("],'+
     'body[data-is-admin="false"] #headerDropdown [onclick*="deleteSelectedItems("]{display:none!important;}';
   document.head.appendChild(style);
-  setInterval(checkPage,1100);
   window.vlOwnerAccess={can,eligible,refresh:async()=>{
     await checkIds(current(),true);
     window.vlMenuController?.refreshVisible();
