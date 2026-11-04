@@ -209,6 +209,25 @@ export default async function handler(req,res) {
         return respond(res,502,'Drive không trả địa chỉ upload hợp lệ');
       return respond(res,200,'Đã tạo phiên upload',{uploadUrl});
     }
+    if(action==='inspectUpload'){
+      const id=String(body.id||'');
+      const folderId=String(body.folderId||'');
+      const key=String(body.uploadKey||'');
+      if(!idPattern.test(id)||!idPattern.test(folderId)||!uploadKeyPattern.test(key))
+        return respond(res,400,'Mã xác minh file upload không hợp lệ');
+      // A valid upload must be present in the app's Shared Drive and the
+      // destination folder. A bare successful resumable PUT is insufficient.
+      await folder(folderId);
+      await requireScope(folderId,scopeRoot);
+      const info=await fileInfo(id);
+      if(!inGallery(info)||!(info.parents||[]).includes(folderId)||
+         info.appProperties?.[uploadKeyField]!==key ||
+         (!admin&&!own(info,email)))
+        return respond(res,409,'Drive chưa xác minh file nằm đúng thư mục hoặc quyền người tải lên');
+      return respond(res,200,'Đã xác minh vị trí và quyền upload',{
+        file:{id:info.id,name:info.name,mimeType:info.mimeType,driveId:info.driveId}
+      });
+    }
     if(action==='confirmUpload'){
       const parentId=body.folderId;
       const uploadKey=String(body.uploadKey||'');
