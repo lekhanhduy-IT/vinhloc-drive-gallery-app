@@ -83,6 +83,19 @@ async function inShareTree(id,root){
   }
   return false;
 }
+async function withinConfiguredRoot(id){
+  const seen=new Set();
+  let cursor=id;
+  for(let depth=0;depth<45;depth++){
+    if(cursor===ROOT_FOLDER_ID)return true;
+    if(seen.has(cursor))return false;
+    seen.add(cursor);
+    const f=await fileInfo(cursor,'id,parents,trashed');
+    if(f.trashed||(f.parents||[]).length!==1)return false;
+    cursor=f.parents[0];
+  }
+  return false;
+}
 async function requireScope(id,root){
   if(root&&!await inShareTree(id,root))
     throw Object.assign(new Error('Không được thao tác ngoài phạm vi thư mục chia sẻ'),{status:403});
@@ -217,10 +230,15 @@ export default async function handler(req,res) {
         return respond(res,400,'Mã xác minh file upload không hợp lệ');
       // A valid upload must be present in the app's Shared Drive and the
       // destination folder. A bare successful resumable PUT is insufficient.
-      await folder(folderId);
+      const parent=await fileInfo(folderId);
+      const internalRoot=admin&&!scopeRoot&&await withinConfiguredRoot(folderId);
+      if((!inGallery(parent)&&!internalRoot)||
+         parent.mimeType!=='application/vnd.google-apps.folder')
+        return respond(res,403,'Thư mục không thuộc kho ảnh được cấp quyền');
       await requireScope(folderId,scopeRoot);
       const info=await fileInfo(id);
-      if(!inGallery(info)||!(info.parents||[]).includes(folderId)||
+      if((!inGallery(info)&&!internalRoot)||
+         info.trashed || !(info.parents||[]).includes(folderId)||
          info.appProperties?.[uploadKeyField]!==key ||
          (!admin&&!own(info,email)))
         return respond(res,409,'Drive chưa xác minh file nằm đúng thư mục hoặc quyền người tải lên');
