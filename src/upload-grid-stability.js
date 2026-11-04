@@ -8,6 +8,52 @@
   const batches=new Map();
   const folderOfTempId=new Map();
   let installed=null;
+  // Keep the upload records in RAM, independently from the changing Drive
+  // cache and DOM. This allows navigation away and back during a batch.
+  let lastDrawnFolder=null;
+  let lastObservedFolder=null;
+  const RECENT_MS=180000;
+  function reconcile(folderId,items){
+    if(!Array.isArray(items))return items;
+    const batch=batches.get(folderId);
+    if(!batch)return items;
+    const now=Date.now(),pinned=[];
+    for(const record of batch.pending.values()){
+      pinned.push(record.data);
+    }
+    for(const [id,record] of batch.completed){
+      if(!batch.active && now-record.at>RECENT_MS){
+        batch.completed.delete(id);
+        continue;
+      }
+      pinned.push(record.data);
+    }
+    if(!pinned.length)return items;
+    const seen=new Set(pinned.map(x=>x.id));
+    // Keep all unmodified server/cache items, but never let a stale Drive
+    // response overwrite a pending or newly confirmed upload.
+    return [...pinned,...items.filter(x=>x && !seen.has(x.id))];
+  }
+  function listFor(folderId){
+    try{
+      const cache=typeof folderDataCache!=='undefined'?folderDataCache:window.folderDataCache;
+      return Array.isArray(cache?.[folderId])?cache[folderId]:[];
+    }catch(_){return [];}
+  }
+  function restoreCards(folderId){
+    if(folderId!==currentFolder())return;
+    const batch=batches.get(folderId);
+    const list=document.getElementById('fileList');
+    if(!batch||!list||list.dataset.vlRenderedFolder!==folderId)return;
+    const missing=[...batch.pending.entries()]
+      .filter(([id])=>!getCard(id))
+      .map(([,record])=>record);
+    if(missing.length)appendPending(folderId,missing);
+    for(const [id,record] of batch.pending){
+      if(record.status==='uploading')updateMessage(id,'Đang Up...');
+      else if(record.status==='uncertain')updateMessage(id,'Chưa xác nhận trên Drive',true);
+    }
+  }
   const cleanupUrls=new Set();
   const pendingUrls=new Set();
 
@@ -24,19 +70,26 @@
       const folderId=currentFolder();
       const batch=batches.get(folderId);
       const list=document.getElementById('fileList');
+      // When returning to this folder, the prior DOM (and often the Drive
+      // cache) no longer contains the uploading placeholders. Never suppress
+      // that first repaint just because the folder had been painted earlier.
+      const visible=batch && [...batch.pending.keys(),...batch.completed.keys()]
+        .every(id=>!!getCard(id));
       if(batch?.active && batch.initialPaintDone && !isSearchMode &&
+         lastDrawnFolder===folderId &&
          list?.dataset.vlRenderedFolder===folderId &&
-         list.childElementCount>0) {
-        // During transfer, the real cache is still updated by caller. Only
-        // the destructive full DOM re-render is suppressed.
+         list.childElementCount>0 && visible) {
         return;
       }
-      const result=current.call(this,items,isSearchMode,...rest);
+      const merged=!isSearchMode?reconcile(folderId,items):items;
+      const result=current.call(this,merged,isSearchMode,...rest);
       if(!isSearchMode){
         const list=document.getElementById('fileList');
-        if(list)list.dataset.vlRenderedFolder=currentFolder()||'';
+        if(list)list.dataset.vlRenderedFolder=folderId||'';
+        lastDrawnFolder=folderId;
+        if(batch)batch.initialPaintDone=true;
+        restoreCards(folderId);
       }
-      if(batch?.active && !isSearchMode)batch.initialPaintDone=true;
       return result;
     };
     guard.__vlStableUploadGuard=true;
@@ -52,12 +105,14 @@
       list?.dataset.vlRenderedFolder===folderId && list.childElementCount>0);
     if(!batch){
       batch={folderId,active:true,groups:0,initialPaintDone:false,
-        ids:new Set(),start:Date.now(),progress:new Map()};
+        ids:new Set(),start:Date.now(),progress:new Map(),
+        pending:new Map(),completed:new Map()};
       batches.set(folderId,batch);
     }
     batch.groups++;
     for(const item of items){
       batch.ids.add(item.tempId);
+      batch.pending.set(item.tempId,{...item,status:'waiting'});
       folderOfTempId.set(item.tempId,folderId);
       if(item.tempUrl)pendingUrls.add(item.tempUrl);
     }
@@ -133,7 +188,12 @@
     }
     if(warning) overlay.querySelector('.loader')?.remove();
   }
-  function markUploading(id){updateMessage(id,'Đang Up...');}
+  function markUploading(id){
+    const folder=folderOfTempId.get(id);
+    const record=batches.get(folder)?.pending.get(id);
+    if(record)record.status='uploading';
+    if(currentFolder()===folder)updateMessage(id,'Đang Up...');
+  }
   function finalizeQueuedCard(card,menu,item,tempId){
     if(card.dataset.vlQueuedSettled==='1')return;
     card.dataset.vlQueuedSettled='1';
@@ -180,7 +240,18 @@
     action('Xóa',()=>window.vlAskOwnedDelete?.(item.id,'file'));
   }
   function settle(tempId,item,tempUrl){
-    const previous=getCard(tempId);
+    const parent=folderOfTempId.get(tempId);
+    const batch=batches.get(parent);
+    if(item?.id){
+      batch?.pending.delete(tempId);
+      batch?.completed.set(item.id,{data:item,at:Date.now()});
+      batch?.ids.delete(tempId);
+      batch?.progress.set(item.id,'success');
+      folderOfTempId.delete(tempId);
+    }
+    // The old DOM belongs to another folder after navigation. Record the
+    // completion above so it is immediately visible on return.
+    const previous=parent===currentFolder()?getCard(tempId):null;
     if(!previous || !item?.id){
       // If the user navigated away, the completed item is already in the
       // folder cache. Its off-screen blob preview can be released safely.
@@ -221,11 +292,6 @@
       preloader.src=window.vlMediaProxyReady?
         '/api/media?fileId='+encodeURIComponent(newId)+'&variant=thumb':thumb;
     }
-    const parent=folderOfTempId.get(tempId);
-    const batch=batches.get(parent);
-    batch?.ids.delete(tempId);
-    batch?.progress.set(newId,'success');
-    folderOfTempId.delete(tempId);
     return true;
   }
   function release(url){
@@ -238,7 +304,9 @@
     const card=getCard(id);
     if(card)card.remove();
     const parent=folderOfTempId.get(id);
-    batches.get(parent)?.ids.delete(id);
+    const batch=batches.get(parent);
+    batch?.ids.delete(id);
+    batch?.pending.delete(id);
     folderOfTempId.delete(id);
   }
   function failed(id,error){
@@ -246,7 +314,10 @@
     const card=getCard(id);
     if(card)card.title='Lệnh upload chưa xác nhận: '+String(error||'Kiểm tra mạng');
     const parent=folderOfTempId.get(id);
-    batches.get(parent)?.progress.set(id,'unconfirmed');
+    const batch=batches.get(parent);
+    batch?.progress.set(id,'unconfirmed');
+    const record=batch?.pending.get(id);
+    if(record)record.status='uncertain';
     // Do not erase the card: a Drive upload can complete despite Safari's
     // fetch throwing "Load failed" after sending the request bytes.
   }
@@ -256,18 +327,55 @@
     batch.groups=Math.max(0,batch.groups-1);
     if(batch.groups)return;
     batch.active=false;
-    batches.delete(folderId);
-    for(const id of batch.ids)folderOfTempId.delete(id);
+    batch.finishedAt=Date.now();
+    // Do not discard completed records when the batch ends: a stale Drive
+    // response can still overwrite the folder cache after navigation.
+    if(!batch.pending.size && !batch.completed.size)batches.delete(folderId);
   }
   window.addEventListener('pagehide',()=>{
     for(const url of pendingUrls)URL.revokeObjectURL(url);
     pendingUrls.clear();
   });
+  function ensureAfterNavigation(){
+    const folderId=currentFolder();
+    if(!folderId)return;
+    if(folderId!==lastObservedFolder){
+      lastObservedFolder=folderId;
+      const batch=batches.get(folderId);
+      if(batch)batch.initialPaintDone=false;
+    }
+    const batch=batches.get(folderId);
+    const list=document.getElementById('fileList');
+    if(!batch||!list||list.dataset.vlRenderedFolder!==folderId)return;
+    const missing=[...batch.pending.keys(),...batch.completed.keys()]
+      .some(id=>!getCard(id));
+    if(!missing)return;
+    const now=Date.now();
+    if(batch.lastRestoreAt && now-batch.lastRestoreAt<1800)return;
+    batch.lastRestoreAt=now;
+    // Drive/legacy code can swap the DOM or rehydrate a stale IndexedDB list
+    // without going through the guarded renderer.
+    const items=reconcile(folderId,listFor(folderId));
+    if(items.length&&typeof window.renderItems==='function'){
+      batch.initialPaintDone=false;
+      window.renderItems(items);
+    }
+  }
   window.vlUploadGrid={begin,appendPending,markUploading,settle,failed,drop,finish,release,install,
-    isActive:()=>batches.size>0,
+    reconcile,restoreCards,
+    isActive:()=>[...batches.values()].some(x=>x.active),
     folderId:()=>currentFolder(),
-    suppressFor:id=>batches.has(id),
+    suppressFor:id=>!!batches.get(id)?.active,
     retrying:updateMessage};
   install();
-  setInterval(install,900);
+  setInterval(()=>{
+    install();
+    ensureAfterNavigation();
+    for(const [id,batch] of batches){
+      if(!batch.active&&batch.finishedAt&&Date.now()-batch.finishedAt>RECENT_MS){
+        for(const record of batch.pending.values())if(record.tempUrl)release(record.tempUrl);
+        batches.delete(id);
+      }
+    }
+  },700);
 })();
