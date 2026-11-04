@@ -16,7 +16,6 @@
   function typeOf(id){const item=current().find(x=>x.id===id);return item?.type==='folder'?'folder':'file';}
   function nameOf(id){return current().find(x=>x.id===id)?.name||id;}
   function eligible(){return current().filter(x=>can(x.id));}
-  function cleanse(){const allowed=new Set(eligible().map(x=>x.id));for(const id of selected())if(!allowed.has(id))selected().delete(id);}
   async function api(action,args={}){
     const response=await fetch('/api/owned-files',{
       method:'POST',credentials:'same-origin',
@@ -120,13 +119,11 @@
     });
     const set=selected(),allChosen=items.length && items.every(item=>set.has(item.id));
     for(const item of items)if(allChosen)set.delete(item.id);else set.add(item.id);
-    cleanse();
     if(typeof window.renderItems==='function')window.renderItems(current());
     if(typeof window.buildHeaderMenu==='function')window.buildHeaderMenu();
     showHeader();
   }
   async function menuDelete(){
-    cleanse();
     const candidates=eligible().filter(x=>selected().has(x.id));
     if(!candidates.length)return;
     // The existing delete-consistency modal reads selectedIds; its backend
@@ -189,25 +186,11 @@
     }
     if(!idsCache.has(id))void checkIds([{id}]);
   }
-  // Apply the ownership constraint to the shared selection Set as well:
-  // long-press and checkbox selections must not silently select another
-  // account's file, even when the legacy toolbar is hidden by CSS.
-  let guardedSet = null;
-  function guardSelection(){
-    if(admin())return;
-    const set=selected();
-    if(set===guardedSet || !(set instanceof Set))return;
-    const add=Set.prototype.add;
-    set.add=function(id){
-      if(!can(id))return this;
-      return add.call(this,id);
-    };
-    guardedSet=set;
-    cleanse();
-  }
+  // Selection is a harmless UI action: permit highlighting any visible
+  // file/folder. Ownership restrictions apply only when executing a protected
+  // rename/delete operation (enforced again by /api/owned-files).
   function checkPage(){
     if(admin())return;
-    guardSelection();
     const items=current();
     const folder=String(window.currentFolderId||'');
     const signature=folder+'|'+items.length+'|'+items.slice(0,20).map(x=>x.id).join(',');
