@@ -7,7 +7,7 @@
   const ENDPOINT_FALLBACK = 'https://script.google.com/macros/s/AKfycbx3xI-bNWfeffsEH-iIc0yYfF9bHYvAiKZKWIfco6j7Z7GOtOAv7Q8WE1_y9xjen7c/exec';
   const CHUNK_SIZE = 5 * 1024 * 1024; // 20 * Drive's 256-KiB alignment.
   const SELF = {token: null, tokenAt: 0, tokenPromise: null, processing: false,
-    uploadQueue: [], batchSeq: 0};
+    uploadQueue: [], batchSeq: 0, remainingIds: new Set()};
   const rootId = '1xWDed1IBzGdCA4r5vbds1x6AF31hSIUT';
   function read(name) {
     try {
@@ -25,6 +25,35 @@
   function toast(message, bad = false) {
     if (typeof window.showToast === 'function') window.showToast(message, bad);
     else console[bad ? 'warn' : 'info']('[QL Ảnh]', message);
+  }
+  // The queue is global to this open app tab, not tied to #fileList.
+  // This small indicator stays visible while the user opens other folders.
+  let hideStatusTimer=null;
+  function queueStatus(){
+    let badge=document.getElementById('vlGlobalUploadStatus');
+    if(!badge){
+      badge=document.createElement('div');
+      badge.id='vlGlobalUploadStatus';
+      badge.setAttribute('role','status');
+      badge.setAttribute('aria-live','polite');
+      badge.style.cssText='position:fixed;bottom:calc(12px + env(safe-area-inset-bottom));left:12px;z-index:28;pointer-events:none;max-width:min(330px,calc(100vw - 90px));background:#ffffffee;color:#1e293b;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 4px 15px #0f172a25;padding:10px 14px;font:600 12px system-ui;display:none;';
+      document.body.appendChild(badge);
+    }
+    if(hideStatusTimer){clearTimeout(hideStatusTimer);hideStatusTimer=null;}
+    const remaining=SELF.remainingIds.size;
+    if(remaining){
+      badge.style.display='block';
+      badge.textContent='Đang tải lên Drive · '+remaining+' file còn lại';
+    }else if(SELF.processing){
+      badge.style.display='block';
+      badge.textContent='Đang hoàn tất upload…';
+    }else{
+      badge.textContent='Các đợt upload đã xử lý xong';
+      hideStatusTimer=setTimeout(()=>{badge.style.display='none';},2500);
+    }
+  }
+  function completePending(id){
+    if(SELF.remainingIds.delete(id))queueStatus();
   }
   async function api(action, params = {}) {
     const res = await fetch(read('endpoint') || ENDPOINT_FALLBACK, {
@@ -350,6 +379,8 @@
             URL.revokeObjectURL(item.tempUrl);
           }
           toast('Chưa xác nhận '+item.file.name+': '+error.message,true);
+        } finally {
+          completePending(item.tempId);
         }
       }
       toast('Đợt '+job.batchNo+': đã xác nhận '+success+'/'+chosen.length+' file lên Drive.'+
@@ -359,12 +390,15 @@
       // A token/session failure before sending any bytes: remove ONLY this
       // batch's unstarted placeholders; leave all other batches intact.
       for (const item of pending) {
-        if (getList(folderId).some(f => f.id === item.tempId)) {
+        // Drop only items of this batch not already confirmed above.
+        if (SELF.remainingIds.has(item.tempId) &&
+            getList(folderId).some(f => f.id === item.tempId)) {
           remove(folderId,item.tempId);
           window.vlUploadGrid?.drop(item.tempId);
           window.vlUploadGrid?.release(item.tempUrl);
           if(!window.vlUploadGrid)URL.revokeObjectURL(item.tempUrl);
         }
+        completePending(item.tempId);
       }
       toast('Đợt '+job.batchNo+' chưa thực hiện được: '+error.message,true);
       return {success,failure,uncertain,error:error.message};
@@ -390,13 +424,16 @@
           console.warn('[QL Ảnh] Upload batch error:',error);
           job.resolve({success:0,error:error.message});
         } finally {
-          window.vlUploadGrid?.finish();
+          // Finishing a batch must not clear the UI state of another folder.
+          window.vlUploadGrid?.finish(job.folderId);
+          queueStatus();
         }
       }
     } finally {
       SELF.processing = false;
       window.vlUploadQueueActive = false;
       setBusy(false);
+      queueStatus();
     }
   }
 
@@ -428,7 +465,11 @@
       }};
     });
     window.vlActiveUploadIds ||= new Set();
-    for (const item of pending) window.vlActiveUploadIds.add(item.tempId);
+    for (const item of pending) {
+      window.vlActiveUploadIds.add(item.tempId);
+      SELF.remainingIds.add(item.tempId);
+    }
+    queueStatus();
     const append = window.vlUploadGrid?.begin(folderId,pending);
     setList(folderId,[...pending.map(p=>p.data),...getList(folderId)]);
     if (append) window.vlUploadGrid?.appendPending(folderId,pending);
