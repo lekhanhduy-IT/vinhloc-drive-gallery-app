@@ -357,6 +357,10 @@
             if (!verified) throw transferError;
             completed = verified;
           }
+          const inspected=await ownApi('inspectUpload',{id:completed.id,folderId,uploadKey:item.uploadKey});
+          if(inspected.file?.id!==completed.id)
+            throw new Error('Drive chưa xác minh file trong đúng thư mục');
+          completed={...completed,...inspected.file};
           const {tempUrl: discardPreview, isPending: discardPending, ...uploadData} = item.data;
           const fileData = {
             ...uploadData, id:completed.id, name:completed.name || item.file.name,
@@ -364,6 +368,7 @@
             isPending:false, recentlyUploadedAt:Date.now(),
             ...(!isAdminClient()?{uploadedBy:localStorage.getItem('vinhloc_authenticated_email')}: {})
           };
+          window.vlVideoMediaBridge?.confirmed(item.tempId,fileData.id);
           upsert(folderId,fileData,item.tempId);
           window.vlUploadGrid?.settle(item.tempId,fileData,item.tempUrl);
           window.vlActiveUploadIds?.delete(item.tempId);
@@ -470,6 +475,9 @@
       SELF.remainingIds.add(item.tempId);
     }
     queueStatus();
+    for(const item of pending)
+      if((item.file.type||'').startsWith('video/'))
+        window.vlVideoMediaBridge?.queued(item.tempId,item.file,item.tempUrl,folderId);
     const append = window.vlUploadGrid?.begin(folderId,pending);
     setList(folderId,[...pending.map(p=>p.data),...getList(folderId)]);
     if (append) window.vlUploadGrid?.appendPending(folderId,pending);
