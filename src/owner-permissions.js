@@ -177,6 +177,7 @@
     // Old patches rebuild #headerDropdown with innerHTML +=, which
     // destroys element listeners. Header actions are handled on window capture.
     const all=current();
+    const unattributed=all.filter(item=>idsCache.get(item.id)?.provenance==='missing').length;
     const owned=eligible();
     const chosen=owned.filter(x=>selected().has(x.id));
     const folders=owned.filter(x=>x.type==='folder');
@@ -193,8 +194,9 @@
       ? String(lastCheckError).replace(/[<>&"]/g,'')+' — Nhấn để xác thực lại Google'
       : (!sessionValid ? 'Đang chờ xác thực tài khoản Google để kiểm tra quyền…' :
         (lastChecking ? 'Đang xác minh quyền thao tác…' :
-        (!owned.length && all.length ? 'Không tìm thấy metadata người tải lên hoặc tài khoản này không có quyền.' :
-         'Đã kiểm tra quyền từ Drive cho danh sách đang hiển thị.')));
+        (unattributed>0 ? unattributed+' mục cũ thiếu metadata người tải lên trên Drive; cần đối soát với quản trị viên.' :
+         (!owned.length && all.length ? 'Không có mục nào thuộc quyền sửa/xóa của tài khoản hiện tại.' :
+          'Đã kiểm tra quyền từ Drive cho danh sách đang hiển thị.'))));
     const statusAction=lastCheckError?'auth':'none';
     block.innerHTML=
       '<div style="font-size:11px;font-weight:bold;color:#64748b;padding:6px 10px;">DO TÔI TẢI LÊN ('+owned.length+'/'+all.length+')</div>'+
