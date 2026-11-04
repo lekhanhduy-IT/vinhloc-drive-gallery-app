@@ -207,6 +207,23 @@
   // sessions may still have the legacy /api/media-only cookie.
   // A permission failure checks the shared cookie before showing a prompt.
   window.vlMediaRequireReauth=()=>checkSession(true,true);
+  // A previously signed-in Google cookie can belong to a DIFFERENT account
+  // from the app's visible login. An explicit user click must clear that
+  // stale session and display the official Google account picker.
+  window.vlMediaSwitchAccount=async()=>{
+    try{
+      await fetch(API,{method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'logout'}),cache:'no-store'});
+    }catch(error){console.warn('[QL Ảnh] Không kết thúc được phiên Google cũ:',error);}
+    ready=false;
+    window.vlMediaProxyReady=false;
+    lastSessionStatus=401;
+    lastSessionCheckAt=Date.now();
+    signInInitialized=false;
+    showPanel();
+    showGoogleFallback();
+  };
   // Called immediately after an authenticated Google login has written a
   // fresh cookie. Bypass stale negative status cached before that login.
   window.vlMediaEnsureAuth=()=>checkSession(true,true);
