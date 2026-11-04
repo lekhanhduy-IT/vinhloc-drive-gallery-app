@@ -71,6 +71,7 @@
     // Avoid expensive Drive GET calls for every folder every time JS renders.
     for (let start=0;start<fresh.length;start+=80) {
       const group=fresh.slice(start,start+80);
+      const requestedAt=Date.now();
       group.forEach(id=>inFlight.add(id));
       try {
         const res=await fetch('/api/folder-cover',{
@@ -83,6 +84,8 @@
           throw Error(data.message || 'Không đọc được thumbnail đã lưu');
         for (const id of group) {
           if (!Object.prototype.hasOwnProperty.call(data.covers,id)) continue;
+          // An earlier GET must not overwrite a cover just confirmed by SET.
+          if((driveCovers.get(id)?.time||0)>requestedAt)continue;
           const imageId=idOk(data.covers[id]) ? data.covers[id] : null;
           driveCovers.set(id,{imageId,time:Date.now()});
           if(imageId){
