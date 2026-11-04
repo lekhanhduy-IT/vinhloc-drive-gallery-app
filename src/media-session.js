@@ -205,8 +205,11 @@
   }
   // Ownership APIs require the verified cookie scoped to /api, while old
   // sessions may still have the legacy /api/media-only cookie.
-  window.vlMediaRequireReauth=()=>checkSession(true);
-  window.vlMediaEnsureAuth=()=>checkSession(true);
+  // A permission failure checks the shared cookie before showing a prompt.
+  window.vlMediaRequireReauth=()=>checkSession(true,true);
+  // Called immediately after an authenticated Google login has written a
+  // fresh cookie. Bypass stale negative status cached before that login.
+  window.vlMediaEnsureAuth=()=>checkSession(true,true);
   function showPanel() {
     if (ready || !appSignedIn() || authorizing ||
         (window.vlShareScope && !window.vlShareScope.ready?.()) ||
@@ -220,13 +223,13 @@
     // The primary action is Cho phép; official Google button appears only
     // when the iOS/Google consent prompt cannot be displayed.
   }
-  async function checkSession(showWhenMissing = false) {
+  async function checkSession(showWhenMissing = false, force = false) {
     // Opening a folder can emit dozens of image errors in one frame. They
     // must share ONE quiet status request, never dozens of consent prompts.
     if(sessionCheckTask)return sessionCheckTask;
     const elapsed=Date.now()-lastSessionCheckAt;
-    if(ready && elapsed<20000)return true;
-    if(!ready && lastSessionStatus===401 && elapsed<12000){
+    if(!force && ready && elapsed<20000)return true;
+    if(!force && !ready && lastSessionStatus===401 && elapsed<12000){
       if(showWhenMissing)showPanel();
       return false;
     }
