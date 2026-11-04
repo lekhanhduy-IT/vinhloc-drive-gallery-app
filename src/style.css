@@ -491,10 +491,9 @@ img[src*="vlimage"] {
   pointer-events: auto !important;
   opacity: 1 !important;
   transform: none !important;
-  /* Visual outline only: do not resize or reconstruct Google's pill button. */
-  outline: 0.5px solid #9ca3af !important;
-  outline-offset: 0 !important;
-  border-radius: 999px !important;
+  /* Google provides the single gray pill border itself.
+     No second outline on the iframe or Gmail account chooser. */
+  outline: none !important;
 }
 #vlMediaAllowButton {
   border-radius: 999px !important;
