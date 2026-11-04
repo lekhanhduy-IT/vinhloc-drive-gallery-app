@@ -33,6 +33,40 @@
     if(typeof window.renderItems==='function')
       window.renderItems(items.slice(0,limit),true);
   }
+  function cacheHints(raw){
+    const normalized=value=>String(value||'').normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const match=normalized(raw);
+    const found=new Set();
+    let meta={},folder={},sub={},visible=[];
+    try {
+      meta=typeof appMeta!=='undefined'?appMeta:(window.appMeta||{});
+      folder=typeof folderDataCache!=='undefined'?folderDataCache:(window.folderDataCache||{});
+      sub=typeof subFolderCache!=='undefined'?subFolderCache:(window.subFolderCache||{});
+      visible=typeof currentDriveItems!=='undefined'?currentDriveItems:(window.currentDriveItems||[]);
+    }catch(_){}
+    const idOK=id=>typeof id==='string'&&/^[A-Za-z0-9_-]{10,180}$/.test(id);
+    const consider=(id,name)=>{
+      if(found.size>=120||!idOK(id))return;
+      if(normalized(name).includes(match)||normalized(meta?.[id]?.name).includes(match))
+        found.add(id);
+    };
+    for(const items of [visible,...Object.values(folder||{}),...Object.values(sub||{})]){
+      if(!Array.isArray(items))continue;
+      for(const item of items){
+        if(item)consider(item.id,item.name);
+        if(found.size>=120)break;
+      }
+      if(found.size>=120)break;
+    }
+    if(found.size<120){
+      for(const [id,value] of Object.entries(meta||{})){
+        consider(id,value?.name);
+        if(found.size>=120)break;
+      }
+    }
+    return [...found];
+  }
   function stop(){
     generation++;
     clearTimeout(timer);
@@ -63,7 +97,7 @@
       const response=await fetch('/api/live-library',{
         method:'POST',credentials:'same-origin',cache:'no-store',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({action:'search',keyword:raw}),
+        body:JSON.stringify({action:'search',keyword:raw,hintIds:cacheHints(raw)}),
         signal:controller.signal
       });
       const data=await response.json().catch(()=>({}));
