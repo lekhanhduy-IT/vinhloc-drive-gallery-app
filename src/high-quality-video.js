@@ -65,7 +65,7 @@
     live.pause();live.srcObject=null;
   }
   function clearRecorded(){
-    state.file=null;preview.pause();preview.removeAttribute('src');preview.load();
+    state.file=null;preview.pause();preview.onloadedmetadata=null;preview.removeAttribute('src');preview.load();
     if(state.url){URL.revokeObjectURL(state.url);state.url=null;}
     preview.hidden=true;live.hidden=false;againBtn.hidden=true;upBtn.hidden=true;
   }
@@ -156,6 +156,15 @@
       const name='VinhLoc_'+new Date().toISOString().replace(/[:.]/g,'-')+'.'+ext;
       state.file=new File([blob],name,{type:contentType,lastModified:Date.now()});
       state.url=URL.createObjectURL(blob);
+      // The final MP4/WebM encoder may output a LOWER resolution than the
+      // live camera track. Read actual encoded dimensions before upload.
+      preview.onloadedmetadata=()=>{
+        const w=preview.videoWidth,h=preview.videoHeight;
+        if(!w||!h)return;
+        actual.textContent+=' · Video gốc '+w+' × '+h;
+        if(Math.min(w,h)<1080 || Math.max(w,h)<1920)
+          setMessage('File video xuất ra chỉ có '+w+' × '+h+'. Trình duyệt đã ghi dưới 1080p. Hãy quay bằng ứng dụng Camera điện thoại và chọn file từ thư viện để tránh video bị vỡ.',true);
+      };
       preview.src=state.url;preview.hidden=false;live.hidden=true;
       startBtn.hidden=true;againBtn.hidden=false;upBtn.hidden=false;
       const bitrate=(blob.size*8/durationMs/1000);
