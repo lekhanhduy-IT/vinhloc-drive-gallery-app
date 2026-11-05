@@ -308,17 +308,18 @@
     }
   }
   function inspectCurrentImages() {
-    document.querySelectorAll('#fileList img, #mediaContent img').forEach(inspectImage);
+    document.querySelectorAll('#fileList img, #folderList img, #mediaContent img').forEach(inspectImage);
   }
   function watchGallery() {
     const list = document.getElementById('fileList');
+    const folderList = document.getElementById('folderList');
     const viewer = document.getElementById('mediaContent');
     let task = null;
     const observer = new MutationObserver(() => {
       if (task !== null) return;
       task = setTimeout(() => { task = null; inspectCurrentImages(); }, 180);
     });
-    for (const root of [list, viewer]) {
+    for (const root of [list, folderList, viewer]) {
       if (root) observer.observe(root, {childList:true, subtree:true});
     }
     setTimeout(inspectCurrentImages, 300);
