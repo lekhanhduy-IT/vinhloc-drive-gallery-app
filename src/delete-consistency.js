@@ -198,6 +198,7 @@
     installRenderGuard();
     if(typeof window.renderItems==='function' && Array.isArray(globals('items')))
       window.renderItems(globals('items'));
+    if(parent)window.vlSharedPreload?.refreshFolder?.(parent);
     window.vinhloc_cache_modified=true;
   }
   function closeDialog() {
