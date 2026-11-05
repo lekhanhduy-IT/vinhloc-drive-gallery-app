@@ -343,7 +343,7 @@
   }
   function reconcile() {
     if (!ready || (!mobileDevice && !needsProxy)) return;
-    document.querySelectorAll('#fileList img,#mediaContent img').forEach(setImageUrl);
+    document.querySelectorAll('#fileList img,#folderList img,#mediaContent img').forEach(setImageUrl);
     document.querySelectorAll('#mediaContent iframe').forEach(setVideoPlayer);
     document.querySelectorAll('#mediaContent video').forEach(video => {
       const src=video.getAttribute('src') || '';
@@ -360,9 +360,10 @@
   }
   function initObservers() {
     const gallery=document.getElementById('fileList');
+    const folders=document.getElementById('folderList');
     const viewer=document.getElementById('mediaContent');
     const observer=new MutationObserver(scheduleReconcile);
-    for(const element of [gallery,viewer]) {
+    for(const element of [gallery,folders,viewer]) {
       if (element) observer.observe(element,{childList:true,subtree:true,attributes:true,attributeFilter:['src']});
     }
     document.addEventListener('click',event => {
@@ -374,7 +375,7 @@
     document.addEventListener('error',event => {
       if (!(event.target instanceof HTMLImageElement)) return;
       const img=event.target;
-      if (!img.closest('#fileList,#mediaContent')) return;
+      if (!img.closest('#fileList,#folderList,#mediaContent')) return;
       if (ready) {
         const src=img.getAttribute('src') || '';
         if (!src.startsWith(API)) {
