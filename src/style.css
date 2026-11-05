@@ -495,13 +495,14 @@ header.vl-header-menu-host #headerDropdown {
   z-index: 99999999 !important;
 }
 
-/* Expanded addfolder.gif menu: gentle dim, no blur and no reflow.
-   The existing FAB parent uses z-index:30, so z-index:29 stays below it. */
+/* Expanded addfolder.gif: the dimmer covers the complete UI,
+   including elevated three-dot controls and old dropdown patch layers.
+   Only the FAB root is promoted above it while expanded. */
 #vlFabBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 29;
-  background: rgba(15, 23, 42, 0.28);
+  z-index: 2147482000 !important;
+  background: rgba(15, 23, 42, 0.34);
   opacity: 0;
   pointer-events: none;
   transition: opacity 180ms ease-out;
@@ -509,6 +510,10 @@ header.vl-header-menu-host #headerDropdown {
 #vlFabBackdrop.vl-fab-backdrop-open {
   opacity: 1;
   pointer-events: auto;
+}
+.vl-fab-root-active {
+  z-index: 2147482001 !important;
+  isolation: isolate;
 }
 @media (prefers-reduced-motion: reduce) {
   #vlFabBackdrop { transition: none; }
