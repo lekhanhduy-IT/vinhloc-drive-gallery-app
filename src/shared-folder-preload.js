@@ -254,7 +254,13 @@
     if(!row)return;
     const handler=row.getAttribute('onclick')||'';
     const match=handler.match(/(?:loadFolder|toggleMegaRow)\s*\(\s*['"]([A-Za-z0-9_-]{10,180})/);
-    if(match)push(match[1],true);
+    if(match){
+      push(match[1],true);
+      // A just-clicked cold folder gets first priority: show Redis data as
+      // soon as possible, without waiting behind a long BFS crawl.
+      if(auth&&!Array.isArray(localCache()?.[match[1]]))
+        void hydrateFolder(match[1]).catch(()=>{});
+    }
   },true);
   setInterval(()=>{
     if(!scope())return;
