@@ -107,6 +107,7 @@
     const list=[...initial.filter(it=>it.id!==item.id),item].sort((a,b)=>
       a.type===b.type?String(a.name||'').localeCompare(String(b.name||''),'vi'):
         a.type==='folder'?-1:1);
+    window.vlSharedPreload?.refreshFolder?.(parent);
     if(cache){
       cache[parent]=list;
       if(window.localforage)void localforage.setItem('vinhloc_folder_cache',cache).catch(()=>{});
