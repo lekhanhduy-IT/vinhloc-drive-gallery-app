@@ -122,7 +122,7 @@ export default async function handler(req,res){
     const cacheKey=key(scope,id);
     let cached=await redis.get(cacheKey);
     if(cached&&Array.isArray(cached.items)&&
-      (action==='get'||Date.now()-Number(cached.updatedAt||0)<FRESH_MS)){
+      (action==='get'||(!data.force&&Date.now()-Number(cached.updatedAt||0)<FRESH_MS))){
       return reply(res,200,'OK',{folderId:id,data:cached.items,
         updatedAt:cached.updatedAt,source:'shared-cache',
         fresh:Date.now()-Number(cached.updatedAt||0)<FRESH_MS});
