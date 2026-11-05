@@ -56,8 +56,7 @@ export default async function handler(req,res){
   catch(_){return respond(res,401,'Cần đăng nhập Google để quản lý thumbnail');}
   // Only members can edit folder information; external share recipients
   // cannot mutate folders, even when they uploaded content inside the share.
-  if(account.scopeRoot&&account.member!==true)
-    return respond(res,403,'Tài khoản không có quyền sửa thông tin folder');
+  // Read access follows the verified shared-folder scope; only writes require membership.
   let body=req.body||{};
   if(typeof body==='string')try{body=JSON.parse(body);}catch(_){body={};}
   const action=String(body.action||'');
@@ -84,6 +83,8 @@ export default async function handler(req,res){
       return respond(res,200,'OK',{covers:result});
     }
     if(action==='set'){
+      if(account.scopeRoot&&account.member!==true)
+        return respond(res,403,'Tài khoản không có quyền sửa thông tin folder');
       const folderId=String(body.folderId||'');
       const imageId=String(body.imageId||'');
       if(!idOK(folderId)||!idOK(imageId))return respond(res,400,'ID ảnh hoặc thư mục không hợp lệ');
