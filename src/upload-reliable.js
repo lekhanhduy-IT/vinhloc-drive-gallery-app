@@ -204,6 +204,7 @@
                 renderSubFolders(parentId, subs[parentId]);
             }
           }
+          window.vlSharedPreload?.refreshFolder?.(parentId);
           const modal = document.getElementById('customModal');
           if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
           toast('Đã tạo "' + name + '" trên Drive. Có thể mở và tải ảnh/video ngay.');
@@ -414,6 +415,7 @@
           };
           window.vlVideoMediaBridge?.confirmed(item.tempId,fileData.id);
           upsert(folderId,fileData,item.tempId);
+          window.vlSharedPreload?.refreshFolder?.(folderId);
           window.vlUploadGrid?.settle(item.tempId,fileData,item.tempUrl);
           window.vlActiveUploadIds?.delete(item.tempId);
           if(!window.vlUploadGrid)URL.revokeObjectURL(item.tempUrl);
