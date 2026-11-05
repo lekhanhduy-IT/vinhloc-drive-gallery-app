@@ -11,7 +11,7 @@
   const FRESH=10*60*1000;
   const RETRY=90*1000;
   const WORKERS=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)?1:2;
-  const queued=new Set(),queue=[],verified=new Map();
+  const queued=new Set(),queue=[],verified=new Map(),verifiedItems=new Map();
   const serverPermitted=new Set(),refreshTimers=new Map();
   let cacheHealthy=false;
   let auth=false,booting=false,failedUntil=0,active=0,lastAuth=0;
@@ -74,6 +74,7 @@
     if(window.vlShareScope &&
        !window.vlShareScope.allowed?.(id) && !serverPermitted.has(id))return;
     verified.set(id,Number(updatedAt)||Date.now());
+    verifiedItems.set(id,items);
     const cache=localCache(),sub=subCache();
     if(!cache)return;
     const old=Array.isArray(cache[id])?cache[id]:null;
@@ -164,7 +165,7 @@
     try{
       if(bootedScope!==currentScope){
         bootedScope=currentScope;
-        queue.length=0;queued.clear();verified.clear();serverPermitted.clear();
+        queue.length=0;queued.clear();verified.clear();verifiedItems.clear();serverPermitted.clear();
         serverPermitted.add(currentScope);
         push(currentScope,true);
         // The primary screen starts warming immediately. Fetch the entire
@@ -240,7 +241,25 @@
     },1600);
     refreshTimers.set(id,timer);
   }
-  window.vlSharedPreload={hydrateFolder,refreshFolder,refresh:()=>void boot(),
+  function protectSnapshot(snapshot){
+    // Legacy Patch 54 imports a whole separate global-cache JSON and
+    // overwrites RAM. Retain recent, verified shared-server entries so
+    // its slow response cannot undo a faster cross-device preload.
+    if(!snapshot||typeof snapshot!=='object')return;
+    snapshot.folderData ||= {};
+    snapshot.subData ||= {};
+    const now=Date.now();
+    for(const [id,items] of verifiedItems){
+      if(!Array.isArray(items)||now-(verified.get(id)||0)>FRESH)continue;
+      const pendingLocal=(snapshot.folderData[id]||[]).filter(pending);
+      const localIds=new Set(pendingLocal.map(item=>item.id));
+      snapshot.folderData[id]=[
+        ...pendingLocal,...items.filter(item=>!localIds.has(item.id))
+      ];
+      snapshot.subData[id]=snapshot.folderData[id].filter(item=>item.type==='folder');
+    }
+  }
+  window.vlSharedPreload={hydrateFolder,refreshFolder,protectSnapshot,refresh:()=>void boot(),
     status:()=>({cached:verified.size,queued:queue.length,active,authorized:auth,
       sharedCacheReady:cacheHealthy})};
   for(const event of ['vl:media-authorized','vl:share-member-ready'])
