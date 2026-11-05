@@ -618,3 +618,33 @@ header.vl-header-menu-host #headerDropdown {
 #fileList.vl-pinterest:not(.list-view) > div .item-action-menu {
   z-index: 500 !important;
 }
+
+
+/* Google account chosen: a clean white screen with one spinning circle.
+   The Google button itself is untouched. */
+#vlAuthWait[hidden] { display: none !important; }
+#vlAuthWait {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  z-index: 2147483600 !important;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+           env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+#vlAuthWait .vl-auth-wait-ring {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #e5e7eb;
+  border-top-color: #01adee;
+  border-radius: 50%;
+  animation: vl-auth-wait-spin 800ms linear infinite;
+}
+@keyframes vl-auth-wait-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  #vlAuthWait .vl-auth-wait-ring { animation-duration: 1.8s; }
+}
