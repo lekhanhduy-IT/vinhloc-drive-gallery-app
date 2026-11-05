@@ -6,6 +6,7 @@
   if (window.__vlFabBackdropReady) return;
   const main=document.getElementById('fabMain');
   const menu=document.getElementById('fabMenu');
+  const fabRoot=main?.parentElement;
   if (!main || !menu) return;
   window.__vlFabBackdropReady=true;
 
@@ -22,6 +23,9 @@
   function synchronize() {
     const active=opened();
     backdrop.classList.toggle('vl-fab-backdrop-open',active);
+    // The button root alone stays above the dimmer; every file/folder
+    // three-dot circle, card menu, header and list stays beneath it.
+    fabRoot?.classList.toggle('vl-fab-root-active',active);
     main.setAttribute('aria-expanded',String(active));
   }
   function close() {
