@@ -236,6 +236,7 @@
         callback:async output=>{
           if(authBusy||!output?.credential)return;
           authBusy=true;warning.textContent='Đang xác thực quyền truy cập…';
+          window.vlAuthWait?.begin();
           try{
             const r=await nativeFetch(authApi,{
               method:'POST',credentials:'same-origin',
@@ -245,12 +246,16 @@
             const data=await r.json();
             if(!r.ok||!data.success||data.scopeRoot!==root)throw Error(data.message||'Từ chối quyền truy cập');
             ready=true;member=data.isMember===true;
+            window.vlAuthWait?.finish();
             closeModal();memberControls();
             void window.vlMediaEnsureAuth?.();
             // Discard stale global caches from a previous account/device.
             try{if(typeof folderDataCache!=='undefined')delete folderDataCache[root];}catch(_){}
             if(typeof window.loadFolder==='function')await window.loadFolder(root,name,false,false);
-          }catch(error){warning.textContent=error.message;}
+          }catch(error){
+            warning.textContent=error.message;
+            window.vlAuthWait?.fail(error.message);
+          }
           finally{authBusy=false;}
         },
         auto_select:false,
