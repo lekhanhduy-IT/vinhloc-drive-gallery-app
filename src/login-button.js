@@ -40,8 +40,17 @@
           typeof window.handleCredentialResponse === 'function' &&
           config.callback === window.handleCredentialResponse) return;
 
+      const callback=config?.callback;
       return originalInitialize({
         ...config,
+        // Show the spinner only when Google returns the selected account.
+        // Do not modify the native Google iframe, size or click target.
+        ...(typeof callback==='function'?{
+          callback:function(response){
+            if(response?.credential)window.vlAuthWait?.begin();
+            return callback.call(this,response);
+          }
+        }:{}),
         auto_select: false,
         button_auto_select: false,
         use_fedcm_for_button: false
