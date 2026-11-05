@@ -32,7 +32,7 @@
   // so writing window.appMeta does NOT reliably update its actual data model.
   const driveCovers = new Map();
   const inFlight = new Set();
-  const CACHE_TTL = 90000;
+  const CACHE_TTL = 25000;
   let scanTimer = null;
   let saveBusy = false;
   let replayLegacySave = false;
@@ -62,11 +62,11 @@
       applyFolderCover(id,record.imageId);
     }
   }
-  async function loadSavedCovers(ids) {
+  async function loadSavedCovers(ids, force = false) {
     const now = Date.now();
     const fresh = [...new Set(ids)].filter(id =>
       idOk(id) && !inFlight.has(id) &&
-      (!driveCovers.has(id) || now-driveCovers.get(id).time>CACHE_TTL));
+      (force || !driveCovers.has(id) || now-driveCovers.get(id).time>CACHE_TTL));
     if (!fresh.length) return;
     // Avoid expensive Drive GET calls for every folder every time JS renders.
     for (let start=0;start<fresh.length;start+=80) {
@@ -100,7 +100,7 @@
       }
     }
   }
-  function scanRenderedFolders(){
+  function scanRenderedFolders(force = false){
     scanTimer=null;
     const ids=new Set();
     for(const img of document.querySelectorAll('#folderList img[class*="item-cover-img-"]')){
@@ -114,7 +114,7 @@
       const known=driveCovers.get(id);
       if(known?.imageId)applyFolderCover(id,known.imageId);
     }
-    void loadSavedCovers([...ids]);
+    void loadSavedCovers([...ids], force);
   }
   function scheduleFolderScan(){
     if(scanTimer!==null)return;
@@ -126,10 +126,16 @@
       .observe(folderList,{childList:true,subtree:true});
   }
   scheduleFolderScan();
-  window.addEventListener('focus',()=>{
-    // Recheck only after TTL; other users may have changed the cover.
-    scheduleFolderScan();
+  // Revalidate from Drive when another device may have changed a cover.
+  // Keep the current image displayed while the new result is fetched.
+  window.addEventListener('focus', () => scanRenderedFolders(true));
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) scanRenderedFolders(true);
   });
+  window.addEventListener('online', () => scanRenderedFolders(true));
+  setInterval(() => {
+    if (!document.hidden && document.visibilityState === 'visible') scanRenderedFolders();
+  }, 25000);
 
   const notify = (message, error = false) => {
     if (typeof window.showToast === 'function') window.showToast(message, error);
