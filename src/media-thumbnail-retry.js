@@ -27,7 +27,24 @@
       label.style.cssText='position:absolute;inset:0;display:flex;justify-content:center;align-items:center;text-align:center;padding:8px;font:600 11px system-ui;background:#f1f5f9;color:#64748b;pointer-events:none;z-index:1;border-radius:8px;';
       container.appendChild(label);
     }
-    label.textContent=message;
+    const videoCard=/(MP4|MOV|QUICKTIME|WEBM|M4V)/i.test(
+      container.closest('#fileList > div')?.textContent||'');
+    if(videoCard && (message==='Đang xử lý video…'||
+                     message==='Drive chưa tạo thumbnail')){
+      // Drive may never produce a thumbnail for some codecs. Don't leave
+      // the file appearing broken or unclickable; its existing card click
+      // still opens the real video player, while retry continues quietly.
+      const play=document.createElement('i');
+      play.className='fas fa-play-circle text-3xl text-blue-500';
+      const caption=document.createElement('span');
+      caption.textContent='Xem video';
+      caption.style.cssText='font:600 11px system-ui;margin-top:7px;';
+      label.replaceChildren(play,caption);
+      label.style.flexDirection='column';
+    }else{
+      label.textContent=message;
+      label.style.flexDirection='';
+    }
   }
   function clearLabel(img) {
     const sibling=img.parentElement?.querySelector(':scope > .vl-thumb-status');
