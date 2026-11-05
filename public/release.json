@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.21",
-  "source_commit": "62105716f159f4a38763750d6e95ac36a7ddafb4",
-  "deployment_purpose": "Build latest main with Pinterest image masonry and video upload/playback fixes",
+  "version": "3.1.24",
+  "source_commit": "1168364f5962718e752dd7ed0df5cb550f97ec2a",
+  "deployment_purpose": "Synchronize folder cover thumbnails across devices; allow authorized shared viewers to read folder covers",
   "deployment_trigger_date": "2026-11-05"
 }
