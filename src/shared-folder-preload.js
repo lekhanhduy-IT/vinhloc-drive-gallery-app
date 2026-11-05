@@ -12,6 +12,8 @@
   const RETRY=90*1000;
   const WORKERS=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)?1:2;
   const queued=new Set(),queue=[],verified=new Map();
+  const serverPermitted=new Set(),refreshTimers=new Map();
+  let cacheHealthy=false;
   let auth=false,booting=false,failedUntil=0,active=0,lastAuth=0;
   let flushTimer=null,bootedScope='',lastSnapshot=0;
   const localCache=()=>{
@@ -37,7 +39,8 @@
     !!(item?.recentlyUploadedAt&&Date.now()-item.recentlyUploadedAt<120000);
   function push(id,urgent=false){
     if(!ID.test(id)||queued.has(id))return;
-    if(window.vlShareScope && !window.vlShareScope.allowed?.(id))return;
+    if(window.vlShareScope &&
+       !window.vlShareScope.allowed?.(id) && !serverPermitted.has(id))return;
     queued.add(id);
     if(urgent)queue.unshift(id);
     else queue.push(id);
@@ -45,7 +48,10 @@
   function discover(items){
     if(!Array.isArray(items))return;
     for(const item of items){
-      if(item?.type==='folder'&&ID.test(item.id))push(item.id);
+      if(item?.type==='folder'&&ID.test(item.id)){
+        serverPermitted.add(item.id);
+        push(item.id);
+      }
     }
   }
   function saveEventually(){
@@ -65,7 +71,8 @@
   }
   function apply(id,items,updatedAt,mode='snapshot'){
     if(!ID.test(id)||!Array.isArray(items))return;
-    if(window.vlShareScope && !window.vlShareScope.allowed?.(id))return;
+    if(window.vlShareScope &&
+       !window.vlShareScope.allowed?.(id) && !serverPermitted.has(id))return;
     verified.set(id,Number(updatedAt)||Date.now());
     const cache=localCache(),sub=subCache();
     if(!cache)return;
@@ -108,6 +115,7 @@
       if(response.status===401){auth=false;throw Error('Chưa có phiên Google đã xác thực');}
       if(!response.ok||data.success!==true)
         throw Error(data.message||'Folder cache HTTP '+response.status);
+      cacheHealthy=true;
       return data;
     }finally{clearTimeout(timer);}
   }
@@ -126,6 +134,7 @@
   function disableOldSpider(){
     // Prevent old concurrent crawling from rewriting the same cache with
     // stale per-device data. Leave it enabled if the Redis service is down.
+    if(!cacheHealthy)return;
     if(window.spiderInterval){
       clearInterval(window.spiderInterval);
       window.spiderInterval=null;
@@ -155,8 +164,12 @@
     try{
       if(bootedScope!==currentScope){
         bootedScope=currentScope;
-        queue.length=0;queued.clear();verified.clear();
+        queue.length=0;queued.clear();verified.clear();serverPermitted.clear();
+        serverPermitted.add(currentScope);
         push(currentScope,true);
+        // The primary screen starts warming immediately. Fetch the entire
+        // shared index in parallel; it may be thousands of folders.
+        work();
         if(!window.vlShareScope)await snapshot();
       }
       disableOldSpider();
@@ -204,13 +217,32 @@
   // warmed session, without an additional Drive operation.
   async function hydrateFolder(id){
     if(!ID.test(id)||!auth)return false;
-    if(window.vlShareScope&&!window.vlShareScope.allowed?.(id))return false;
+    if(window.vlShareScope&&!window.vlShareScope.allowed?.(id)&&
+       !serverPermitted.has(id))return false;
     const response=await call('get',{folderId:id});
     apply(id,response.data,response.updatedAt,'snapshot');
     return true;
   }
-  window.vlSharedPreload={hydrateFolder,refresh:()=>void boot(),
-    status:()=>({cached:verified.size,queued:queue.length,active,authorized:auth})};
+  function refreshFolder(id){
+    if(!ID.test(id)||!scope())return;
+    if(refreshTimers.has(id))clearTimeout(refreshTimers.get(id));
+    const timer=setTimeout(async()=>{
+      refreshTimers.delete(id);
+      if(!auth){push(id,true);return;}
+      try{
+        const result=await call('warm',{folderId:id,force:true});
+        apply(id,result.data,result.updatedAt,'drive');
+      }catch(error){
+        console.warn('[QL Ảnh] Sẽ cập nhật lại cache folder khi có mạng',error);
+        verified.delete(id);
+        push(id,true);
+      }
+    },1600);
+    refreshTimers.set(id,timer);
+  }
+  window.vlSharedPreload={hydrateFolder,refreshFolder,refresh:()=>void boot(),
+    status:()=>({cached:verified.size,queued:queue.length,active,authorized:auth,
+      sharedCacheReady:cacheHealthy})};
   for(const event of ['vl:media-authorized','vl:share-member-ready'])
     window.addEventListener(event,()=>{lastAuth=0;void boot();});
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)onVisible();});
