@@ -164,6 +164,7 @@
           correctListCache(value.data.folderData, true);
           correctListCache(value.data.subData, true, true);
           preserveActiveUploads(value.data);
+          window.vlSharedPreload?.protectSnapshot?.(value.data);
           return patchResponse(response, value);
         }
       } catch (error) {
