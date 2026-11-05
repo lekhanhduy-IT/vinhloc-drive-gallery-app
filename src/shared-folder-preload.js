@@ -83,7 +83,13 @@
     const incoming=items.filter(item=>ID.test(item?.id)&&!item.isPending);
     const live=mode==='drive';
     const oldPending=(old||[]).filter(pending);
-    if(!old || live){
+    // Another device can have older IndexedDB content from yesterday.
+    // A recent server-verified snapshot wins for non-active folders, unless
+    // this device is uploading/editing those items right now.
+    const newerServer=mode==='snapshot' &&
+      Date.now()-Number(updatedAt||0)<FRESH &&
+      id!==activeFolder() && oldPending.length===0;
+    if(!old || live || newerServer){
       const ids=new Set(oldPending.map(item=>item.id));
       cache[id]=[...oldPending,...incoming.filter(item=>!ids.has(item.id))];
       if(sub)sub[id]=cache[id].filter(item=>item.type==='folder');
