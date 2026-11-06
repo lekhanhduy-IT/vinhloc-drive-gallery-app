@@ -648,3 +648,148 @@ header.vl-header-menu-host #headerDropdown {
 @media (prefers-reduced-motion: reduce) {
   #vlAuthWait .vl-auth-wait-ring { animation-duration: 1.8s; }
 }
+
+/* Desktop-only square gallery: regular 8-column CSS Grid, never masonry.
+   Columns may increase beyond the viewport; overflow scrolls horizontally so
+   file labels and three-dot buttons never shrink with tile density. */
+@media (min-width: 1024px) and (pointer: fine) {
+  #contentArea:has(> #fileList.vl-desktop-squares) {
+    overflow-x: auto;
+  }
+  #fileList.vl-desktop-squares:not(.list-view) {
+    box-sizing: border-box;
+    display: grid !important;
+    width: max(100%, var(--vl-desktop-min-width, 880px)) !important;
+    min-width: 100%;
+    max-width: none !important;
+    grid-template-columns: repeat(var(--vl-desktop-columns, 8), minmax(0, 1fr)) !important;
+    grid-auto-flow: row !important;
+    grid-auto-rows: max-content !important;
+    align-content: start;
+    align-items: start;
+    column-gap: 10px !important;
+    row-gap: 10px !important;
+    transition: none !important;
+  }
+  #fileList.vl-desktop-squares:not(.list-view) > div {
+    box-sizing: border-box;
+    position: relative;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    aspect-ratio: auto !important;
+    margin: 0 !important;
+    padding: 7px !important;
+    overflow: visible !important;
+    transform: none !important;
+    font-size: 13px !important;
+  }
+  /* The preview area is square for image, video and upload placeholders. */
+  #fileList.vl-desktop-squares:not(.list-view) > div > .h-32 {
+    position: relative !important;
+    display: flex !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    aspect-ratio: 1 / 1 !important;
+    flex: 0 0 auto !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+    margin-bottom: 7px !important;
+    background: #f3f4f6;
+  }
+  #fileList.vl-desktop-squares:not(.list-view) > div > .h-32 > img.drive-img-item {
+    position: absolute !important;
+    inset: 0;
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    aspect-ratio: auto !important;
+    object-fit: contain !important;
+    object-position: center !important;
+  }
+  /* File names and metadata remain legible at every column count. */
+  #fileList.vl-desktop-squares:not(.list-view) > div > .px-1 {
+    box-sizing: border-box;
+    flex: 0 0 auto !important;
+    width: 100%;
+    min-width: 0;
+    min-height: 50px;
+    padding: 3px 2px 4px !important;
+    font-size: 13px !important;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  #fileList.vl-desktop-squares:not(.list-view) > div .drive-img-name {
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    width: 100%;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    font-size: 12px !important;
+    line-height: 17px !important;
+    min-height: 34px;
+    max-height: 34px;
+    font-weight: 700 !important;
+    transform: none !important;
+    cursor: pointer;
+  }
+  #fileList.vl-desktop-squares:not(.list-view) > div > .px-1 > span:last-child:not(.drive-img-name) {
+    font-size: 10px !important;
+    line-height: 14px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Never scale the clickable ellipsis: minimum 36px hit target. */
+  #fileList.vl-desktop-squares:not(.list-view) > div > .absolute:has(> button[onclick*="toggleItemMenu"]) {
+    top: 6px !important;
+    right: 6px !important;
+    z-index: 40 !important;
+    transform: none !important;
+  }
+  #fileList.vl-desktop-squares:not(.list-view) > div > .absolute > button[onclick*="toggleItemMenu"] {
+    box-sizing: border-box;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    padding: 0 !important;
+    font-size: 14px !important;
+    line-height: 1 !important;
+    transform: none !important;
+    cursor: pointer;
+    pointer-events: auto !important;
+    touch-action: manipulation;
+  }
+  #fileList.vl-desktop-squares:not(.list-view) > div > .absolute > button[onclick*="toggleItemMenu"] i {
+    font-size: 14px !important;
+    line-height: 1 !important;
+    transform: none !important;
+    pointer-events: none;
+  }
+  #fileList.vl-desktop-squares:not(.list-view) > div .item-action-menu {
+    width: 160px !important;
+    min-width: 160px !important;
+    font-size: 14px !important;
+    z-index: 600 !important;
+  }
+  #fileList.vl-desktop-squares:not(.list-view) > div:has(.item-action-menu:not(.hidden)) {
+    z-index: 100;
+  }
+}
