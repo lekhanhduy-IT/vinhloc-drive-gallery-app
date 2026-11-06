@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.31",
-  "source_commit": "2d59c1fda96109ceda9fcba9d475bea3c121577f",
-  "deployment_purpose": "Fix invalid Unicode Content-Disposition headers on image/video streaming with ASCII fallback and RFC 5987 UTF-8 filename encoding",
+  "version": "3.1.32",
+  "source_commit": "45eea1176a02d5d61e6baf8229e4e13b621cff5a",
+  "deployment_purpose": "Shift-click selects inclusive consecutive files in visible gallery grid or list without re-rendering thumbnails; preserve Ctrl-click selection",
   "deployment_trigger_date": "2026-11-06"
 }
