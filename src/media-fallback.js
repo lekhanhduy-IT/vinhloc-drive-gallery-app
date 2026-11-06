@@ -25,6 +25,12 @@
   function idFromDriveUrl(raw) {
     try {
       const url = new URL(raw, location.href);
+      // Copies that fail through our private media gateway must also be
+      // resolvable by the existing Drive OAuth / Apps Script fallback.
+      if(url.origin===location.origin && url.pathname==='/api/media') {
+        const fileId=url.searchParams.get('fileId');
+        return /^[A-Za-z0-9_-]{10,160}$/.test(fileId||'')?fileId:null;
+      }
       if (/drive\.google\.com$/.test(url.hostname)) {
         const id = url.searchParams.get('id');
         if (id) return id;
@@ -254,8 +260,15 @@
       video.src = url;
     });
   }
+  // The gateway's own retry module handles /api/media first and invokes
+  // vlMediaFallbackImage only if its original-file route also fails.
+  // Do not race its image src changes against this legacy error listener.
   function fallbackForImage(img) {
     if (img.dataset.vlFallback === 'running' || img.dataset.vlFallback === 'failed') return;
+    try {
+      const candidate=new URL(img.currentSrc||img.src||'',location.href);
+      if(candidate.origin===location.origin && candidate.pathname==='/api/media')return;
+    }catch(_) {}
     const original = img.currentSrc || img.src || img.getAttribute('src');
     const id = idFromDriveUrl(original);
     if (!id) return;
@@ -341,6 +354,12 @@
       }
       const id = idFromDriveUrl(img.currentSrc || img.src);
       if (id) {
+        // Leave same-origin failures to media-thumbnail-retry so its
+        // authenticated-first path stays deterministic.
+        try {
+          const candidate=new URL(img.currentSrc||img.src,location.href);
+          if(candidate.origin===location.origin && candidate.pathname==='/api/media')return;
+        }catch(_) {}
         event.stopImmediatePropagation();
         if (visibleObserver && !img.closest('#mediaContent')) visibleObserver.observe(img);
         else fallbackForImage(img);
@@ -400,6 +419,10 @@
       else alert(error.message);
     } finally { if (button) button.disabled = false; }
   }
+
+  // Reuse the trusted fallback for a copied file's exact Drive ID. The
+  // returned URL is a verified temporary image/blob, never a public share URL.
+  window.vlMediaFallbackImage = imageFallback;
 
   // An explicit viewer fallback helps when the built-in Drive preview iframe
   // fails silently (iframe load events do not reliably report authentication).
