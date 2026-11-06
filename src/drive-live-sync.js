@@ -8,6 +8,39 @@
   let lastRun = 0;
   const driveNames = new Map();
   let installedRenderer = null;
+  let lastPaintKey = '';
+  // Avoid throwing away decoded <img> nodes when a background sync paints the
+  // SAME file IDs and metadata again. Replacing innerHTML causes loaded
+  // previews to disappear and start network/fallback recovery from zero.
+  function sameFileCards(files) {
+    const list=document.getElementById('fileList');
+    if(!list || list.children.length!==files.length || !files.length)return false;
+    for(let i=0;i<files.length;i++) {
+      const menu=list.children[i].querySelector('[id^="menu-"]');
+      if(!menu || menu.id!=='menu-'+files[i].id)return false;
+    }
+    return true;
+  }
+  function paintKey(items) {
+    try {
+      const selected=window.multiSelectState?.selectedIds;
+      const selectedIds=selected instanceof Set ? Array.from(selected).sort() : [];
+      const scope=typeof currentFolderId!=='undefined'?currentFolderId:'';
+      const category=typeof currentCategory!=='undefined'?currentCategory:'';
+      const metadata=typeof appMeta!=='undefined'?appMeta:{};
+      const itemsKey=items.map(i=>[
+        i.id,i.type,i.name,i.mimeType||'',i.size||'',
+        i.description||'',i.tempUrl||'',!!i.isPending,!!i.isGhostPaste,
+        i.recentlyUploadedAt||0,
+        metadata?.[i.id]?.name||'',metadata?.[i.id]?.desc||'',
+        metadata?.[i.id]?.cover||'',metadata?.[i.id]?.type||'',
+        metadata?.[i.id]?.pinnedAt||''
+      ]);
+      return JSON.stringify([scope,category,
+        document.getElementById('fileList')?.classList.contains('list-view'),
+        selectedIds,itemsKey]);
+    }catch(_) {return '';}
+  }
   // The legacy renderer forces names from Sheets metadata, even when Drive has changed.
   // Keep the current Drive name authoritative at render time without altering other metadata.
   function installRendererGuard() {
@@ -23,7 +56,17 @@
           if (typeof appMeta !== 'undefined' && appMeta[item.id]) appMeta[item.id].name = liveName;
         } catch (_) {}
       });
-      return original.call(this, items, ...args);
+      // Search, active uploads, temporary cards, and folder-only views must
+      // use the original renderer. Only suppress identical in-folder repaints.
+      const files=Array.isArray(items)?items.filter(i=>i.type!=='folder'):[];
+      const search=!!args[0];
+      const key=!search && files.length && !files.some(i=>i.isPending||i.isGhostPaste||i.tempUrl)
+        ?paintKey(items):'';
+      if(key && key===lastPaintKey && sameFileCards(files))return undefined;
+      const result=original.call(this, items, ...args);
+      if(key && sameFileCards(files))lastPaintKey=key;
+      else lastPaintKey='';
+      return result;
     };
     installedRenderer = wrapped;
     window.renderItems = wrapped;
