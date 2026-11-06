@@ -307,6 +307,10 @@
     if ((img.getAttribute('src') || '').startsWith('blob:')) return;
     const id = selectedMediaId(img);
     if (!id) return;
+    // Never replace a preview that has already decoded successfully.
+    // A later reconciliation can race a Drive fallback and put a broken
+    // thumb URL back on the same file, making thumbnails flicker.
+    if (img.closest('#fileList') && img.complete && img.naturalWidth>0) return;
     const full = !!img.closest('#mediaContent');
     const desired = proxy(id, full ? 'full':'thumb');
     const current = img.getAttribute('src') || '';
