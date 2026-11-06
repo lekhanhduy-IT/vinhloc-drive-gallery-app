@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.25",
-  "source_commit": "ae5a67ee1083293291c7c22f9c87c186a80a2e49",
-  "deployment_purpose": "Fix folder-cover refresh isolation and retain thumbnails across devices; bump visible app release",
+  "version": "3.1.26",
+  "source_commit": "713fe29aa37b478ef206b11fa6d61cdd762776c7",
+  "deployment_purpose": "Desktop 8-column square file gallery, unbounded Ctrl +/- zoom, fixed-size file labels and three-dot buttons, preserve mobile masonry",
   "deployment_trigger_date": "2026-11-06"
 }
