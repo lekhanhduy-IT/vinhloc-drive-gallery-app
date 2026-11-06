@@ -49,6 +49,7 @@
     desktopColumns = next;
     try { localStorage.setItem(desktopKey, String(next)); } catch (_) {}
     grid.style.setProperty('--vl-desktop-columns', String(next));
+    grid.style.setProperty('--vl-desktop-min-width', (next * 110) + 'px');
   }
   function applyResponsiveMode() {
     const desktop = isDesktop();
@@ -56,6 +57,7 @@
     grid.classList.toggle('vl-pinterest', !desktop);
     if (desktop) {
       grid.style.setProperty('--vl-desktop-columns', String(desktopColumns));
+      grid.style.setProperty('--vl-desktop-min-width', (desktopColumns * 110) + 'px');
     } else {
       if (!customizedMobile) {
         const saved = legacyStored();
