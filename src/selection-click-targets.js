@@ -42,8 +42,17 @@
 
   // Window capture runs BEFORE the old shared-folder document capture listener,
   // which otherwise handles the same folder click a second time.
+  // Normal clicks on the preview continue to OPEN images/videos. Shift+click
+  // anywhere on a file card selects a range instead of opening the viewer.
   window.addEventListener('click', event => {
-    const chosen=pickTarget(event.target);
+    let chosen=pickTarget(event.target);
+    if (!chosen && event.shiftKey && event.target?.closest &&
+        !event.target.closest('button,.item-action-menu,[role="dialog"],#infoModal,#customModal')) {
+      const card=event.target.closest('#fileList > div');
+      const menu=card?.querySelector('[id^="menu-"]');
+      const id=menu?.id?.slice(5);
+      if (id && /^[A-Za-z0-9_-]{10,180}$/.test(id)) chosen={id,kind:'file'};
+    }
     if (!chosen?.id) return;
     if (typeof window.toggleFileSelection!=='function') return;
     event.preventDefault();
@@ -97,26 +106,81 @@
     }
     card.dataset.vlSelected=selected?'true':'false';
   }
+  // Anchor is scoped to one folder. The range follows the CURRENT visible
+  // file order (not filename sorting, Drive timestamps or the backing cache).
+  let selectionAnchor=null;
+  function folderScope() {
+    try {
+      if(typeof currentFolderId!=='undefined' && currentFolderId)
+        return String(currentFolderId);
+    } catch(_) {}
+    return document.getElementById('fileList')?.dataset.vlRenderedFolder||location.pathname;
+  }
+  function orderedVisibleFiles(){
+    const list=document.getElementById('fileList');
+    if(!list)return [];
+    const entries=[];
+    for(const card of list.children){
+      const menu=card.querySelector('[id^="menu-"]');
+      const id=menu?.id?.slice(5);
+      if(id && /^[A-Za-z0-9_-]{10,180}$/.test(id))
+        entries.push({id,card});
+    }
+    return entries;
+  }
+  function updateSelectionControls(){
+    const menu=document.getElementById('headerDropdown');
+    if(menu && !menu.classList.contains('hidden') &&
+       typeof window.buildHeaderMenu==='function')
+      window.buildHeaderMenu();
+    if(typeof window.updatePasteButtonState==='function')
+      window.updatePasteButtonState();
+  }
   function installSelectionWithoutRedraw(){
     const prior=window.toggleFileSelection;
     if (typeof prior!=='function' || prior.__vlSelectionWithoutRedraw) return;
     const stable=function(id,event){
       const card=visibleFileCard(id);
       const state=window.multiSelectState?.selectedIds;
-      // List view, folder rows and unusual legacy views keep old semantics.
+      // Folder rows, unsupported list views and special actions keep the old
+      // selection behavior; don't change their navigation/selection semantics.
       if (!card || !(state instanceof Set))
         return prior.apply(this,arguments);
       event?.stopPropagation?.();
+      const scope=folderScope();
+      if(selectionAnchor?.scope!==scope)selectionAnchor=null;
+      const visible=orderedVisibleFiles();
+      const end=visible.findIndex(entry=>entry.id===id);
+      if(end<0)return prior.apply(this,arguments);
+
+      if(event?.shiftKey) {
+        let anchor=visible.findIndex(entry=>entry.id===selectionAnchor?.id);
+        if(anchor<0) {
+          // A file selected through the existing menu can be an anchor too.
+          anchor=visible.findIndex(entry=>state.has(entry.id));
+        }
+        if(anchor>=0) {
+          const from=Math.min(anchor,end),to=Math.max(anchor,end);
+          // Add the entire inclusive range, preserving other selections from
+          // Ctrl+click or prior actions. No thumbnail <img> is re-created.
+          for(let i=from;i<=to;i++){
+            const entry=visible[i];
+            if(!state.has(entry.id)){
+              state.add(entry.id);
+              updateVisibleFileSelection(entry.card,true);
+            }
+          }
+          selectionAnchor={scope,id:visible[anchor].id};
+          updateSelectionControls();
+          return undefined;
+        }
+      }
       const selected=!state.has(id);
-      if (selected) state.add(id);
+      if (selected)state.add(id);
       else state.delete(id);
       updateVisibleFileSelection(card,selected);
-      const menu=document.getElementById('headerDropdown');
-      if(menu && !menu.classList.contains('hidden') &&
-         typeof window.buildHeaderMenu==='function')
-        window.buildHeaderMenu();
-      if(typeof window.updatePasteButtonState==='function')
-        window.updatePasteButtonState();
+      selectionAnchor=selected?{scope,id}:null;
+      updateSelectionControls();
       return undefined;
     };
     stable.__vlSelectionWithoutRedraw=true;
