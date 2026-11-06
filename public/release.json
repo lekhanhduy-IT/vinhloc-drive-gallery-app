@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.26",
-  "source_commit": "713fe29aa37b478ef206b11fa6d61cdd762776c7",
-  "deployment_purpose": "Desktop 8-column square file gallery, unbounded Ctrl +/- zoom, fixed-size file labels and three-dot buttons, preserve mobile masonry",
+  "version": "3.1.27",
+  "source_commit": "e25a861a8c7adc104e3731ce6b3578053f96b947",
+  "deployment_purpose": "Prevent gallery flicker by toggling only the selected file card without reconstructing thumbnails or grid",
   "deployment_trigger_date": "2026-11-06"
 }
