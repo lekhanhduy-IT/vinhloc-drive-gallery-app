@@ -66,7 +66,8 @@
   // Patch only the clicked file card; leave real data renders untouched.
   function visibleFileCard(id) {
     const list=document.getElementById('fileList');
-    if (!list || list.classList.contains('list-view')) return null;
+    // Grid and list view use the same file-card nodes and stable Drive IDs.
+    if (!list) return null;
     const menu=document.getElementById('menu-'+id);
     if (!menu || !list.contains(menu)) return null;
     let card=menu;
@@ -142,8 +143,8 @@
     const stable=function(id,event){
       const card=visibleFileCard(id);
       const state=window.multiSelectState?.selectedIds;
-      // Folder rows, unsupported list views and special actions keep the old
-      // selection behavior; don't change their navigation/selection semantics.
+      // Folder rows and special actions keep the old selection behavior;
+      // don't change their navigation or selection semantics.
       if (!card || !(state instanceof Set))
         return prior.apply(this,arguments);
       event?.stopPropagation?.();
