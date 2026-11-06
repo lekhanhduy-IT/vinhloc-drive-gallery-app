@@ -109,7 +109,7 @@
       // the same ID through OAuth or the existing bounded Apps Script path.
       itemLabel(img,'Đang khôi phục ảnh từ Drive…');
       try {
-        candidate=await window.vlMediaFallbackImage(fileId,false);
+        candidate=await window.vlMediaFallbackImage(fileId,false,true);
       } catch(error) {
         state.lastRecoveryError=String(error?.message||error).slice(0,170);
         console.warn('[QL Ảnh] Không thể khôi phục thumbnail',fileId,error);
