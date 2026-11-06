@@ -36,6 +36,33 @@
   let scanTimer = null;
   let saveBusy = false;
   let replayLegacySave = false;
+  let initialFolderFields = null;
+  const COVER_STORE = 'vl_folder_covers_v2';
+  // A metadata refresh or a re-render must never erase already known covers.
+  // Persist references only (not image bytes or Drive authorization).
+  function restoreCovers() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(COVER_STORE) || '{}');
+      for (const [id, data] of Object.entries(stored)) {
+        if (idOk(id) && idOk(data?.imageId))
+          driveCovers.set(id, {imageId:data.imageId, time:0});
+      }
+    } catch (_) {}
+  }
+  function rememberCover(id, imageId) {
+    if (!idOk(id)) return;
+    try {
+      const stored = JSON.parse(localStorage.getItem(COVER_STORE) || '{}');
+      if (idOk(imageId)) stored[id] = {imageId};
+      else delete stored[id];
+      const entries = Object.entries(stored).slice(-1500);
+      localStorage.setItem(COVER_STORE, JSON.stringify(Object.fromEntries(entries)));
+    } catch (_) {}
+  }
+  function folderFields() {
+    return ['infoName', 'infoDesc', 'infoType'].map(id => byId(id)?.value ?? '');
+  }
+  restoreCovers();
 
   function applyFolderCover(id, imageId) {
     if (!idOk(id) || !idOk(imageId)) return;
@@ -88,6 +115,7 @@
           if((driveCovers.get(id)?.time||0)>requestedAt)continue;
           const imageId=idOk(data.covers[id]) ? data.covers[id] : null;
           driveCovers.set(id,{imageId,time:Date.now()});
+          rememberCover(id,imageId);
           if(imageId){
             applyFolderCover(id,imageId);
             applyDialogCover(id,imageId);
@@ -151,6 +179,7 @@
       cover = null;
       choice = null;
       const result=baseOpenInfo.apply(this, arguments);
+      initialFolderFields = edit ? folderFields() : null;
       if(edit){
         const known=driveCovers.get(edit.id);
         if(known?.imageId)applyDialogCover(edit.id,known.imageId);
@@ -383,6 +412,7 @@
         throw Error(result.message||'Google Drive chưa xác nhận lưu thumbnail');
 
       driveCovers.set(selected.folderId,{imageId:selected.fileId,time:Date.now()});
+      rememberCover(selected.folderId,selected.fileId);
       applyFolderCover(selected.folderId,selected.fileId);
       // Once saved, the legacy Save button can commit name/description without
       // uploading a duplicate image or replacing the authoritative Drive cover.
@@ -391,12 +421,21 @@
       window.pendingCoverMimeType=null;
       showSaveStatus('');
       if(edit?.id===selected.folderId && !byId('infoModal')?.classList.contains('hidden')){
-        replayLegacySave=true;
-        try {
-          target.disabled=false;
-          const current=byId('infoSaveBtn');
-          current?.click();
-        } finally {replayLegacySave=false;}
+        const fieldsChanged = !initialFolderFields ||
+          folderFields().some((value,index)=>value!==initialFolderFields[index]);
+        if(fieldsChanged){
+          // Preserve the original rename/description/type save behavior only
+          // when one of those fields was actually modified.
+          replayLegacySave=true;
+          try {
+            target.disabled=false;
+            byId('infoSaveBtn')?.click();
+          } finally {replayLegacySave=false;}
+        } else if(typeof window.closeInfoModal==='function'){
+          // Cover-only save is already committed by /api/folder-cover.
+          // The legacy save would invalidate/re-render the entire folder list.
+          window.closeInfoModal();
+        }
       }
       repaintKnown();
       setTimeout(repaintKnown,0);
