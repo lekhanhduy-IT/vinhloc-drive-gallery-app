@@ -102,12 +102,42 @@
       preview.onerror=()=>finish(false);
       preview.src=url;
     });
-    if (!succeeded || !img.isConnected) return false;
-    // Media-session's MutationObserver must preserve this working original
-    // instead of reverting it to a broken variant=thumb URL.
+    if (!img.isConnected) return false;
+    let candidate=succeeded?url:null;
+    if(!candidate && typeof window.vlMediaFallbackImage==='function') {
+      // /api/media may fail for just-copied files even though Drive can read
+      // the same ID through OAuth or the existing bounded Apps Script path.
+      itemLabel(img,'Đang khôi phục ảnh từ Drive…');
+      try {
+        candidate=await window.vlMediaFallbackImage(fileId,false);
+      } catch(error) {
+        state.lastRecoveryError=String(error?.message||error).slice(0,170);
+        console.warn('[QL Ảnh] Không thể khôi phục thumbnail',fileId,error);
+      }
+    }
+    if (!candidate || !img.isConnected) return false;
+    const probe=await new Promise(resolve=>{
+      const preview=new Image();
+      const timeout=setTimeout(()=>finish(false),10000);
+      let finished=false;
+      function finish(ok) {
+        if(finished)return;
+        finished=true;clearTimeout(timeout);
+        preview.onload=null;preview.onerror=null;
+        if(!ok)preview.src='';
+        resolve(ok);
+      }
+      preview.onload=()=>finish(preview.naturalWidth>0);
+      preview.onerror=()=>finish(false);
+      preview.src=candidate;
+    });
+    if (!probe || !img.isConnected) return false;
+    // Keep a working first-party full or verified temporary Blob URL. The
+    // media-session reconciler already preserves Blob URLs; it also honors
+    // vlOriginalThumb for same-origin full URLs.
     img.dataset.vlOriginalThumb='1';
     img.style.visibility='';
-    img.src=url;
+    img.src=candidate;
     clearLabel(img);
     states.delete(img);
     return true;
@@ -159,7 +189,10 @@
           return;
         }
         if(prior.attempt>=delays.length) {
-          itemLabel(img,code===404?'Drive chưa tạo thumbnail':'Không thể xem thumbnail');
+          itemLabel(img,prior.lastRecoveryError?
+            'Không thể đọc ảnh từ Drive' :
+            (code===404?'Drive chưa tạo thumbnail':'Không thể xem thumbnail'));
+          if(prior.lastRecoveryError)img.title=prior.lastRecoveryError;
           return;
         }
         const delay=delays[prior.attempt++];
