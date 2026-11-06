@@ -310,6 +310,18 @@
     const full = !!img.closest('#mediaContent');
     const desired = proxy(id, full ? 'full':'thumb');
     const current = img.getAttribute('src') || '';
+    // A freshly copied photo may have no Drive thumbnail yet. If the
+    // thumbnail recovery module has confirmed the private original loads,
+    // retain that exact file's preview across MutationObserver passes.
+    if (img.dataset.vlOriginalThumb==='1' && !full) {
+      try {
+        const existing=new URL(current,location.href);
+        if(existing.origin===location.origin && existing.pathname===API &&
+          existing.searchParams.get('fileId')===id &&
+          existing.searchParams.get('variant')==='full')return;
+      }catch(_){}
+      delete img.dataset.vlOriginalThumb;
+    }
     if (current === desired) return;
     // The thumbnail recovery module adds thumbRetry=N while Drive is still
     // processing a batch upload. Do not reset the URL from MutationObserver.
