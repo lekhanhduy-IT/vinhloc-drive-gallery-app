@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.29",
-  "source_commit": "de3455bf5b6b176946c414d01d7dad6ac630a245",
-  "deployment_purpose": "Use authenticated Google Drive and Apps Script fallback for copied images when media gateway original and thumbnail are unavailable",
+  "version": "3.1.30",
+  "source_commit": "4b440ac8810698030d63d36cc3a2235c91f7f956",
+  "deployment_purpose": "Prevent thumbnails popping/disappearing by retaining decoded images, using stable Blob previews, and skipping identical live-sync full-grid renders",
   "deployment_trigger_date": "2026-11-06"
 }
