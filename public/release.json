@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.24",
-  "source_commit": "1168364f5962718e752dd7ed0df5cb550f97ec2a",
-  "deployment_purpose": "Synchronize folder cover thumbnails across devices; allow authorized shared viewers to read folder covers",
-  "deployment_trigger_date": "2026-11-05"
+  "version": "3.1.25",
+  "source_commit": "ae5a67ee1083293291c7c22f9c87c186a80a2e49",
+  "deployment_purpose": "Fix folder-cover refresh isolation and retain thumbnails across devices; bump visible app release",
+  "deployment_trigger_date": "2026-11-06"
 }
