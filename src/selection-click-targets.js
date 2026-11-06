@@ -179,7 +179,8 @@
       if (selected)state.add(id);
       else state.delete(id);
       updateVisibleFileSelection(card,selected);
-      selectionAnchor=selected?{scope,id}:null;
+      // Keep keyboard range anchor even if the last clicked file was toggled off.
+      selectionAnchor={scope,id};
       updateSelectionControls();
       return undefined;
     };
