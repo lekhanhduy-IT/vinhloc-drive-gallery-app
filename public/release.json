@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.30",
-  "source_commit": "4b440ac8810698030d63d36cc3a2235c91f7f956",
-  "deployment_purpose": "Prevent thumbnails popping/disappearing by retaining decoded images, using stable Blob previews, and skipping identical live-sync full-grid renders",
+  "version": "3.1.31",
+  "source_commit": "2d59c1fda96109ceda9fcba9d475bea3c121577f",
+  "deployment_purpose": "Fix invalid Unicode Content-Disposition headers on image/video streaming with ASCII fallback and RFC 5987 UTF-8 filename encoding",
   "deployment_trigger_date": "2026-11-06"
 }
