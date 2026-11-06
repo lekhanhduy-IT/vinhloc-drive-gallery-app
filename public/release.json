@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.28",
-  "source_commit": "7c7b5da312354f4022dccebf55a9bf7a010f05ed",
-  "deployment_purpose": "Recover copied/moved photo previews using authenticated original when Drive thumbnail is delayed; preserve fallback while rendering",
+  "version": "3.1.29",
+  "source_commit": "de3455bf5b6b176946c414d01d7dad6ac630a245",
+  "deployment_purpose": "Use authenticated Google Drive and Apps Script fallback for copied images when media gateway original and thumbnail are unavailable",
   "deployment_trigger_date": "2026-11-06"
 }
