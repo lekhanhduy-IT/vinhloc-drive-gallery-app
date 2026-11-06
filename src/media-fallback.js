@@ -141,12 +141,12 @@
       ]);
     } finally { clearTimeout(timeoutId); }
   }
-  async function resolvePreview(id, full) {
+  async function resolvePreview(id, full, forceBlob = false) {
     let token, info, oauthError = null;
     try {
       token = await withDeadline(getToken(), 10000);
       info = await withDeadline(metadata(id, token), 10000);
-      if (!full && info.thumbnailLink) {
+      if (!full && !forceBlob && info.thumbnailLink) {
         try {
           const signed = await testImage(info.thumbnailLink, isIOS ? 3500 : 6500);
           return {url: signed, isBlob: false};
@@ -217,13 +217,15 @@
       });
     } finally { URL.revokeObjectURL(source); }
   }
-  async function imageFallback(id, full = false) {
-    const cacheKey = full ? id + ':full' : id;
+  async function imageFallback(id, full = false, forceBlob = false) {
+    // A copied-image rescue must return a stable in-memory URL, not a
+    // short-lived thumbnailLink which media-session resets to /api/media.
+    const cacheKey = full ? id + ':full' : forceBlob ? id + ':blob' : id;
     const prior = saved.get(cacheKey);
     if (prior && Date.now() - prior.recordedAt < 20 * 60000) return prior.url;
     if (inflight.has(cacheKey)) return inflight.get(cacheKey);
     const task = enqueue(async () => {
-      const preview = await resolvePreview(id, full);
+      const preview = await resolvePreview(id, full, forceBlob);
       return remember(cacheKey, preview.url, preview.isBlob);
     }).finally(() => inflight.delete(cacheKey));
     inflight.set(cacheKey, task);
