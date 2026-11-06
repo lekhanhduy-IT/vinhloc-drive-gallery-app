@@ -198,7 +198,23 @@ async function inManagedRoot(id,token){
   }
   return false;
 }
-function filenameSafe(s) { return String(s||'file').replace(/[^\p{L}\p{N}._ -]/gu,'_').slice(0,120); }
+// Node/Vercel HTTP headers are Latin-1 only. Never put a Vietnamese
+// filename directly inside the quoted filename= parameter. RFC 5987's
+// filename*=UTF-8'' form preserves the real Unicode Drive name.
+function mediaContentDisposition(name) {
+  const unicodeName=Array.from(String(name||'file').normalize('NFC')
+    .replace(/[\\/\x00-\x1F\x7F]/g,'_'))
+    .slice(0,160).join('')
+    .replace(/[\uD800-\uDFFF]/g,'_') || 'file';
+  const asciiName=unicodeName.normalize('NFKD')
+    .replace(/\p{M}/gu,'')
+    .replace(/đ/g,'d').replace(/Đ/g,'D')
+    .replace(/[^A-Za-z0-9._ -]/g,'_')
+    .slice(0,120) || 'file';
+  const encoded=encodeURIComponent(unicodeName)
+    .replace(/[!'()*]/g,c=>'%'+c.charCodeAt(0).toString(16).toUpperCase());
+  return 'inline; filename="'+asciiName+'"; filename*=UTF-8\'\''+encoded;
+}
 export const config = {maxDuration: 60};
 // Reuse this verified, signed HttpOnly session for ownership-protected writes.
 export async function verifiedAccount(req) {
@@ -327,7 +343,7 @@ export default async function handler(req, res) {
       ? content.headers.get('content-type') : mime;
     res.status(content.status===206?206:200);
     res.setHeader('Content-Type',contentType);
-    res.setHeader('Content-Disposition','inline; filename="'+filenameSafe(info.name)+'"');
+    res.setHeader('Content-Disposition',mediaContentDisposition(info.name));
     res.setHeader('Accept-Ranges','bytes');
     for(const name of ['content-length','content-range']) {
       const val=content.headers.get(name);
