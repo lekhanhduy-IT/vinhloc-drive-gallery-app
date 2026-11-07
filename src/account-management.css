@@ -1,0 +1,47 @@
+/* Admin account management. Scoped under the dedicated view only. */
+#menu-quanly[hidden],#vlAdminPage[hidden]{display:none!important}
+body[data-vl-account-view="true"] #vlGallerySearchBar,
+body[data-vl-account-view="true"] #vlGalleryFab,
+body[data-vl-account-view="true"] #contentArea > #folderList,
+body[data-vl-account-view="true"] #contentArea > #fileList{display:none!important}
+#contentArea.vl-admin-open{background:#f6f9fc;overflow-y:auto}
+#vlAdminPage{display:block;min-height:100%;box-sizing:border-box;padding:clamp(16px,3vw,36px);color:#17263e;font-family:Roboto,system-ui,sans-serif}
+#vlAdminPage .vl-admin-shell{width:min(1040px,100%);margin:0 auto}
+#vlAdminPage .vl-admin-title{font-weight:800;font-size:clamp(22px,2.3vw,29px);margin:0;color:#172b45}
+#vlAdminPage .vl-admin-intro{font-size:13px;color:#63738b;margin:8px 0 22px;line-height:1.65}
+#vlAdminPage .vl-admin-card{background:white;border:1px solid #e4eaf1;border-radius:16px;box-shadow:0 8px 26px #193b6409;padding:22px;margin-bottom:20px}
+#vlAdminPage .vl-admin-form{display:grid;grid-template-columns:minmax(0,1fr) minmax(175px,220px) auto;align-items:end;gap:14px}
+#vlAdminPage .vl-admin-field{display:flex;flex-direction:column;gap:8px;min-width:0}
+#vlAdminPage .vl-admin-field label{font-size:12px;font-weight:700;color:#3d4d63}
+#vlAdminPage .vl-admin-input,#vlAdminPage .vl-admin-select{height:44px;border:1px solid #d9e3ed;border-radius:10px;background:white;color:#233449;font-size:14px;padding:0 12px;outline:none;width:100%;box-sizing:border-box}
+#vlAdminPage .vl-admin-input:focus,#vlAdminPage .vl-admin-select:focus{border-color:#01adee;box-shadow:0 0 0 3px #01adee22}
+#vlAdminPage .vl-admin-submit{height:44px;min-width:104px;border:0;border-radius:10px;background:#01adee;color:white;font-weight:700;font-size:14px;cursor:pointer;padding:0 18px}
+#vlAdminPage .vl-admin-submit:disabled{opacity:.55;cursor:wait}
+#vlAdminPage .vl-admin-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+#vlAdminPage .vl-admin-heading{margin:0;font-size:17px;font-weight:800}
+#vlAdminPage .vl-admin-count{font-size:12px;color:#667891;font-weight:500}
+#vlAdminPage .vl-admin-reload{border:1px solid #dce5ef;color:#247eaa;background:white;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer}
+#vlAdminPage .vl-admin-table-wrap{overflow-x:auto;width:100%}
+#vlAdminPage table{width:100%;border-collapse:collapse;text-align:left;white-space:nowrap;font-size:13px}
+#vlAdminPage th{font-weight:700;color:#64748b;background:#f7fafd;font-size:12px;padding:13px 12px}
+#vlAdminPage td{border-bottom:1px solid #edf1f6;padding:15px 12px;vertical-align:middle}
+#vlAdminPage tr:last-child td{border-bottom:none}
+#vlAdminPage .vl-admin-email{font-weight:700;color:#21334a;max-width:330px;overflow:hidden;text-overflow:ellipsis}
+#vlAdminPage .vl-role{display:inline-block;border-radius:999px;background:#eaf8fe;color:#007fb5;padding:6px 10px;font-size:11px;font-weight:700}
+#vlAdminPage .vl-role.vl-role-admin{background:#e5f6ff;color:#006b9e}
+#vlAdminPage .vl-state{display:inline-flex;align-items:center;gap:7px;font-weight:600;color:#667891;font-size:12px}
+#vlAdminPage .vl-state:before{content:'';height:7px;width:7px;border-radius:50%;background:#94a3b8}
+#vlAdminPage .vl-state-online{color:#168354}
+#vlAdminPage .vl-state-online:before{background:#20b779}
+#vlAdminPage .vl-state-unknown:before{background:#c7cdd7}
+#vlAdminPage .vl-admin-delete{border:1px solid #ffe0e0;background:#fff8f8;color:#d34444;border-radius:8px;padding:8px 11px;cursor:pointer;font-size:12px;font-weight:700}
+#vlAdminPage .vl-admin-delete:disabled{opacity:.35;cursor:not-allowed}
+#vlAdminPage .vl-admin-message{margin-top:12px;min-height:18px;color:#277b55;font-size:13px}
+#vlAdminPage .vl-admin-message.vl-error{color:#d12c46}
+#vlAdminPage .vl-admin-empty{padding:24px;color:#77859b;text-align:center}
+@media(max-width:680px){
+  #vlAdminPage .vl-admin-card{padding:16px;border-radius:12px}
+  #vlAdminPage .vl-admin-form{grid-template-columns:minmax(0,1fr);gap:12px}
+  #vlAdminPage .vl-admin-submit{width:100%}
+  #vlAdminPage td,#vlAdminPage th{padding:12px 10px}
+}
