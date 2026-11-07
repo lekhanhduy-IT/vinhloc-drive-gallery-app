@@ -1,6 +1,7 @@
 import { createPublicKey, createHmac, timingSafeEqual, verify as verifySignature } from 'node:crypto';
 import { Readable } from 'node:stream';
 import {readFolderGrant} from '../lib/share-capability.js';
+import {roleForEmail} from '../lib/drive-roles.js';
 
 // A first-party media gateway: Google ID token -> Shared Drive membership ->
 // Drive API with the app service token. No public Drive permissions, no URL tokens.
@@ -80,6 +81,7 @@ function sealSession(identity) {
     sub:identity.sub,email:identity.email,
     ...(identity.scopeRoot?{scopeRoot:identity.scopeRoot}:{}),
     member:identity.member===true,
+    role:identity.role||'guest',
     exp:Math.min(identity.exp,Math.floor(Date.now()/1000)+3300)
   })).toString('base64url');
   const signature = createHmac('sha256',key).update(payload).digest('base64url');
@@ -118,35 +120,26 @@ async function callScript(action, payload={}) {
 }
 async function requireAccount(req) {
   const stored=cookie(req);
-  const sealed=readSignedSession(stored);
-  if (sealed) return sealed;
-  const identity=await verifyGoogleIdToken(stored);
-  // If the deployment lacks a signing key, Google ID tokens remain verified
-  // on every request; the separate HttpOnly scope cookie retains the grant.
-  const share=cookie(req,SHARE_COOKIE);
-  if(share){
-    const grant=await readFolderGrant(share,await driveToken());
-    if(!grant)throw new Error('Liên kết chia sẻ đã hết hạn hoặc bị thu hồi');
-    identity.scopeRoot=grant.root;
-    const memberKey='member:'+identity.sub+':'+identity.email;
-    const memberState=authorized.get(memberKey);
-    if(memberState?.until>Date.now())identity.member=memberState.member;
-    else {
-      try {await callScript('verifyUser',{email:identity.email});identity.member=true;}
-      catch(_){identity.member=false;}
-      authorized.set(memberKey,{until:Date.now()+90000,member:identity.member});
+  // Always verify the actual current Drive role, even with a previously
+  // signed HttpOnly session. Removing a member revokes protected API access.
+  let identity=readSignedSession(stored);
+  if(!identity){
+    identity=await verifyGoogleIdToken(stored);
+    const share=cookie(req,SHARE_COOKIE);
+    if(share){
+      const grant=await readFolderGrant(share,await driveToken());
+      if(!grant)throw new Error('Liên kết chia sẻ đã hết hạn hoặc bị thu hồi');
+      identity.scopeRoot=grant.root;
     }
-    return identity;
   }
-  const cacheKey=identity.sub+':'+identity.email;
-  if((authorized.get(cacheKey)||0)<Date.now()){
-    await callScript('verifyUser',{email:identity.email});
-    if(authorized.size>300)authorized.clear();
-    authorized.set(cacheKey,Date.now()+90000);
-  }
-  identity.member=true;
+  const role=await roleForEmail(identity.email,await driveToken());
+  identity.role=role;
+  identity.member=role!=='guest';
+  if(!identity.scopeRoot && role==='guest')
+    throw new Error('Tài khoản không còn quyền nội bộ. Chỉ có thể truy cập bằng liên kết chia sẻ hợp lệ.');
   return identity;
 }
+
 async function driveToken() {
   if (driveAuth && Date.now() < driveAuthUntil) return driveAuth;
   const result = await callScript('getToken');
@@ -256,14 +249,13 @@ export default async function handler(req, res) {
            folder.mimeType!=='application/vnd.google-apps.folder')
           return error(res,403,'Thư mục chia sẻ không được cấp quyền');
         identity.scopeRoot=grant.root;
-        try {
-          await callScript('verifyUser',{email:identity.email});
-          identity.member=true;
-        }catch(_) {identity.member=false;}
-      }else{
-        identity.member=true;
-        await callScript('verifyUser',{email:identity.email});
       }
+      // Google ID token identifies the human; the Drive ACL determines role.
+      const currentRole=await roleForEmail(identity.email,await driveToken(),{fresh:true});
+      identity.role=currentRole;
+      identity.member=currentRole!=='guest';
+      if(!grant && currentRole==='guest')
+        return error(res,403,'Tài khoản chưa được cấp quyền Shared Drive. Vui lòng dùng liên kết chia sẻ hợp lệ.');
       const life = Math.min(3300, Math.max(1,identity.exp - Math.floor(Date.now()/1000) - 10));
       const session=sealSession(identity) || body.credential;
       res.setHeader('Set-Cookie',[
@@ -272,14 +264,14 @@ export default async function handler(req, res) {
         SHARE_COOKIE+'='+(grant?body.shareGrant:'')+'; HttpOnly; Secure; SameSite=Strict; Path=/api; Max-Age='+(grant?life:0)
       ]);
       authorized.set(identity.sub+':'+identity.email,Date.now()+90000);
-      return res.status(200).json({success:true, email:identity.email,expiresAt:identity.exp,scopeRoot:identity.scopeRoot||null,isMember:identity.member===true});
+      return res.status(200).json({success:true, email:identity.email,expiresAt:identity.exp,scopeRoot:identity.scopeRoot||null,isMember:identity.member===true,role:identity.role});
     } catch (e) { return error(res,401,'Không thể xác thực tài khoản: '+e.message); }
   }
   if (req.method !== 'GET') return error(res,405,'Phương thức không hỗ trợ');
   let identity;
   try { identity = await requireAccount(req); }
   catch (e) { return error(res,401,'Cần đăng nhập lại Google để xem ảnh: '+e.message); }
-  if (req.query.status === '1') return res.status(200).json({success:true,email:identity.email,scopeRoot:identity.scopeRoot||null,isMember:identity.member===true||!identity.scopeRoot});
+  if (req.query.status === '1') return res.status(200).json({success:true,email:identity.email,scopeRoot:identity.scopeRoot||null,isMember:identity.member===true,role:identity.role});
   const id = req.query.fileId;
   if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{10,160}$/.test(id))
     return error(res,400,'ID tệp không hợp lệ');
