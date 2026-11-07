@@ -36,7 +36,12 @@ export default async function handler(req,res){
   }
   let identity;
   try{identity=await verifiedAccount(req);}
-  catch(_){return respond(res,401,'Cần đăng nhập lại bằng tài khoản Google được cấp quyền');}
+  catch(error){
+    const revoked=String(error?.message||'').includes('không còn quyền nội bộ');
+    return respond(res,revoked?403:401,
+      revoked?'Tài khoản đã bị thu hồi quyền nội bộ':'Cần đăng nhập lại bằng tài khoản Google được cấp quyền',
+      revoked?{code:'ROLE_REVOKED'}:{});
+  }
   const email=normalizeAccountEmail(identity.email);
   if(!email)return respond(res,401,'Danh tính Google không hợp lệ');
   const scoped=!!identity.scopeRoot;
