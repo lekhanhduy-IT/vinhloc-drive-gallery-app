@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.33",
-  "source_commit": "75bd3737bde5b8e50630ac5a7e33ef82046888b0",
-  "deployment_purpose": "Hotfix 3.1.33: Google Drive permissions pageSize <=100, paginated role validation, prevent false repeated Google authorization prompts and retry temporary permission API errors",
+  "version": "3.1.34",
+  "source_commit": "edf5c6bdfb84bafd1253e28e332c2d9dfb6f17de",
+  "deployment_purpose": "Replace legacy blue/purple post-login spider loader with the same clean white cyan-spinner screen used during Google verification; fix deployment version 3.1.34 across app, API and assets.",
   "deployment_trigger_date": "2026-11-07"
 }
