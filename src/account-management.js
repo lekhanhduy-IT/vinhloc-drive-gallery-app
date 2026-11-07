@@ -274,6 +274,15 @@
     installMenu();
     installPage();
     document.body.dataset.vlAccountView='false';
+    // Restore legacy item-menu entries after its mailbox-specific visibility
+    // patch runs; this only applies to newly delegated verified Managers.
+    window.vlMenuController?.onItem?.(({menu})=>{
+      if(role!=='admin'||verifiedEmail==='admin@tudonghoavinhloc.com')return;
+      for(const item of Array.from(menu.children)){
+        if(item.style.getPropertyValue('display')==='none')
+          item.style.removeProperty('display');
+      }
+    });
     window.addEventListener('vl:media-authorized',()=>void check(true));
     window.addEventListener('focus',()=>{void check(true);void heartbeat();});
     document.addEventListener('visibilitychange',()=>{
