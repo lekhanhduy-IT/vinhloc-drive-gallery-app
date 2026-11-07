@@ -128,8 +128,8 @@
     left: 0; 
     width: 100vw; 
     height: 100vh;
-    background-color: #380ad7; /* Nền xanh tím che toàn bộ */
-    z-index: 9999999; /* Z-index cực lớn để đè lên mọi UI khác */
+    background-color: #ffffff; /* Cùng nền trắng với màn hình xác thực Google */
+    z-index: 9999999; /* Giữ thứ tự hiển thị tải dữ liệu */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -146,7 +146,7 @@
 }
 
 #spider-brain-text {
-    color: #ffffff;
+    color: #475569;
     font-size: 14px;
     font-weight: 200;
     font-family: 'Montserrat', sans-serif;
@@ -797,4 +797,36 @@ header.vl-header-menu-host #headerDropdown {
 /* Mega-row names use the exact blue of the application header. */
 .mega-row > .mega-header [class*="item-name-"] {
   color: #01adee !important;
+}
+
+/* v3.1.34: Both post-Google-login wait stages use the same neutral
+   white surface and cyan loading ring. Keep the existing data-preload
+   lifecycle and progress text intact; only unify presentation. */
+#spider-brain-loader {
+  background: #ffffff !important;
+  color: #334155 !important;
+  min-height: 100dvh;
+}
+#spider-brain-loader > img {
+  display: none !important;
+}
+#spider-brain-loader::before {
+  content: "";
+  display: block;
+  box-sizing: border-box;
+  width: 50px;
+  height: 50px;
+  margin-bottom: 16px;
+  border: 4px solid #e5e7eb;
+  border-top-color: #01adee;
+  border-radius: 50%;
+  animation: vl-auth-wait-spin 800ms linear infinite;
+}
+#spider-brain-loader #spider-brain-text {
+  color: #475569 !important;
+  font-size: 13px;
+  font-weight: 500;
+}
+@media (prefers-reduced-motion: reduce) {
+  #spider-brain-loader::before { animation-duration: 1.8s; }
 }
