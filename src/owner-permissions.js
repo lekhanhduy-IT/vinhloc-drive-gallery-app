@@ -5,7 +5,7 @@
   'use strict';
   const adminEmail='admin@tudonghoavinhloc.com';
   const email=()=>String(localStorage.getItem('vinhloc_authenticated_email')||'').toLowerCase();
-  const admin=()=>!window.vlShareScope && email()===adminEmail;
+  const admin=()=>!window.vlShareScope && document.body.dataset.vlAccountRole==='admin';
   const current=()=>{try{return Array.isArray(currentDriveItems)?currentDriveItems:window.currentDriveItems||[];}catch(_){return window.currentDriveItems||[];}};
   const idsCache=new Map();
   const pendingIds=new Set();
