@@ -27,11 +27,11 @@
   // Retry a transient Drive permission outage with the in-memory ID token.
   // Never store the Google credential in localStorage, IndexedDB or a URL.
   function retryTransientAuthorization(credential) {
-    if(mediaRetryTimer || mediaRetryCount >= 3 || !appSignedIn()) return;
+    if(mediaRetryTimer || mediaRetryCount >= 3) return;
     const delay = 2500 * Math.pow(2,mediaRetryCount++);
     mediaRetryTimer = setTimeout(() => {
       mediaRetryTimer = null;
-      if(ready || !appSignedIn()) return;
+      if(ready) return;
       void authorize(credential).catch(err =>
         console.warn('[QL Ảnh] Google Drive chưa phản hồi quyền:',err.message));
     },delay);
@@ -253,7 +253,7 @@
   // fresh cookie. Bypass stale negative status cached before that login.
   window.vlMediaEnsureAuth=()=>checkSession(true,true);
   function showPanel() {
-    if (ready || !appSignedIn() || authorizing ||
+    if (ready || !appSignedIn() || authorizing || mediaRetryTimer!==null ||
         (window.vlShareScope && !window.vlShareScope.ready?.()) ||
         Date.now()-lastShown<1200) return;
     if(panel?.isConnected && !panel.hidden)return;
