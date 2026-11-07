@@ -22,7 +22,6 @@ async function saveMegaRowMeta(id,name,category){
   }finally{clearTimeout(timer);}
 }
 
-const ADMIN_EMAIL='admin@tudonghoavinhloc.com';
 const LIMIT=50;
 const idPattern=/^[A-Za-z0-9_-]{10,180}$/;
 const api='https://www.googleapis.com/drive/v3/files';
@@ -139,13 +138,13 @@ export default async function handler(req,res) {
   try{user=await verifiedAccount(req);}
   catch(_){return respond(res,401,'Cần xác thực Google trong QL Ảnh');}
   const email=user.email.toLowerCase();
-  const admin=email===ADMIN_EMAIL;
+  const admin=!user.scopeRoot && user.role==='admin';
   const scopeRoot=user.scopeRoot||null;
   let body=req.body||{};
   if(typeof body==='string')try{body=JSON.parse(body);}catch(_){body={};}
   const action=body.action||req.query.action||'status';
   try{
-    if(action==='status')return respond(res,200,'OK',{email,admin,scopeRoot,isMember:user.member===true||!scopeRoot});
+    if(action==='status')return respond(res,200,'OK',{email,admin,scopeRoot,isMember:user.member===true,role:user.role});
     if(action==='issueShare'){
       if(scopeRoot)return respond(res,403,'Tài khoản chỉ có quyền trong thư mục được chia sẻ');
       const id=String(body.folderId||'');
