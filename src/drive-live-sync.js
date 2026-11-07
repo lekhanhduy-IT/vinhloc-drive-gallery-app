@@ -2,10 +2,12 @@
    This file runs after the existing (protected) application script. */
 (() => {
   'use strict';
-  const REFRESH_INTERVAL = 30000;
+  const REFRESH_INTERVAL = 12000;
+  const FULL_REFRESH_INTERVAL = 45000;
   const REQUEST_TIMEOUT = 15000;
   let running = null;
   let lastRun = 0;
+  let lastDeepRun = 0;
   const driveNames = new Map();
   let installedRenderer = null;
   let lastPaintKey = '';
@@ -99,7 +101,7 @@
     catch (_) { return null; }
   }
   function canRefresh(force) {
-    if (!force && (document.hidden || Date.now() - lastRun < 12000)) return false;
+    if (!force && (document.hidden || Date.now() - lastRun < 9000)) return false;
     if (new URLSearchParams(location.search).has('shareId')) return false;
     // The old loading overlay can stay mounted after login; do not block Drive reads.
     if ((!force && busy()) || !endpoint() || !activeFolder()) return false;
@@ -350,18 +352,23 @@
       if (!path.length || originalActive !== path[path.length - 1].id) return false;
       const liveParents = new Map();
       let allSucceeded = true;
-      // Refresh every ancestor; this detects renamed and moved folders.
-      for (const parent of path.slice(0, -1)) {
-        try { liveParents.set(parent.id, await syncOne(parent.id)); }
-        catch (err) { allSucceeded = false; console.warn('[QL Ảnh] Không thể kiểm tra', parent.id, err); }
+      // Recheck the active directory frequently. Its ancestors and expanded
+      // mega-rows use a slower deep pass to avoid repeated Drive queries and
+      // thumbnail re-renders across every connected device.
+      const deep = force || Date.now() - lastDeepRun >= FULL_REFRESH_INTERVAL;
+      if (deep) {
+        for (const parent of path.slice(0, -1)) {
+          try { liveParents.set(parent.id, await syncOne(parent.id)); }
+          catch (err) { allSucceeded = false; console.warn('[QL Ảnh] Không thể kiểm tra', parent.id, err); }
+        }
+        updatePathFromParents(path, liveParents);
       }
-      updatePathFromParents(path, liveParents);
       if (activeFolder() === originalActive) {
         try { await syncOne(originalActive); }
         catch (err) { allSucceeded = false; console.warn('[QL Ảnh] Đồng bộ Drive thất bại', err); }
       }
       // The root displays expanded mega-folder rows from a separate subfolder cache.
-      if (activeFolder() === originalActive && path.length === 1) {
+      if (deep && activeFolder() === originalActive && path.length === 1) {
         const opened = Array.from(document.querySelectorAll('[id^="acc-"]:not(.hidden)'))
           .map(element => element.id.slice(4)).filter(Boolean).slice(0, 12);
         for (const id of opened) {
@@ -370,6 +377,7 @@
         }
       }
       lastRun = Date.now();
+      if (deep && allSucceeded) lastDeepRun = lastRun;
       return allSucceeded;
     })();
     try { return await running; }
@@ -403,7 +411,7 @@
   }
   function start() {
     installButton();
-    // Revalidate a newly opened directory instead of waiting the 30-second
+    // Revalidate a newly opened directory instead of waiting the background
     // crawler cycle. Keep navigation unchanged, even with flattened paths.
     let observedFolder = activeFolder();
     setInterval(() => {
@@ -423,7 +431,16 @@
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) void refresh(true);
     });
-    window.addEventListener('focus', () => { void refresh(false); });
+    window.addEventListener('focus', () => {
+      if (Date.now() - lastRun >= 5000) void refresh(true);
+      // The legacy metadata watcher already polls every 5 seconds. Trigger
+      // one immediate metadata check on focus without a page reload.
+      try {
+        if (typeof silentFetchMeta === 'function' &&
+            document.getElementById('infoModal')?.classList.contains('hidden') &&
+            !busy()) void silentFetchMeta();
+      } catch (_) {}
+    });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
