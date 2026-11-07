@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.32",
-  "source_commit": "45eea1176a02d5d61e6baf8229e4e13b621cff5a",
-  "deployment_purpose": "Shift-click selects inclusive consecutive files in visible gallery grid or list without re-rendering thumbnails; preserve Ctrl-click selection",
-  "deployment_trigger_date": "2026-11-06"
+  "version": "3.1.33",
+  "source_commit": "0fd0599a4a4011ed73fcd2055705b29605d0091b",
+  "deployment_purpose": "Admin-only account management: grant or revoke Shared Drive member/Manager roles, verified role-based UI and online presence",
+  "deployment_trigger_date": "2026-11-07"
 }
