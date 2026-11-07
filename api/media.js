@@ -120,6 +120,7 @@ async function callScript(action, payload={}) {
 }
 async function requireAccount(req) {
   const stored=cookie(req);
+  if(!stored)throw Object.assign(new Error('Chưa có phiên xác thực Google'),{authFailure:true});
   // Always verify the actual current Drive role, even with a previously
   // signed HttpOnly session. Removing a member revokes protected API access.
   let identity=readSignedSession(stored);
@@ -136,7 +137,7 @@ async function requireAccount(req) {
   identity.role=role;
   identity.member=role!=='guest';
   if(!identity.scopeRoot && role==='guest')
-    throw new Error('Tài khoản không còn quyền nội bộ. Chỉ có thể truy cập bằng liên kết chia sẻ hợp lệ.');
+    throw Object.assign(new Error('Tài khoản không còn quyền nội bộ. Chỉ có thể truy cập bằng liên kết chia sẻ hợp lệ.'),{revoked:true});
   return identity;
 }
 
@@ -235,7 +236,9 @@ export default async function handler(req, res) {
       return res.status(200).json({success:true, message:'Đã đăng xuất khỏi phiên media'});
     }
     try {
-      const identity = await verifyGoogleIdToken(body.credential);
+      let identity;
+      try{identity=await verifyGoogleIdToken(body.credential);}
+      catch(error){error.authFailure=true;throw error;}
       const grant=body.shareGrant ? await readFolderGrant(body.shareGrant,await driveToken()):null;
       if(body.shareGrant && !grant)return error(res,403,'Liên kết chia sẻ không hợp lệ hoặc đã hết hạn');
       if(grant){
@@ -265,12 +268,17 @@ export default async function handler(req, res) {
       ]);
       authorized.set(identity.sub+':'+identity.email,Date.now()+90000);
       return res.status(200).json({success:true, email:identity.email,expiresAt:identity.exp,scopeRoot:identity.scopeRoot||null,isMember:identity.member===true,role:identity.role});
-    } catch (e) { return error(res,401,'Không thể xác thực tài khoản: '+e.message); }
+    } catch (e) { return error(res,e.authFailure?401:e.status===403?403:503,
+      e.authFailure?'Không thể xác thực tài khoản: '+e.message:
+      'Chưa kiểm tra được quyền Google Drive. Vui lòng thử lại sau: '+e.message); }
   }
   if (req.method !== 'GET') return error(res,405,'Phương thức không hỗ trợ');
   let identity;
   try { identity = await requireAccount(req); }
-  catch (e) { return error(res,401,'Cần đăng nhập lại Google để xem ảnh: '+e.message); }
+  catch (e) { return error(res,e.revoked?403:e.authFailure||!cookie(req)?401:
+    e.status===401?401:503,
+    e.revoked?'Quyền nội bộ đã bị thu hồi. Hãy sử dụng liên kết chia sẻ hợp lệ.':
+    (e.authFailure||!cookie(req)?'Cần đăng nhập Google để xem ảnh: ':'Tạm thời không kiểm tra được quyền Google Drive: ')+e.message); }
   if (req.query.status === '1') return res.status(200).json({success:true,email:identity.email,scopeRoot:identity.scopeRoot||null,isMember:identity.member===true,role:identity.role});
   const id = req.query.fileId;
   if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{10,160}$/.test(id))
