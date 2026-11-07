@@ -22,6 +22,20 @@
   let lastSessionCheckAt = 0;
   let lastSessionStatus = 0;
   let authorizing = false;
+  let mediaRetryTimer = null;
+  let mediaRetryCount = 0;
+  // Retry a transient Drive permission outage with the in-memory ID token.
+  // Never store the Google credential in localStorage, IndexedDB or a URL.
+  function retryTransientAuthorization(credential) {
+    if(mediaRetryTimer || mediaRetryCount >= 3 || !appSignedIn()) return;
+    const delay = 2500 * Math.pow(2,mediaRetryCount++);
+    mediaRetryTimer = setTimeout(() => {
+      mediaRetryTimer = null;
+      if(ready || !appSignedIn()) return;
+      void authorize(credential).catch(err =>
+        console.warn('[QL Ảnh] Google Drive chưa phản hồi quyền:',err.message));
+    },delay);
+  }
   function appSignedIn(){
     const scope=window.vlShareScope;
     return scope ? scope.ready?.()===true :
@@ -53,11 +67,16 @@
       body:JSON.stringify({credential,...(window.vlShareScope?.grant?{shareGrant:window.vlShareScope.grant}:{})})
     });
     const data = await result.json();
-    if (!result.ok || data.success !== true)
-      throw new Error(data.message || 'Không thể xác thực quyền xem ảnh');
+    if (!result.ok || data.success !== true) {
+      const failure = new Error(data.message || 'Không thể xác thực quyền xem ảnh');
+      failure.status = result.status;
+      throw failure;
+    }
     if(window.vlShareScope && data.scopeRoot!==window.vlShareScope.root)
       throw new Error('Phiên Google không đúng thư mục được chia sẻ');
     ready = true;
+    mediaRetryCount = 0;
+    if(mediaRetryTimer!==null){clearTimeout(mediaRetryTimer);mediaRetryTimer=null;}
     proxyVersion++;
     window.vlMediaProxyReady = true;
     lastSessionCheckAt = Date.now();
@@ -66,6 +85,10 @@
     scheduleReconcile();
     window.dispatchEvent(new CustomEvent('vl:media-authorized'));
     return data;
+    } catch(error) {
+      // Backend authorization outages must not force a second Google login.
+      if(error.status>=500)retryTransientAuthorization(credential);
+      throw error;
     } finally {authorizing = false;}
   }
   window.vlMediaAuthorize = authorize;
@@ -153,7 +176,9 @@
       callback:response => {
         if(response?.credential)void authorize(response.credential).catch(err=>{
           const el=panel?.querySelector('span');
-          if(el)el.textContent='Xác thực Google thất bại: '+err.message;
+          if(el)el.textContent=err.status>=500 ?
+            'Google Drive đang kiểm tra quyền. Ứng dụng sẽ tự thử lại.' :
+            'Xác thực Google thất bại: '+err.message;
         });
       },
       auto_select:false
