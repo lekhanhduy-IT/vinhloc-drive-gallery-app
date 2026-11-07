@@ -249,6 +249,7 @@
   }
   window.addEventListener('vl:share-member-ready',setDisplay);
   window.addEventListener('vl:media-authorized',()=>void verifyMember(true));
+  window.addEventListener('vl:account-role',()=>{setDisplay();void verifyMember(true);});
   window.addEventListener('focus',()=>void verifyMember());
   window.addEventListener('pageshow',()=>void verifyMember());
   document.getElementById('fabMain')?.addEventListener('click',()=>{
