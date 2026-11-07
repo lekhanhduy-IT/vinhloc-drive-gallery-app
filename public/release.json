@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
   "version": "3.1.33",
-  "source_commit": "0fd0599a4a4011ed73fcd2055705b29605d0091b",
-  "deployment_purpose": "Admin-only account management: grant or revoke Shared Drive member/Manager roles, verified role-based UI and online presence",
+  "source_commit": "75bd3737bde5b8e50630ac5a7e33ef82046888b0",
+  "deployment_purpose": "Hotfix 3.1.33: Google Drive permissions pageSize <=100, paginated role validation, prevent false repeated Google authorization prompts and retry temporary permission API errors",
   "deployment_trigger_date": "2026-11-07"
 }
