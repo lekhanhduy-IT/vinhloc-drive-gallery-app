@@ -1,7 +1,7 @@
 import { createPublicKey, createHmac, timingSafeEqual, verify as verifySignature } from 'node:crypto';
 import { Readable } from 'node:stream';
 import {readFolderGrant} from '../lib/share-capability.js';
-import {roleForEmail} from '../lib/drive-roles.js';
+import {verifiedRole} from '../lib/verified-role.js';
 
 // A first-party media gateway: Google ID token -> Shared Drive membership ->
 // Drive API with the app service token. No public Drive permissions, no URL tokens.
@@ -132,7 +132,7 @@ async function requireAccount(req) {
       identity.scopeRoot=grant.root;
     }
   }
-  const role=await roleForEmail(identity.email,await driveToken());
+  const role=await verifiedRole(identity.email,driveToken);
   identity.role=role;
   identity.member=role!=='guest';
   if(!identity.scopeRoot && role==='guest')
@@ -251,7 +251,7 @@ export default async function handler(req, res) {
         identity.scopeRoot=grant.root;
       }
       // Google ID token identifies the human; the Drive ACL determines role.
-      const currentRole=await roleForEmail(identity.email,await driveToken(),{fresh:true});
+      const currentRole=await verifiedRole(identity.email,driveToken,{fresh:true});
       identity.role=currentRole;
       identity.member=currentRole!=='guest';
       if(!grant && currentRole==='guest')
