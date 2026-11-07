@@ -13,7 +13,10 @@
     return window.vlShareScope||null;
   }
   function localAdmin(){
-    return !scope()&&String(localStorage.getItem('vinhloc_authenticated_email')||'').toLowerCase()==='admin@tudonghoavinhloc.com';
+    // Preserve the original primary Admin creation flow. Other verified
+    // Drive Managers use the protected /api/owned-files member dialog.
+    return !scope() && document.body.dataset.vlAccountRole==='admin' &&
+      String(localStorage.getItem('vinhloc_authenticated_email')||'').toLowerCase()==='admin@tudonghoavinhloc.com';
   }
   function authorizedToCreate(){
     const shared=scope();
