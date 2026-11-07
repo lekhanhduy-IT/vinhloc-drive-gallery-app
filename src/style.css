@@ -793,3 +793,8 @@ header.vl-header-menu-host #headerDropdown {
     z-index: 100;
   }
 }
+
+/* Mega-row names use the exact blue of the application header. */
+.mega-row > .mega-header [class*="item-name-"] {
+  color: #01adee !important;
+}
