@@ -3,6 +3,7 @@
 import {createHash} from 'node:crypto';
 import {Redis} from '@upstash/redis';
 import {verifiedAccount,serverDriveToken} from './media.js';
+import {invalidateVerifiedRole} from '../lib/verified-role.js';
 import {PRIMARY_ADMIN,normalizeAccountEmail,driveMembers,memberForEmail,appRole,
   invalidateMembers,driveRequest,permissionsUrl,sharedDrivePermissionsUrl} from '../lib/drive-roles.js';
 
@@ -105,6 +106,7 @@ export default async function handler(req,res){
         });
       }
       invalidateMembers();
+      await invalidateVerifiedRole(target);
       return respond(res,200,'Đã cấp quyền trên Google Shared Drive',{
         email:target,role:body.role,permissionId:permission?.id||present?.id
       });
@@ -114,6 +116,7 @@ export default async function handler(req,res){
       return respond(res,409,'Mã tài khoản không còn khớp, hãy tải lại danh sách');
     await driveRequest(permissionsUrl(present.id),token,{method:'DELETE'});
     invalidateMembers();
+    await invalidateVerifiedRole(target);
     return respond(res,200,'Đã thu hồi quyền Shared Drive',{email:target,removed:true});
   }catch(error){
     const statusCode=error.status===403?403:502;
