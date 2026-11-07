@@ -123,9 +123,12 @@ async function requireAccount(req) {
   if(!stored)throw Object.assign(new Error('Chưa có phiên xác thực Google'),{authFailure:true});
   // Always verify the actual current Drive role, even with a previously
   // signed HttpOnly session. Removing a member revokes protected API access.
-  let identity=readSignedSession(stored);
+  let identity;
+  try{identity=readSignedSession(stored);}
+  catch(error){error.authFailure=true;throw error;}
   if(!identity){
-    identity=await verifyGoogleIdToken(stored);
+    try{identity=await verifyGoogleIdToken(stored);}
+    catch(error){error.authFailure=true;throw error;}
     const share=cookie(req,SHARE_COOKIE);
     if(share){
       const grant=await readFolderGrant(share,await driveToken());
