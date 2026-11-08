@@ -37,8 +37,11 @@
       body:JSON.stringify({action,...params})
     });
     const data=await response.json().catch(()=>({}));
-    if(!response.ok||data.success!==true)
-      throw new Error(data.message||'Không thể kết nối Google Drive');
+    if(!response.ok||data.success!==true){
+      const error=new Error(data.message||'Không thể kết nối Google Drive');
+      error.status=response.status;
+      throw error;
+    }
     return data;
   }
   const isId=x=>typeof x==='string'&&/^[A-Za-z0-9_-]{10,180}$/.test(x);
@@ -105,6 +108,7 @@
         ' · Đã gán '+fmt(job.written)+' thumbnail'+
         ' · Đã có '+fmt(job.existing)+
         ' · Không có ảnh '+fmt(job.empty)+
+        (job.skippedGone?' · Đã xóa '+fmt(job.skippedGone):'')+
         (job.failed.length?' · Lỗi '+fmt(job.failed.length):'');
       el('vlCoverAutoCurrent').textContent=job.phase==='done'?
         'Đã duyệt xong toàn bộ thư mục hiện có dưới 06. HÌNH ẢNH CONTENT':
@@ -134,7 +138,18 @@
     const current=job.current;
     if(current.stage==='browse'){
       // Every page is strictly "folderId in parents AND trashed=false".
-      const result=await send('browse',{folderId:id,pageToken:current.cursor||''});
+      let result;
+      try{result=await send('browse',{folderId:id,pageToken:current.cursor||''});}
+      catch(error){
+        // A folder deleted/moved to trash after discovery must not block
+        // processing the remaining valid folders in the tree.
+        if(error.status===404){
+          job.scanned++;job.index++;job.current=null;
+          job.skippedGone=(job.skippedGone||0)+1;
+          await saveState();paint();return;
+        }
+        throw error;
+      }
       if(result.folderId!==id||!Array.isArray(result.items))
         throw Error('Danh sách con trả về không đúng folder');
       current.name=result.folderName||current.name;
