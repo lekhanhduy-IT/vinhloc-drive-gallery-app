@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.42",
-  "source_commit": "8c33f4dc46f6adee76800bb0d1195ce44ad40e32",
-  "deployment_purpose": "Unify visual design: white search/view/paste toolbar controls with red #db1010 icons and 0.5px cyan #01adee borders, cyan active controls/focus outlines, cyan popup headings and former royal blue UI, red folder and mega-row expander icons. Preserve content, media and workflows.",
+  "version": "3.1.43",
+  "source_commit": "58c0829258b83c58ba74afdb27fa2f0b69ab78a3",
+  "deployment_purpose": "Create public/login-backgrounds with nine selected original JPEG photos from 06. HÌNH ẢNH CONTENT and backgrounds.json; no login screen changes yet.",
   "deployment_trigger_date": "2026-11-09"
 }

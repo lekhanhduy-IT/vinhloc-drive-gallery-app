@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "title": "QL Ảnh — login background collection",
+  "updated": "2026-11-09",
+  "description": "Curated industrial scenes and teams copied from the gallery Drive tree; static public files, no Google login needed to load.",
+  "images": [
+    {
+      "src": "/login-backgrounds/factory-hall-bb-thanh-xuan.jpg",
+      "alt": "Nhà xưởng rộng BB Thanh Xuân",
+      "category": "factory",
+      "width": 4032,
+      "height": 3024,
+      "bytes": 2615700,
+      "orientation": "landscape"
+    },
+    {
+      "src": "/login-backgrounds/production-machines-bb-thanh-xuan.jpg",
+      "alt": "Dây chuyền sản xuất công nghiệp",
+      "category": "factory",
+      "width": 4032,
+      "height": 3024,
+      "bytes": 2418426,
+      "orientation": "landscape"
+    },
+    {
+      "src": "/login-backgrounds/sunrice-team-panorama.jpg",
+      "alt": "Đội kỹ thuật khảo sát nhà máy Sunrice",
+      "category": "group",
+      "width": 2560,
+      "height": 1920,
+      "bytes": 537269,
+      "orientation": "landscape"
+    },
+    {
+      "src": "/login-backgrounds/lee-man-forklift-hall.jpg",
+      "alt": "Xe nâng trong xưởng Lee Man",
+      "category": "factory",
+      "width": 2560,
+      "height": 1920,
+      "bytes": 564318,
+      "orientation": "landscape"
+    },
+    {
+      "src": "/login-backgrounds/lee-man-workshop.jpg",
+      "alt": "Khu vực sản xuất Lee Man",
+      "category": "factory",
+      "width": 2560,
+      "height": 1920,
+      "bytes": 619540,
+      "orientation": "landscape"
+    },
+    {
+      "src": "/login-backgrounds/sunrice-engineer-group.jpg",
+      "alt": "Nhóm kỹ thuật dưới dây chuyền Sunrice",
+      "category": "group",
+      "width": 2560,
+      "height": 1920,
+      "bytes": 662087,
+      "orientation": "landscape"
+    },
+    {
+      "src": "/login-backgrounds/sunrice-materials-factory.jpg",
+      "alt": "Kho vật liệu và máy móc nhà máy Sunrice",
+      "category": "factory",
+      "width": 2560,
+      "height": 1920,
+      "bytes": 622787,
+      "orientation": "landscape"
+    },
+    {
+      "src": "/login-backgrounds/lee-man-industrial-site.jpg",
+      "alt": "Khu vực lắp đặt thiết bị công nghiệp",
+      "category": "factory",
+      "width": 2560,
+      "height": 1920,
+      "bytes": 749014,
+      "orientation": "landscape"
+    },
+    {
+      "src": "/login-backgrounds/sunrice-workers-portrait.jpg",
+      "alt": "Kỹ thuật viên làm việc trong nhà máy Sunrice",
+      "category": "group",
+      "width": 1920,
+      "height": 2560,
+      "bytes": 500110,
+      "orientation": "portrait"
+    }
+  ]
+}
