@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.40",
-  "source_commit": "19c5332571a242babecd477f898e82435d459e30",
-  "deployment_purpose": "Admin-only one-time bulk folder thumbnail tool. Paginated Drive folder/image metadata scan, best available direct-child photo by resolution/size/aspect/name, write Drive appProperties.vlCoverImageId, skip existing by default, persist progress and resume.",
+  "version": "3.1.41",
+  "source_commit": "de1ad41ea2e0066568c0dc11dcd5997d2f1bb8b0",
+  "deployment_purpose": "Traverse only existing direct children under 06. HÌNH ẢNH CONTENT, skip trash, immediately set Google Drive appProperties.vlCoverImageId for each folder with a suitable image, and refresh Admin UI with cyan live per-folder progress bar. Old whole-drive scan state no longer resumes.",
   "deployment_trigger_date": "2026-11-09"
 }
