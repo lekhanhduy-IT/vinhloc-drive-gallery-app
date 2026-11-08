@@ -107,7 +107,7 @@ public class VLBackgroundUploadPlugin extends Plugin {
                 boolean work=false;
                 for(int i=0;i<all.length();i++){
                     String status=all.getJSONObject(i).optString("status");
-                    if("queued".equals(status)||"paused".equals(status)||"retrying".equals(status)||
+                    if("queued".equals(status)||"paused".equals(status)||"auth_required".equals(status)||"retrying".equals(status)||
                        "staging".equals(status)||"uploading".equals(status)){work=true;break;}
                 }
                 if(work)VLUploadService.start(getContext());

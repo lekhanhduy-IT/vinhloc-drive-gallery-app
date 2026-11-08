@@ -90,7 +90,11 @@ public class VLUploadService extends Service {
         return result;
     }
     private void update(JSONObject job,Object...values)throws Exception{
-        UploadStore.patch(this,job.getString("id"),fields(values));
+        JSONObject patch=fields(values);
+        UploadStore.patch(this,job.getString("id"),patch);
+        // Keep the active in-memory object synchronized for retries in this service instance.
+        java.util.Iterator<String> keys=patch.keys();
+        while(keys.hasNext()){String key=keys.next();job.put(key,patch.get(key));}
     }
     private void drain(){
         JSONArray all=UploadStore.all(this);
@@ -98,7 +102,7 @@ public class VLUploadService extends Service {
             JSONObject job=all.optJSONObject(i);
             if(job==null)continue;
             String state=job.optString("status");
-            if("complete".equals(state)||"auth_required".equals(state)||"failed".equals(state))continue;
+            if("complete".equals(state)||"failed".equals(state))continue;
             int attempts=0;
             while(attempts<5&&!Thread.currentThread().isInterrupted()){
                 try {
