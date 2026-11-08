@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.41",
-  "source_commit": "de1ad41ea2e0066568c0dc11dcd5997d2f1bb8b0",
-  "deployment_purpose": "Traverse only existing direct children under 06. HÌNH ẢNH CONTENT, skip trash, immediately set Google Drive appProperties.vlCoverImageId for each folder with a suitable image, and refresh Admin UI with cyan live per-folder progress bar. Old whole-drive scan state no longer resumes.",
+  "version": "3.1.42",
+  "source_commit": "8c33f4dc46f6adee76800bb0d1195ce44ad40e32",
+  "deployment_purpose": "Unify visual design: white search/view/paste toolbar controls with red #db1010 icons and 0.5px cyan #01adee borders, cyan active controls/focus outlines, cyan popup headings and former royal blue UI, red folder and mega-row expander icons. Preserve content, media and workflows.",
   "deployment_trigger_date": "2026-11-09"
 }
