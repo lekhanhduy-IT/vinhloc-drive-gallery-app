@@ -136,6 +136,13 @@ public class VLUploadService extends Service {
                "failed".equals(job.optString("status")) ||
                job.optString("session").startsWith(DRIVE_PREFIX))continue;
             try {
+                JSONObject previous=api(job,"confirmUpload",fields("folderId",job.getString("folderId"),
+                    "uploadKey",job.getString("uploadKey")));
+                if(previous.optBoolean("found") && previous.optJSONObject("file")!=null){
+                    File staged=job.optString("staged").isEmpty()?null:new File(job.optString("staged"));
+                    finish(job,previous.getJSONObject("file").getString("id"),staged);
+                    continue;
+                }
                 JSONObject created=api(job,"startUpload",fields(
                     "folderId",job.getString("folderId"),"name",job.getString("name"),
                     "mimeType",job.getString("mimeType"),"size",job.getLong("size"),
