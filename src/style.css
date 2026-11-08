@@ -859,3 +859,23 @@ body > header {
   top: calc(24px + env(safe-area-inset-top, 0px));
   right: calc(16px + env(safe-area-inset-right, 0px));
 }
+
+
+/* v3.1.38: notch screen fallback for standalone iPhone.
+   WebKit occasionally resolves env(safe-area-inset-top) to zero on Home
+   Screen launches. The top minimum is applied to the PADDING (not min-height)
+   so the buttons move below the Dynamic Island without creating a large
+   blank area beneath them. Normal browser and Android layouts are unchanged. */
+@media (orientation: portrait) and (max-width: 600px) {
+  html.vl-ios-edge-to-edge body > header {
+    padding-top: 60px !important;
+    padding-top: max(60px, env(safe-area-inset-top, 0px)) !important;
+    padding-bottom: 8px !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  html.vl-ios-edge-to-edge #sidebar > :first-child {
+    padding-top: 60px !important;
+    padding-top: max(60px, env(safe-area-inset-top, 0px)) !important;
+  }
+}
