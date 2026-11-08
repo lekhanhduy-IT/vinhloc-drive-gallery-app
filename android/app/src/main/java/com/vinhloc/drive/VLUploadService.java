@@ -170,7 +170,7 @@ public class VLUploadService extends Service {
     }
 
     private File staged(JSONObject job)throws Exception{
-        File folder=new File(getFilesDir(),"vl-upload-data");
+        File folder=new File(getNoBackupFilesDir(),"vl-upload-data");
         if(!folder.exists()&&!folder.mkdirs())throw new Exception("Cannot create upload staging directory");
         File file=new File(folder,job.getString("id")+".bin");
         if(file.exists()&&file.length()==job.getLong("size"))return file;

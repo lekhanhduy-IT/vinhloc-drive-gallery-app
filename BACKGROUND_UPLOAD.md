@@ -2,7 +2,7 @@
 
 ## Phạm vi triển khai
 
-- **Android native:** `VLBackgroundUploadPlugin` dùng `ACTION_OPEN_DOCUMENT` và giữ quyền đọc URI. Khi người dùng chọn file, service `VLUploadService` được khởi chạy ngay, tiếp nhận hàng đợi, tạo phiên upload bằng cookie phiên xác thực, sao chép dữ liệu vào vùng riêng của app và upload lên Google Drive bằng resumable PUT 5 MiB/chunk. Dữ liệu hàng đợi và phiên Drive được lưu dưới `noBackupFilesDir`. Tiến độ được xác minh bằng `inspectUpload` trên máy chủ. Foreground notification hiển thị khi upload.
+- **Android native:** `VLBackgroundUploadPlugin` dùng `ACTION_OPEN_DOCUMENT` và giữ quyền đọc URI. Khi người dùng chọn file, service `VLUploadService` được khởi chạy ngay, tiếp nhận hàng đợi, tạo phiên upload bằng cookie phiên xác thực, sao chép dữ liệu vào vùng riêng **không sao lưu** của app và upload lên Google Drive bằng resumable PUT 5 MiB/chunk. Dữ liệu hàng đợi và phiên Drive được lưu dưới `noBackupFilesDir`. Tiến độ được xác minh bằng `inspectUpload` trên máy chủ. Foreground notification hiển thị khi upload.
 - **iOS native:** Có mã nguồn Swift cho `UIDocumentPicker`, staging vào Application Support và `URLSessionConfiguration.background` dùng `uploadTask(fromFile:)`. Cần tạo dự án iOS bằng Xcode, thêm mã nguồn Swift và tích hợp AppDelegate; xem `native/ios/README.md`.
 - **Web/PWA/desktop:** Không thay đổi luồng `src/upload-reliable.js`. Web không bảo đảm upload khi tab bị đóng băng hoặc trình duyệt bị hệ điều hành đình chỉ.
 
