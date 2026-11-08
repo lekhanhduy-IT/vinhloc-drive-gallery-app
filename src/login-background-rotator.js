@@ -1,114 +1,99 @@
-/* Lightweight two-layer login slideshow. Only the next photo is preloaded;
-   authentication, Google button and the verification screen are untouched. */
+/* Progressive login slideshow: the first <img> already has a real src in HTML.
+ * If manifest fetch or JavaScript fails, the login background still appears.
+ * This is a Vite module entry in index.html so Vercel includes it in the build. */
 (() => {
   'use strict';
   const overlay = document.getElementById('auth-overlay');
   const container = document.getElementById('vl-login-backgrounds');
   if (!overlay || !container) return;
-  const layers = Array.from(container.querySelectorAll('.vl-login-bg'));
+  const layers = Array.from(container.querySelectorAll('img.vl-login-bg'));
   if (layers.length !== 2) return;
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const MANIFEST = '/login-backgrounds/backgrounds.json';
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const ROTATION_MS = 8500;
-  let images = [];
+  let photos = [];
   let pointer = 0;
-  let activeLayer = 0;
-  let hasPhoto = false;
+  let current = 0;
   let loading = false;
   let timer = null;
 
-  const visible = () => !document.hidden && !overlay.hidden &&
-    getComputedStyle(overlay).display !== 'none';
-
-  function stopTimer() {
+  function loginVisible() {
+    return !document.hidden && !overlay.hidden &&
+      getComputedStyle(overlay).display !== 'none';
+  }
+  function pause() {
     if (timer !== null) clearTimeout(timer);
     timer = null;
   }
-  function schedule() {
-    stopTimer();
-    if (!visible() || !images.length || reducedMotion.matches) return;
+  function nextTimer() {
+    pause();
+    if (!loginVisible() || reduceMotion.matches || !photos.length) return;
     timer = setTimeout(() => {
       timer = null;
-      void showNext();
+      void rotate();
     }, ROTATION_MS);
   }
-  function preload(src) {
+  function load(src) {
     return new Promise(resolve => {
-      const image = new Image();
-      image.decoding = 'async';
-      image.onload = () => resolve(true);
-      image.onerror = () => resolve(false);
-      image.src = src;
+      const img = new Image();
+      img.onload = () => resolve(true);
+      img.onerror = () => resolve(false);
+      img.src = src;
     });
   }
-  async function showNext() {
-    if (loading || !visible() || !images.length) return;
+  async function rotate() {
+    if (loading || !loginVisible() || !photos.length) return;
     loading = true;
-    let success = false;
+    let loaded = false;
     try {
-      const attempts = images.length;
-      for (let i = 0; i < attempts; i++) {
-        const src = images[pointer++ % images.length];
-        if (!(await preload(src))) continue;
-        if (!visible()) return;
-        const next = hasPhoto ? 1 - activeLayer : activeLayer;
-        layers[next].style.backgroundImage = 'url(' + JSON.stringify(src) + ')';
-        // Switch only after the image is decoded/loaded, with no blank frame.
-        layers[next].classList.add('is-visible');
-        if (hasPhoto) layers[activeLayer].classList.remove('is-visible');
-        activeLayer = next;
-        hasPhoto = true;
-        success = true;
+      for (let attempt = 0; attempt < photos.length; attempt++) {
+        const src = photos[pointer++ % photos.length];
+        if (layers[current].getAttribute('src') === src) continue;
+        if (!await load(src)) continue;
+        if (!loginVisible()) return;
+        const other = 1 - current;
+        layers[other].src = src;
+        layers[other].classList.add('is-visible');
+        layers[current].classList.remove('is-visible');
+        current = other;
+        loaded = true;
         break;
       }
     } finally {
       loading = false;
-      if (!success && visible()) images = []; // All broken: keep a clean white fallback.
-      schedule();
+      if (!loaded && loginVisible()) photos = [];
+      nextTimer();
     }
   }
-  function syncVisibility() {
-    if (!visible()) {
-      stopTimer();
-      return;
-    }
-    if (loading || !images.length) return;
-    if (!hasPhoto) void showNext();
-    else if (timer === null) schedule();
+  function onVisibility() {
+    if (!loginVisible()) { pause(); return; }
+    if (timer === null && !loading) nextTimer();
   }
-  function shuffle(values) {
-    for (let i = values.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [values[i], values[j]] = [values[j], values[i]];
-    }
-    return values;
-  }
-  // Pausing while hidden prevents image loading and compositing after sign-in.
-  new MutationObserver(syncVisibility).observe(overlay, {
-    attributes: true, attributeFilter: ['style', 'class', 'hidden']
+  new MutationObserver(onVisibility).observe(overlay, {
+    attributes: true, attributeFilter: ['style','class','hidden']
   });
-  document.addEventListener('visibilitychange', syncVisibility);
-  window.addEventListener('pageshow', syncVisibility);
-  reducedMotion.addEventListener?.('change', syncVisibility);
+  document.addEventListener('visibilitychange', onVisibility);
+  window.addEventListener('pageshow', onVisibility);
+  reduceMotion.addEventListener?.('change', onVisibility);
 
-  fetch(MANIFEST, { cache: 'no-cache' })
+  fetch('/login-backgrounds/backgrounds.json', {cache: 'no-store'})
     .then(response => {
-      if (!response.ok) throw new Error('Login background manifest unavailable');
+      if (!response.ok) throw new Error('Cannot load background manifest');
       return response.json();
     })
     .then(data => {
       if (!Array.isArray(data.images)) return;
-      const sources = data.images.map(entry => entry && entry.src).filter(src => {
-        if (typeof src !== 'string' || !src.startsWith('/login-backgrounds/')) return false;
-        try {
-          const url = new URL(src, location.origin);
-          return url.origin === location.origin &&
-            url.pathname.startsWith('/login-backgrounds/') &&
-            /\.(?:png|jpe?g|webp|avif)$/i.test(url.pathname);
-        } catch { return false; }
-      });
-      images = shuffle([...new Set(sources)]);
-      syncVisibility();
+      photos = [...new Set(data.images
+        .map(entry => entry?.src)
+        .filter(src => typeof src === 'string' &&
+          src.startsWith('/login-backgrounds/') &&
+          /\.(png|jpe?g|webp|avif)$/i.test(src)))];
+      for (let i=photos.length-1; i>0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [photos[i], photos[j]] = [photos[j], photos[i]];
+      }
+      nextTimer();
     })
-    .catch(() => { /* Offline/unavailable: retain the white login background. */ });
+    .catch(error => {
+      console.warn('[login backgrounds] Slideshow unavailable; showing static first photo.', error);
+    });
 })();

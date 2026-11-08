@@ -1,7 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.43",
-  "source_commit": "58c0829258b83c58ba74afdb27fa2f0b69ab78a3",
-  "deployment_purpose": "Create public/login-backgrounds with nine selected original JPEG photos from 06. HÌNH ẢNH CONTENT and backgrounds.json; no login screen changes yet.",
+  "version": "3.1.44",
+  "deployment_purpose": "Restore centered login position, ensure a visible background with static fallback, rotate 11 uploaded PNGs, switch to load_login1.gif.",
   "deployment_trigger_date": "2026-11-09"
 }
