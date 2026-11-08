@@ -98,6 +98,9 @@ public class VLUploadService extends Service {
     }
     private void drain(){
         JSONArray all=UploadStore.all(this);
+        // Mint resumable sessions for the whole selected batch while the user's
+        // authenticated cookie is still fresh. Subsequent Drive PUTs need no cookie.
+        prepareSessions(all);
         for(int i=0;i<all.length()&&!Thread.currentThread().isInterrupted();i++){
             JSONObject job=all.optJSONObject(i);
             if(job==null)continue;
@@ -122,6 +125,29 @@ public class VLUploadService extends Service {
                     try{Thread.sleep(Math.min(30_000,2000L<<attempts));}
                     catch(InterruptedException e){Thread.currentThread().interrupt();break;}
                 }
+            }
+        }
+    }
+
+    private void prepareSessions(JSONArray jobs){
+        for(int i=0;i<jobs.length()&&!Thread.currentThread().isInterrupted();i++){
+            JSONObject job=jobs.optJSONObject(i);
+            if(job==null || "complete".equals(job.optString("status")) ||
+               "failed".equals(job.optString("status")) ||
+               job.optString("session").startsWith(DRIVE_PREFIX))continue;
+            try {
+                JSONObject created=api(job,"startUpload",fields(
+                    "folderId",job.getString("folderId"),"name",job.getString("name"),
+                    "mimeType",job.getString("mimeType"),"size",job.getLong("size"),
+                    "uploadKey",job.getString("uploadKey"),"expectedOwner",job.getString("owner")));
+                String session=created.getString("uploadUrl");
+                if(!session.startsWith(DRIVE_PREFIX))throw new Exception("Địa chỉ phiên Google Drive không hợp lệ");
+                update(job,"session",session,"bytesSent",0,"status","queued","error","");
+            }catch(Exception error){
+                try{update(job,"error",String.valueOf(error.getMessage()));}
+                catch(Exception ignored){}
+                // Existing prepared sessions are still transferable even if
+                // a later startUpload request requires fresh authentication.
             }
         }
     }
@@ -197,13 +223,14 @@ public class VLUploadService extends Service {
         notifyProgress(job.optString("name"),0);
         File file=staged(job);
         String key=job.getString("uploadKey"),folder=job.getString("folderId");
-        JSONObject completed=api(job,"confirmUpload",fields("folderId",folder,"uploadKey",key));
-        if(completed.optBoolean("found")&&completed.optJSONObject("file")!=null){
-            finish(job,completed.getJSONObject("file").getString("id"),file);
-            return;
-        }
         String session=job.optString("session");
         if(!session.startsWith(DRIVE_PREFIX)){
+            // No live session: first check if Drive already committed this key.
+            JSONObject completed=api(job,"confirmUpload",fields("folderId",folder,"uploadKey",key));
+            if(completed.optBoolean("found")&&completed.optJSONObject("file")!=null){
+                finish(job,completed.getJSONObject("file").getString("id"),file);
+                return;
+            }
             JSONObject response=api(job,"startUpload",fields("folderId",folder,"name",job.getString("name"),
                 "mimeType",job.getString("mimeType"),"size",job.getLong("size"),
                 "uploadKey",key,"expectedOwner",job.getString("owner")));
