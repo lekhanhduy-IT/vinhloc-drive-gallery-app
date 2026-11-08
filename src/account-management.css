@@ -45,3 +45,19 @@ body[data-vl-account-view="true"] #contentArea > #fileList{display:none!importan
   #vlAdminPage .vl-admin-submit{width:100%}
   #vlAdminPage td,#vlAdminPage th{padding:12px 10px}
 }
+
+/* One-time auto-thumbnail migration, inside the Admin page only. */
+#vlCoverAutoCard .vl-admin-heading{margin-bottom:10px}
+#vlCoverAutoCard .vl-admin-intro{margin-bottom:16px}
+#vlCoverAutoCard .vl-cover-auto-choice{display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;line-height:1.5;color:#45566e;margin-bottom:17px}
+#vlCoverAutoCard .vl-cover-auto-choice input{width:16px;height:16px;flex:none;accent-color:#01adee;margin-top:2px}
+#vlCoverAutoCard .vl-cover-auto-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#vlCoverAutoCard .vl-cover-auto-actions .vl-admin-reload{height:44px;padding:0 18px}
+#vlCoverAutoCard .vl-cover-auto-progress{display:block;width:100%;height:9px;margin:17px 0 12px;accent-color:#01adee}
+#vlCoverAutoCard .vl-cover-auto-progress[hidden]{display:none!important}
+#vlCoverAutoCard #vlCoverAutoStats{margin:10px 0 2px;line-height:1.8;white-space:normal}
+#vlCoverAutoCard #vlCoverAutoMessage{margin:7px 0 12px}
+#vlCoverAutoCard .vl-admin-count{white-space:normal;line-height:1.65}
+@media(max-width:520px){
+  #vlCoverAutoCard .vl-cover-auto-actions button{flex:1 1 auto}
+}
