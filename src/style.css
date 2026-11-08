@@ -830,3 +830,29 @@ header.vl-header-menu-host #headerDropdown {
 @media (prefers-reduced-motion: reduce) {
   #spider-brain-loader::before { animation-duration: 1.8s; }
 }
+
+
+/* v3.1.35 - edge-to-edge PWA header across notches / Dynamic Island.
+   The bar paints behind the OS status region while its interactive children
+   remain in the device's safe rectangle. Normal browser/desktop insets are 0. */
+html { background-color: #01adee; }
+body > header {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  background-color: #01adee !important;
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  padding-right: calc(16px + env(safe-area-inset-right, 0px));
+  padding-bottom: 16px;
+  padding-left: calc(16px + env(safe-area-inset-left, 0px));
+  min-height: calc(56px + env(safe-area-inset-top, 0px));
+}
+/* The sidebar also exposes a close control; don't put it under the clock. */
+#sidebar > :first-child {
+  padding-top: calc(24px + env(safe-area-inset-top, 0px));
+  padding-left: calc(24px + env(safe-area-inset-left, 0px));
+}
+/* Keep fixed loading/status UI below system indicators on edge-to-edge PWA. */
+#sync-indicator {
+  top: calc(24px + env(safe-area-inset-top, 0px));
+  right: calc(16px + env(safe-area-inset-right, 0px));
+}
