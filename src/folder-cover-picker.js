@@ -161,6 +161,9 @@
     if (!document.hidden) scanRenderedFolders(true);
   });
   window.addEventListener('online', () => scanRenderedFolders(true));
+  // The one-time Admin job saves Drive references without changing folder
+  // lists. Revalidate visible covers once it finishes.
+  window.addEventListener('vl:bulk-covers-saved', () => scanRenderedFolders(true));
   setInterval(() => {
     if (!document.hidden && document.visibilityState === 'visible') scanRenderedFolders();
   }, 25000);
