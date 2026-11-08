@@ -46,18 +46,35 @@ body[data-vl-account-view="true"] #contentArea > #fileList{display:none!importan
   #vlAdminPage td,#vlAdminPage th{padding:12px 10px}
 }
 
-/* One-time auto-thumbnail migration, inside the Admin page only. */
-#vlCoverAutoCard .vl-admin-heading{margin-bottom:10px}
-#vlCoverAutoCard .vl-admin-intro{margin-bottom:16px}
-#vlCoverAutoCard .vl-cover-auto-choice{display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;line-height:1.5;color:#45566e;margin-bottom:17px}
-#vlCoverAutoCard .vl-cover-auto-choice input{width:16px;height:16px;flex:none;accent-color:#01adee;margin-top:2px}
-#vlCoverAutoCard .vl-cover-auto-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+/* Auto-thumbnail controls and live progress: gallery blue #01ADEE. */
+#vlCoverAutoCard .vl-admin-heading{font-size:19px;margin-bottom:9px}
+#vlCoverAutoCard .vl-admin-intro{margin:0 0 17px;line-height:1.7}
+#vlCoverAutoCard .vl-admin-intro code{font-size:12px;color:#037aa8;overflow-wrap:anywhere}
+#vlCoverAutoCard .vl-cover-auto-choice{display:flex;gap:10px;align-items:flex-start;margin-bottom:17px;font-size:13px;color:#45566e;line-height:1.5;cursor:pointer}
+#vlCoverAutoCard .vl-cover-auto-choice input{flex:none;width:16px;height:16px;margin-top:2px;accent-color:#01adee}
+#vlCoverAutoCard .vl-cover-auto-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 20px}
+#vlCoverAutoCard .vl-cover-auto-actions .vl-admin-submit{min-width:160px}
 #vlCoverAutoCard .vl-cover-auto-actions .vl-admin-reload{height:44px;padding:0 18px}
-#vlCoverAutoCard .vl-cover-auto-progress{display:block;width:100%;height:9px;margin:17px 0 12px;accent-color:#01adee}
-#vlCoverAutoCard .vl-cover-auto-progress[hidden]{display:none!important}
-#vlCoverAutoCard #vlCoverAutoStats{margin:10px 0 2px;line-height:1.8;white-space:normal}
-#vlCoverAutoCard #vlCoverAutoMessage{margin:7px 0 12px}
-#vlCoverAutoCard .vl-admin-count{white-space:normal;line-height:1.65}
+#vlCoverAutoCard .vl-cover-auto-actions button:focus-visible{outline:3px solid #01adee66;outline-offset:2px}
+#vlCoverAutoCard .vl-cover-progress-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:2px 0 9px;color:#405870;font-size:13px;font-weight:700}
+#vlCoverAutoCard #vlCoverAutoPercent{font-variant-numeric:tabular-nums;font-size:15px;font-weight:800;color:#009ed8}
+#vlCoverAutoCard .vl-cover-progress{position:relative;display:block;width:100%;height:13px;box-sizing:border-box;overflow:hidden;border-radius:999px;background:#e6f2f7;box-shadow:inset 0 1px 3px #45657a1c;isolation:isolate}
+#vlCoverAutoCard .vl-cover-progress[hidden]{display:none!important}
+#vlCoverAutoCard .vl-cover-progress-fill{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:inherit;background:linear-gradient(90deg,#01adee 0%,#21d1ed 55%,#02b8e8 100%);box-shadow:0 0 12px #01adee44;transition:width .3s ease}
+#vlCoverAutoCard .vl-cover-progress-running .vl-cover-progress-fill:after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 12%,#ffffff44 47%,transparent 78%);background-size:165px 100%;animation:vlCoverProgressSweep 1.6s linear infinite}
+@keyframes vlCoverProgressSweep{from{background-position:-165px 0}to{background-position:165px 0}}
+#vlCoverAutoCard .vl-cover-progress-meta{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:9px 0 13px;color:#63778a;font-size:12px;font-weight:600;line-height:1.4}
+#vlCoverAutoCard #vlCoverAutoProgressCount{font-weight:800;color:#157ba1;font-variant-numeric:tabular-nums}
+#vlCoverAutoCard .vl-cover-auto-current{font-size:12px;font-weight:600;line-height:1.6;word-break:break-word;background:#f0faff;border:1px solid #d8f1fb;padding:10px 12px;margin:0 0 10px;border-radius:10px;color:#2d647f}
+#vlCoverAutoCard .vl-cover-auto-stats{font-size:12px;color:#425d74;line-height:1.85;margin:0 0 9px;font-weight:600}
+#vlCoverAutoCard .vl-admin-message{margin:6px 0 10px;line-height:1.65;min-height:0}
+#vlCoverAutoCard>.vl-admin-count{font-size:11px;color:#738699;white-space:normal;line-height:1.65;margin-top:12px}
 @media(max-width:520px){
-  #vlCoverAutoCard .vl-cover-auto-actions button{flex:1 1 auto}
+  #vlCoverAutoCard .vl-cover-auto-actions{flex-direction:column;align-items:stretch}
+  #vlCoverAutoCard .vl-cover-auto-actions button{width:100%}
+  #vlCoverAutoCard .vl-cover-progress-meta{font-size:11px;flex-wrap:wrap}
+}
+@media(prefers-reduced-motion:reduce){
+  #vlCoverAutoCard .vl-cover-progress-fill{transition:none}
+  #vlCoverAutoCard .vl-cover-progress-running .vl-cover-progress-fill:after{animation:none}
 }
