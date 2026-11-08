@@ -196,9 +196,14 @@
     removeFromCaches(id);
     await persist();
     installRenderGuard();
-    if(typeof window.renderItems==='function' && Array.isArray(globals('items')))
-      window.renderItems(globals('items'));
-    if(parent)window.vlSharedPreload?.refreshFolder?.(parent);
+    // Avoid full gallery repaint per item: root mega rows flashed during delete.
+    // The live Drive refresh runs once after the completed batch instead.
+    if(globals('folder')===parent) {
+      const menu=document.getElementById('menu-'+id);
+      const card=menu?.closest('.file-item-card,.image-card,.subfolder-row,[data-file-id],[data-id]');
+      const list=document.getElementById('fileList');
+      if(card&&list?.contains(card))card.remove();
+    }
     window.vinhloc_cache_modified=true;
   }
   function closeDialog() {
@@ -226,6 +231,9 @@
   }
   async function execute(items) {
     deleting=true;
+    const activeId=globals('folder');
+    const scroll=document.getElementById('contentArea')?.scrollTop||0;
+    document.dispatchEvent(new CustomEvent('vl:delete-start',{detail:{folderId:activeId,scrollTop:scroll}}));
     const total=items.length, failed=[], passed=[];
     toast('Đang xác nhận xóa '+total+' mục với Google Drive...');
     try {
@@ -249,7 +257,10 @@
       // replace cache with stale crawler data as a substitute for verification.
       if(typeof window.vinhlocLiveDriveSync==='function')
         void window.vinhlocLiveDriveSync().catch(err=>console.warn('[QL Ảnh] Đồng bộ sau xóa',err));
-    } finally{deleting=false;}
+    } finally {
+      deleting=false;
+      document.dispatchEvent(new CustomEvent('vl:delete-end',{detail:{folderId:activeId,scrollTop:scroll}}));
+    }
   }
   function parseClickCode(code) {
     const m=code.match(/(?:window\.)?handleDelete\(\s*['"]([A-Za-z0-9_-]+)['"]\s*,\s*['"](folder|file)['"]/);

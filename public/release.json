@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.45",
-  "deployment_purpose": "Fix white login screen by painting photo directly on auth overlay and using GitHub CDN fallback for 11 images; preserve original centered login layout.",
+  "version": "3.1.46",
+  "deployment_purpose": "Continuous capture with Drive queue; safe-area media viewer controls; folder-specific scroll restoration; no delete navigation flicker; sidebar active icon and text only.",
   "deployment_trigger_date": "2026-11-09"
 }
