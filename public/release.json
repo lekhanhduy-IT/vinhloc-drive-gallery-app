@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.35",
-  "source_commit": "818506606d3ba801fb964b6cffca4515473c5bec",
-  "deployment_purpose": "Mobile edge-to-edge PWA status/header: viewport-fit=cover, matching status bar cyan #01ADEE, safe-area padding for header actions and sidebar controls across iOS and Android.",
+  "version": "3.1.36",
+  "source_commit": "b7f0aec2b1752d5d530fd38ec3b763f5895704f1",
+  "deployment_purpose": "Fix excess blank blue space beneath safe-area header controls in mobile PWA: remove compounded safe-area min-height, use intrinsic height and compact bottom padding without shifting action icons into iOS/Android status bars.",
   "deployment_trigger_date": "2026-11-09"
 }
