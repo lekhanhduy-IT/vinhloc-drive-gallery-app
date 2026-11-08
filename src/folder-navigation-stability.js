@@ -118,6 +118,9 @@
       queueMicrotask(sync);
       return result;
     };
+    // Preserve the shared-folder navigation marker. Otherwise its 550ms
+    // installer and this guard would repeatedly wrap one another forever.
+    if(previous.__vlShareBound) wrapped.__vlShareBound=true;
     wrapped.__vlNoDeleteBounce=true;
     installed=wrapped;
     window.loadFolder=wrapped;
