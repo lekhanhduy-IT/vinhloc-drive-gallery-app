@@ -1,0 +1,229 @@
+/* VinhLoc Gallery 3.1.42 — centralized UI accent palette.
+   Keep upload/delete/error colors meaningful; unify blue INTERACTIVE accents.
+   This stylesheet loads last so it also styles legacy dynamically generated UI. */
+:root{
+  --primary-blue:#01adee;
+  --vl-ui-cyan:#01adee;
+  --vl-ui-cyan-pale:#e9faff;
+  --vl-ui-red:#db1010;
+}
+body{accent-color:var(--vl-ui-cyan)}
+
+/* Toolbar immediately below the app header: white surfaces, thin cyan
+   borders, solid red iconography. Do not change sizes, layout or hit areas. */
+body > .sticky.top-0{
+  background-color:#fff!important;
+}
+body > .sticky.top-0 #searchInput{
+  background-color:#fff!important;
+  border:0.5px solid var(--vl-ui-cyan)!important;
+  box-sizing:border-box;
+  color:#1f2937!important;
+  box-shadow:none!important;
+  outline:0!important;
+  --tw-ring-color:var(--vl-ui-cyan)!important;
+}
+body > .sticky.top-0 #searchInput:focus,
+body > .sticky.top-0 #searchInput:focus-visible{
+  border-color:var(--vl-ui-cyan)!important;
+  box-shadow:0 0 0 2px rgba(1,173,238,.15)!important;
+}
+body > .sticky.top-0 .fa-search,
+body > .sticky.top-0 #clearSearchBtn{
+  color:var(--vl-ui-red)!important;
+}
+/* These two controls are created dynamically by the legacy gallery script. */
+body > .sticky.top-0 #viewToggleBtn,
+body > .sticky.top-0 #pasteDestBtn{
+  background-color:#fff!important;
+  color:var(--vl-ui-red)!important;
+  border:0.5px solid var(--vl-ui-cyan)!important;
+  box-shadow:0 1px 4px rgba(1,173,238,.10)!important;
+  box-sizing:border-box;
+}
+body > .sticky.top-0 #viewToggleBtn i,
+body > .sticky.top-0 #pasteDestBtn i{
+  color:var(--vl-ui-red)!important;
+}
+body > .sticky.top-0 #viewToggleBtn:hover,
+body > .sticky.top-0 #pasteDestBtn:hover{
+  background:var(--vl-ui-cyan-pale)!important;
+  border-color:var(--vl-ui-cyan)!important;
+}
+body > .sticky.top-0 #viewToggleBtn:active,
+body > .sticky.top-0 #viewToggleBtn.active,
+body > .sticky.top-0 #pasteDestBtn:active,
+body > .sticky.top-0 #pasteDestBtn.active,
+body > .sticky.top-0 #pasteDestBtn[aria-expanded="true"]{
+  background:var(--vl-ui-cyan)!important;
+  border-color:var(--vl-ui-cyan)!important;
+  box-shadow:0 0 0 2px rgba(1,173,238,.15)!important;
+}
+body > .sticky.top-0 :is(#viewToggleBtn,#pasteDestBtn):is(:active,.active,[aria-expanded="true"]) i{
+  color:#fff!important;
+}
+
+/* Mega-row folder glyphs + unthumbnailed child folders: red, not royal blue.
+   Keep mega-row titles their existing cyan. Exclude expansion chevrons. */
+.mega-row .mega-header i:is(.fa-folder,.fa-folder-open,.fa-folder-closed,.fa-book,.fa-book-open),
+.mega-row .subfolder-row [class*="item-cover-icon-"] i.fa-folder,
+.subfolder-row [class*="item-cover-icon-"] i.fa-folder,
+.mega-row [class*="item-cover-icon-"] i.fa-folder,
+.mega-row .fa-folder-open,
+.mega-row .fa-folder,
+.mega-row .fa-book{
+  color:var(--vl-ui-red)!important;
+}
+.subfolder-row [class*="item-cover-icon-"],
+.mega-row [class*="item-cover-icon-"]{
+  color:var(--vl-ui-red)!important;
+  background-color:#fff5f5!important;
+}
+.mega-row > .mega-header [class*="item-name-"]{
+  color:var(--vl-ui-cyan)!important;
+}
+
+/* Standardize former Tailwind blues across all currently rendered dialogs,
+   dropdowns, selection checks, menus and controls, including JS-built nodes. */
+:is(.text-blue-300,.text-blue-400,.text-blue-500,.text-blue-600,
+    .text-blue-700,.text-blue-800,.text-blue-900,
+    .hover\:text-blue-500:hover,.hover\:text-blue-600:hover,
+    .active\:text-blue-500:active){
+  color:var(--vl-ui-cyan)!important;
+}
+:is(.bg-blue-400,.bg-blue-500,.bg-blue-600,.bg-blue-700,.bg-blue-800,
+    .hover\:bg-blue-600:hover,.hover\:bg-blue-700:hover,
+    .active\:bg-blue-600:active,.active\:bg-blue-700:active,
+    .active\:bg-blue-200:active){
+  background-color:var(--vl-ui-cyan)!important;
+}
+:is(.bg-blue-50,.bg-blue-100,.hover\:bg-blue-50:hover,
+    .hover\:bg-blue-100:hover){
+  background-color:var(--vl-ui-cyan-pale)!important;
+}
+:is(.border-blue-100,.border-blue-200,.border-blue-300,.border-blue-400,
+    .border-blue-500,.border-blue-600,
+    .hover\:border-blue-300:hover,.hover\:border-blue-500:hover,
+    .focus\:border-blue-600:focus){
+  border-color:var(--vl-ui-cyan)!important;
+}
+:is(.ring-blue-200,.ring-blue-300,.ring-blue-400,.ring-blue-500,
+    .focus\:ring-blue-500:focus,.focus\:ring-blue-600:focus){
+  --tw-ring-color:var(--vl-ui-cyan)!important;
+}
+:is(.shadow-blue-600\/30,.shadow-blue-500\/30){
+  --tw-shadow-color:rgba(1,173,238,.3)!important;
+}
+.loader{border-top-color:var(--vl-ui-cyan)!important}
+#sync-indicator :is(i,span){color:var(--vl-ui-cyan)!important}
+
+/* Buttons/tabs in selected states always have the cyan surface.
+   Preserve disabled state and destructive (red) semantics. */
+:is(button, [role="tab"], .sub-tab-btn, .nav-item).active:not(:disabled):not(.vl-admin-delete),
+:is(button, [role="tab"], .sub-tab-btn)[aria-selected="true"]:not(:disabled),
+:is(button, [role="tab"], .sub-tab-btn)[data-state="active"]:not(:disabled){
+  background-color:var(--vl-ui-cyan)!important;
+  border-color:var(--vl-ui-cyan)!important;
+  color:#fff!important;
+}
+:is(button,[role="tab"],.sub-tab-btn).active:not(:disabled) i,
+:is(button,[role="tab"],.sub-tab-btn)[aria-selected="true"]:not(:disabled) i{
+  color:inherit!important;
+}
+.sidebar-item.active{
+  background-color:var(--vl-ui-cyan)!important;
+  border-left-color:var(--vl-ui-cyan)!important;
+  color:#fff!important;
+}
+.sidebar-item.active i{color:#fff!important}
+.sub-tab-btn.active{
+  background-color:var(--vl-ui-cyan)!important;
+  border-color:var(--vl-ui-cyan)!important;
+  color:#fff!important;
+}
+.custom-select-option:is(:hover,.selected,[aria-selected="true"]){
+  background:var(--vl-ui-cyan)!important;
+  color:#fff!important;
+}
+
+/* Active/selected image and folder outlines use cyan. The image itself is
+   never masked with an opaque cyan fill. */
+.image-card.selected::after{
+  border-color:var(--vl-ui-cyan)!important;
+  background:rgba(1,173,238,.12)!important;
+}
+.image-card.selected .check-icon,
+.vl-selection-check,
+#infoFolderImageGrid [aria-pressed="true"] .fa-check{
+  color:#fff!important;
+}
+.image-card.selected .check-icon{background-color:var(--vl-ui-cyan)!important}
+.vl-selection-check,
+#infoFolderImageGrid [aria-pressed="true"] .rounded-full.bg-blue-600{
+  background-color:var(--vl-ui-cyan)!important;
+}
+:is(.image-card,.file-item-card,.subfolder-row).selected-green{
+  border-color:var(--vl-ui-cyan)!important;
+  box-shadow:inset 0 0 0 2px var(--vl-ui-cyan)!important;
+  animation:none!important;
+}
+.check-icon-green{background:var(--vl-ui-cyan)!important}
+.overlay-item.active{border-color:var(--vl-ui-cyan)!important}
+#infoFolderImageGrid button[aria-pressed="true"]{
+  border-color:var(--vl-ui-cyan)!important;
+  --tw-ring-color:rgba(1,173,238,.45)!important;
+}
+#infoFolderImageGrid button:hover{
+  border-color:var(--vl-ui-cyan)!important;
+}
+:is(.ring-blue-500,.ring-blue-600,.border-blue-500,.border-blue-600){
+  border-color:var(--vl-ui-cyan)!important;
+}
+#fileList .ring-2.ring-blue-500{
+  --tw-ring-color:var(--vl-ui-cyan)!important;
+}
+
+/* Popup titles and blue labels: cyan. Keep normal body text dark and legible. */
+#infoModal :is(h2,h3).text-blue-600,
+#infoModal :is(h2,h3).text-blue-700,
+#infoFolderImageTitle,
+#copyMoveModal h3,
+#pastePopup h3,
+#pastePopupPath,
+#vlAdminPage .vl-admin-title,
+#vlAdminPage .vl-admin-heading{
+  color:var(--vl-ui-cyan)!important;
+}
+#pastePopup #miniBtnCopy,
+#pastePopup #miniBtnMove{
+  background:var(--vl-ui-cyan)!important;
+  border-color:var(--vl-ui-cyan)!important;
+}
+#pastePopup #miniBtnCopy i,
+#pastePopup #miniBtnMove i{color:#fff!important}
+#pasteDestBtn.paste-target-btn.active{
+  background:var(--vl-ui-cyan)!important;
+  border-color:var(--vl-ui-cyan)!important;
+  animation:vlCyanPastePulse 1.6s ease-out infinite!important;
+}
+@keyframes vlCyanPastePulse{
+  0%{box-shadow:0 0 0 0 rgba(1,173,238,.34)}
+  70%{box-shadow:0 0 0 8px rgba(1,173,238,0)}
+  100%{box-shadow:0 0 0 0 rgba(1,173,238,0)}
+}
+
+/* Consistent visible focus on real interactive surfaces. */
+:is(button,input,textarea,select,[role="button"],[tabindex]):focus-visible{
+  outline:2px solid var(--vl-ui-cyan)!important;
+  outline-offset:2px;
+}
+:is(input,textarea,select):focus{
+  border-color:var(--vl-ui-cyan)!important;
+  --tw-ring-color:var(--vl-ui-cyan)!important;
+}
+input[type="checkbox"],input[type="radio"],input[type="range"]{
+  accent-color:var(--vl-ui-cyan)!important;
+}
+@media(prefers-reduced-motion:reduce){
+  #pasteDestBtn.paste-target-btn.active{animation:none!important}
+}
