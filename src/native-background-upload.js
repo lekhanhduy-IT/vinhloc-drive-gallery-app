@@ -17,7 +17,8 @@ function uploadFolder(){
   catch(_){return window.currentFolderId||'';}
 }
 function display(jobs){
-  const ongoing = jobs.filter(x=>!['complete','failed'].includes(x.status));
+  const ongoing = jobs.filter(x=>['queued','staging','preparing','uploading','retrying','probing','uploaded'].includes(x.status));
+  const paused = jobs.filter(x=>['paused','auth_required'].includes(x.status));
   let indicator=document.getElementById('vlNativeUploadStatus');
   if(!indicator) {
     indicator=document.createElement('div');
@@ -25,8 +26,9 @@ function display(jobs){
     indicator.style.cssText='position:fixed;bottom:calc(12px + env(safe-area-inset-bottom));left:12px;z-index:30;padding:9px 13px;border-radius:11px;background:#fff;color:#334155;border:1px solid #cbd5e1;box-shadow:0 4px 12px #0002;font:600 12px system-ui;max-width:calc(100vw - 24px);pointer-events:none';
     document.body.appendChild(indicator);
   }
-  indicator.hidden=!ongoing.length;
-  if(ongoing.length)indicator.textContent='Upload nền lên Drive · '+ongoing.length+' file còn lại';
+  indicator.hidden=!(ongoing.length||paused.length);
+  if(ongoing.length)indicator.textContent='Upload nền · '+ongoing.length+' file đang xử lý'+(paused.length?' · '+paused.length+' tạm dừng':'');
+  else if(paused.length)indicator.textContent='Upload tạm dừng · '+paused.length+' file (mở app để thử lại)';
   for(const job of jobs){
     if(job.status!=='complete'||lastCompleted.has(job.id))continue;
     lastCompleted.add(job.id);
@@ -70,7 +72,10 @@ if(enabled){
     const video=label.querySelector('#uploadVideo');
     if(!image&&!video)return;
     event.preventDefault();event.stopImmediatePropagation();
-    if(!apiOrigin){inform('Bản app native chưa cấu hình VITE_VL_UPLOAD_API_ORIGIN HTTPS.',true);return;}
+    if(!apiOrigin||!sameOrigin||apiOrigin!==location.origin){
+      inform('Để upload nền, bản app native phải đăng nhập và chạy trên cùng domain HTTPS với API.',true);
+      return;
+    }
     const folderId=uploadFolder();
     if(!/^[A-Za-z0-9_-]{10,180}$/.test(String(folderId||''))){
       inform('Hãy mở thư mục Drive hợp lệ trước khi upload.',true);return;

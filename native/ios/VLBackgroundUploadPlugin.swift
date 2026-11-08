@@ -26,7 +26,10 @@ public class VLBackgroundUploadPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
               let url = URL(string: origin), url.scheme == "https", url.path.isEmpty,
               let folder = call.getString("folderId"),
               folder.range(of: "^[A-Za-z0-9_-]{10,180}$", options: .regularExpression) != nil,
-              let owner = call.getString("owner"), owner.contains("@") else {
+              let owner = call.getString("owner"), owner.contains("@"),
+              let current = bridge?.webView?.url,
+              current.scheme == "https", current.host == url.host, current.port == url.port,
+              url.query == nil, url.fragment == nil, url.user == nil else {
             call.reject("Cấu hình máy chủ hoặc tài khoản không hợp lệ")
             return
         }
@@ -184,7 +187,10 @@ public final class VLBackgroundUploadCoordinator: NSObject, URLSessionDataDelega
                     guard mime.hasPrefix("image/") || mime.hasPrefix("video/") else { continue }
                     let id = UUID().uuidString
                     let copy = self.directory.appendingPathComponent(id + ".data")
-                    try FileManager.default.copyItem(at: source, to: copy)
+                    // asCopy picker files are already materialized; APFS move is much faster
+                    // than copying a large video, reducing the immediate-background gap.
+                    do { try FileManager.default.moveItem(at: source, to: copy) }
+                    catch { try FileManager.default.copyItem(at: source, to: copy) }
                     staged.append(VLUploadItem(id: id, uploadKey: UUID().uuidString.replacingOccurrences(of: "-", with: ""),
                         name: source.lastPathComponent, mimeType: mime, size: size, folderId: folder, owner: owner,
                         origin: origin, filePath: copy.path, sessionURL: nil, status: "queued",

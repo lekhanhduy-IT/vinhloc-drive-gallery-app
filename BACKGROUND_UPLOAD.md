@@ -8,7 +8,7 @@
 
 ## Điều kiện sử dụng
 
-- Native phải truy cập máy chủ **HTTPS cùng nguồn gốc với phiên đăng nhập có cookie `vl_verified_media`**. Biến build `VITE_VL_UPLOAD_API_ORIGIN` chỉ chỉ định URL máy chủ, không tự tạo phiên đăng nhập trên domain đó. Khi WebView chỉ chạy tài nguyên offline `localhost`, phải cấu hình xác thực web/API thực tế trước khi bật native upload.
+- Native phải chạy WebView từ đúng máy chủ **HTTPS cùng nguồn gốc với phiên đăng nhập có cookie `vl_verified_media`** (plugin kiểm tra HTTPS origin trùng URL WebView). Biến build `VITE_VL_UPLOAD_API_ORIGIN` chỉ chỉ định URL máy chủ, không tự tạo phiên đăng nhập trên domain đó. Khi WebView chỉ chạy tài nguyên offline `localhost`, phải cấu hình xác thực web/API thực tế trước khi bật native upload.
 - Người dùng phải đăng nhập Google và có quyền trong thư mục Drive; `/api/owned-files` sẽ đối chiếu `expectedOwner` với email **đã xác thực** để bảo toàn tài khoản upload, ngăn thiết bị nhận việc ghi đè thông tin sở hữu.
 - Đây là **provenance** trong Drive `appProperties.vlUploadedBy` (tài khoản người yêu cầu upload), không phải thay đổi trường `owners` do Google Drive quản lý. Shared Drive quản lý quyền sở hữu theo chính sách của Drive.
 - Mỗi file có `vlUploadKey` duy nhất. API `confirmUpload` và `inspectUpload` kiểm tra chống trùng trước/sau upload.

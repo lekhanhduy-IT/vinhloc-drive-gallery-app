@@ -35,6 +35,12 @@ public class VLBackgroundUploadPlugin extends Plugin {
             call.reject("Cấu hình máy chủ/tài khoản/thư mục upload không hợp lệ");
             return;
         }
+        Uri active=Uri.parse(getBridge().getWebView().getUrl());
+        String currentOrigin=active.getScheme()+"://"+active.getAuthority();
+        if(!origin.equals(currentOrigin)){
+            call.reject("Upload nền chỉ cho phép API cùng HTTPS origin đã đăng nhập");
+            return;
+        }
         Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("video".equals(accept)?"video/*":"image/*");
