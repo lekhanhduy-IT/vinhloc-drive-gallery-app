@@ -1,9 +1,13 @@
 # Hình nền đăng nhập QL Ảnh
 
-Thư mục dành cho ảnh nền đăng nhập do người quản trị tự tải lên repository.
+Bạn có thể **tự tải ảnh** (PNG, JPG, JPEG, WebP, AVIF) vào thư mục `public/login-backgrounds/`.
 
-- Thêm ảnh vào `public/login-backgrounds/`.
-- Khi muốn sử dụng ảnh, thêm mục tương ứng vào mảng `images` trong `backgrounds.json` theo định dạng `{ "src": "/login-backgrounds/ten-anh.jpg", "alt": "Mô tả ảnh" }`.
-- Hiện tại chưa có ảnh trong thư mục; `images` là danh sách rỗng.
-- Tài nguyên trong thư mục `public` được phục vụ công khai. Không tải lên ảnh bảo mật.
-- Không có quy trình tự động đồng bộ từ Google Drive.
+- Hiện có 11 ảnh. Khi deploy, `npm run build` tự quét các file ảnh và tạo lại `backgrounds.json`; không cần thêm từng file bằng tay.
+- Trang đăng nhập lấy danh sách trong `backgrounds.json`, **xáo trộn thứ tự** và **chuyển ảnh sau mỗi 8,5 giây** bằng hiệu ứng mờ.
+- Trên điện thoại, ảnh tập trung phía trên; phần dưới trắng dần để nút Google và thông tin đăng nhập dễ đọc.
+- Ảnh tiếp theo chỉ tải sau khi ảnh trước xuất hiện; khi tab ẩn hoặc đã đóng màn hình đăng nhập sẽ tạm dừng.
+- Nếu không có ảnh hoặc ảnh lỗi, màn hình đăng nhập vẫn hiển thị nền trắng và hoạt động bình thường.
+- Ảnh thuộc `public` được truy cập công khai. Không đưa dữ liệu riêng tư vào đây.
+- Không có đồng bộ ảnh từ Google Drive.
+
+Các file được thêm trên GitHub cần một lượt build/deploy mới để xuất hiện trong danh sách.

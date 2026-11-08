@@ -1,0 +1,54 @@
+/* Login photo carousel: decorative layers never overlap the Google sign-in iframe. */
+#auth-overlay { isolation: isolate; }
+#vl-login-backgrounds {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: #ffffff;
+}
+#vl-login-backgrounds .vl-login-bg {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: 50% 30%;
+  transition: opacity 1100ms ease-in-out;
+  will-change: opacity;
+}
+#vl-login-backgrounds .vl-login-bg.is-visible { opacity: 1; }
+#vl-login-backgrounds::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,0) 3%, rgba(255,255,255,.06) 32%, rgba(255,255,255,.64) 60%, #ffffff 91%);
+}
+#auth-overlay .vl-login-panel {
+  position: relative;
+  z-index: 1;
+  background: rgba(255,255,255,.93);
+  border-radius: 24px;
+}
+@media (max-width: 767px) {
+  #auth-overlay {
+    justify-content: flex-end !important;
+    padding: 0 16px max(18px, env(safe-area-inset-bottom, 0px)) !important;
+  }
+  #vl-login-backgrounds .vl-login-bg { background-position: 50% 24%; }
+  #vl-login-backgrounds::after {
+    background: linear-gradient(180deg, transparent 0%, transparent 29%, rgba(255,255,255,.26) 43%, rgba(255,255,255,.84) 58%, #ffffff 72%, #ffffff 100%);
+  }
+  #auth-overlay .vl-login-panel {
+    background: transparent;
+    box-shadow: none;
+    margin-top: auto;
+    margin-bottom: clamp(0px, 1.5vh, 14px);
+    padding: 18px 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #vl-login-backgrounds .vl-login-bg { transition: none !important; }
+}

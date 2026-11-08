@@ -364,7 +364,7 @@ div.bottom-20.right-6 label {
    Masonry rules below preserve original image proportions on every device. */
 /* Chặn kéo thả và chặn menu mặc định trên một số thiết bị */
 img[src*="loaddata"],
-img[src*="load_login.GIF"],
+img[src*="load_login1.gif"],
 img[src*="pendesign"],
 img[src*="addfolder"],
 img[src*="vl_foot_sldebar"],
