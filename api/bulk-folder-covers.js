@@ -49,17 +49,22 @@ async function metadata(id,token,fields){
 }
 async function withinRoot(id,token,cache){
   let cursor=id;
-  const seen=new Set();
-  for(let depth=0;depth<35;depth++){
-    if(cursor===ROOT)return true;
-    if(!isId(cursor)||cursor===DRIVE||seen.has(cursor))return false;
-    if(cache.has(cursor))return cache.get(cursor);
+  const seen=new Set(),chain=[];
+  const finish=allowed=>{
+    for(const id of chain)cache.set(id,allowed);
+    return allowed;
+  };
+  for(let depth=0;depth<60;depth++){
+    if(cursor===ROOT)return finish(true);
+    if(!isId(cursor)||cursor===DRIVE||seen.has(cursor))return finish(false);
+    if(cache.has(cursor))return finish(cache.get(cursor));
     seen.add(cursor);
+    chain.push(cursor);
     const node=await metadata(cursor,token,'id,driveId,parents,trashed');
-    if(node.trashed||node.driveId!==DRIVE||node.parents?.length!==1)return false;
+    if(node.trashed||node.driveId!==DRIVE||node.parents?.length!==1)return finish(false);
     cursor=node.parents[0];
   }
-  return false;
+  return finish(false);
 }
 async function applyOne(item,token,overwrite,cache){
   const folderId=item.folderId,imageId=item.imageId;
