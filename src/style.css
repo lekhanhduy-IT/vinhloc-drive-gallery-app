@@ -879,3 +879,37 @@ body > header {
     padding-top: max(60px, env(safe-area-inset-top, 0px)) !important;
   }
 }
+
+
+/* v3.1.39 - folder thumbnail picker modal stack.
+   The legacy header has z-index:999999. These dialogs are direct children
+   of body, so they need to be above that header's stacking context.
+   Keep the picker above its originating folder-info modal. */
+body > #infoModal {
+  z-index: 1000100 !important;
+}
+body > #infoFolderImagePicker {
+  z-index: 1000110 !important;
+  box-sizing: border-box;
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+}
+body > #infoFolderImagePicker > div {
+  min-height: 0;
+  max-height: min(92dvh, 100%);
+}
+/* iOS standalone sometimes reports a zero safe-area inset over Dynamic
+   Island. The same notch fallback used by the app header applies to modals,
+   without putting the card beneath the status indicators. */
+@media (orientation: portrait) and (max-width: 600px) {
+  html.vl-ios-edge-to-edge body > #infoModal {
+    padding-top: max(60px, env(safe-area-inset-top, 0px));
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  }
+  html.vl-ios-edge-to-edge body > #infoFolderImagePicker {
+    padding-top: max(60px, env(safe-area-inset-top, 0px));
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  }
+}
