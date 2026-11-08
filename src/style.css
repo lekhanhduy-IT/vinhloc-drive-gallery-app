@@ -840,11 +840,11 @@ body > header {
   box-sizing: border-box;
   flex-shrink: 0;
   background-color: #01adee !important;
-  /* Place buttons below the system status area without counting that
-     inset twice. The header ends directly below its interactive row. */
+  /* Restore the iOS safe inset expression that positioned the buttons
+     correctly in 3.1.35; only remove the excessive minimum height. */
   height: auto !important;
   min-height: 0 !important;
-  padding-top: max(16px, calc(env(safe-area-inset-top, 0px) + 6px));
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
   padding-right: calc(16px + env(safe-area-inset-right, 0px));
   padding-bottom: 8px;
   padding-left: calc(16px + env(safe-area-inset-left, 0px));
