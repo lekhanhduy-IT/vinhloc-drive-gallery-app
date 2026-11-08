@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.37",
-  "source_commit": "934fa6825d55971df7788bb333cc486abf9c86c7",
-  "deployment_purpose": "Correct iOS PWA status bar overlap caused by 3.1.36 max()/calc() header padding change: restore previously working calc(16px + env(safe-area-inset-top)) while keeping intrinsic compact height and 8px lower padding.",
+  "version": "3.1.38",
+  "source_commit": "731dcf08c8211b7094b2f366828d9a7b6cf3f84e",
+  "deployment_purpose": "Fix iPhone Home Screen PWA header overlap with status indicators/Dynamic Island when safe-area-inset-top resolves to zero. Add early standalone-notch detection and a 60px top-padding fallback while preserving compact 8px bottom padding.",
   "deployment_trigger_date": "2026-11-09"
 }
