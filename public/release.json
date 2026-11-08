@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.34",
-  "source_commit": "edf5c6bdfb84bafd1253e28e332c2d9dfb6f17de",
-  "deployment_purpose": "Replace legacy blue/purple post-login spider loader with the same clean white cyan-spinner screen used during Google verification; fix deployment version 3.1.34 across app, API and assets.",
-  "deployment_trigger_date": "2026-11-07"
+  "version": "3.1.35",
+  "source_commit": "818506606d3ba801fb964b6cffca4515473c5bec",
+  "deployment_purpose": "Mobile edge-to-edge PWA status/header: viewport-fit=cover, matching status bar cyan #01ADEE, safe-area padding for header actions and sidebar controls across iOS and Android.",
+  "deployment_trigger_date": "2026-11-09"
 }
