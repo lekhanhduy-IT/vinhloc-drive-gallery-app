@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.36",
-  "source_commit": "b7f0aec2b1752d5d530fd38ec3b763f5895704f1",
-  "deployment_purpose": "Fix excess blank blue space beneath safe-area header controls in mobile PWA: remove compounded safe-area min-height, use intrinsic height and compact bottom padding without shifting action icons into iOS/Android status bars.",
+  "version": "3.1.37",
+  "source_commit": "934fa6825d55971df7788bb333cc486abf9c86c7",
+  "deployment_purpose": "Correct iOS PWA status bar overlap caused by 3.1.36 max()/calc() header padding change: restore previously working calc(16px + env(safe-area-inset-top)) while keeping intrinsic compact height and 8px lower padding.",
   "deployment_trigger_date": "2026-11-09"
 }
