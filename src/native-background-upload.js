@@ -71,11 +71,10 @@ if(enabled){
     const image=label.querySelector('#uploadImage');
     const video=label.querySelector('#uploadVideo');
     if(!image&&!video)return;
+    // An offline Capacitor app has no signed-in HTTPS API origin yet.
+    // Leave the existing JS picker working instead of blocking uploads.
+    if(!apiOrigin||!sameOrigin||apiOrigin!==location.origin)return;
     event.preventDefault();event.stopImmediatePropagation();
-    if(!apiOrigin||!sameOrigin||apiOrigin!==location.origin){
-      inform('Để upload nền, bản app native phải đăng nhập và chạy trên cùng domain HTTPS với API.',true);
-      return;
-    }
     const folderId=uploadFolder();
     if(!/^[A-Za-z0-9_-]{10,180}$/.test(String(folderId||''))){
       inform('Hãy mở thư mục Drive hợp lệ trước khi upload.',true);return;
