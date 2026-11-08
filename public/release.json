@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.38",
-  "source_commit": "731dcf08c8211b7094b2f366828d9a7b6cf3f84e",
-  "deployment_purpose": "Fix iPhone Home Screen PWA header overlap with status indicators/Dynamic Island when safe-area-inset-top resolves to zero. Add early standalone-notch detection and a 60px top-padding fallback while preserving compact 8px bottom padding.",
+  "version": "3.1.39",
+  "source_commit": "ec79bc9281b82dddac1898f01218183421a0aaa1",
+  "deployment_purpose": "Fix folder thumbnail image picker obscured by elevated mobile header: lift the folder info and picker dialog above header stacking context, preserve picker-over-info ordering, and keep iPhone notch safe-area padding.",
   "deployment_trigger_date": "2026-11-09"
 }
