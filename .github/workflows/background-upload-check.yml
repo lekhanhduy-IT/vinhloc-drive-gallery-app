@@ -26,7 +26,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
+      # GitHub Ubuntu runners already provide Android SDK; setup-android's sdkmanager tools package is unavailable on this runner.
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
