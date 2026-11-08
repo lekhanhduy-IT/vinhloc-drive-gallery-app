@@ -233,14 +233,14 @@
     card.className='vl-admin-card';
     card.innerHTML=[
       '<h3 class="vl-admin-heading">Tự động gán thumbnail cho folder</h3>',
-      '<p class="vl-admin-intro">Chạy một lần cho tất cả thư mục con trong kho ảnh. Chọn ảnh theo độ phân giải, dung lượng, tỷ lệ và tên file. Chỉ lưu ID ảnh vào Google Drive appProperties.vlCoverImageId; không tải ảnh về hoặc ghi Sheet LOẠI.</p>',
+      '<p class="vl-admin-intro">Chạy một lần cho tất cả thư mục con trong kho ảnh. Chọn ảnh nằm trực tiếp trong từng folder, ưu tiên độ phân giải, dung lượng, tỷ lệ và tên file. Chỉ lưu ID ảnh vào Google Drive appProperties.vlCoverImageId; không tải ảnh về hoặc ghi Sheet LOẠI.</p>',
       '<label class="vl-cover-auto-choice"><input id="vlCoverAutoOverwrite" type="checkbox"> Ghi đè cả thumbnail đã có (không khuyến nghị)</label>',
       '<div class="vl-cover-auto-actions"><button type="button" id="vlCoverAutoStart" class="vl-admin-submit">Chạy một lần</button>',
       '<button type="button" id="vlCoverAutoPause" class="vl-admin-reload" disabled>Tạm dừng</button></div>',
       '<progress id="vlCoverAutoProgress" class="vl-cover-auto-progress" hidden></progress>',
       '<p id="vlCoverAutoStats" class="vl-admin-count" aria-live="polite"></p>',
       '<p id="vlCoverAutoMessage" class="vl-admin-message" aria-live="polite"></p>',
-      '<p class="vl-admin-count">Nếu rời ứng dụng giữa chừng, hãy quay lại tab Quản lý và nhấn Tiếp tục. Không cần cấp dịch vụ trả phí mới.</p>'
+      '<p class="vl-admin-count">Nếu rời ứng dụng giữa chừng, hãy quay lại tab Quản lý và nhấn Tiếp tục. Không cần dịch vụ mới, nhưng các lượt gọi API vẫn sử dụng hạn mức Google Drive/Vercel hiện có.</p>'
     ].join('');
     shell.appendChild(card);
     el('vlCoverAutoStart').addEventListener('click',()=>void start());
