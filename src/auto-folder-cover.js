@@ -185,7 +185,6 @@
           }else throw Error('Trạng thái lưu thumbnail không hợp lệ');
         }
         st.index+=batch.length;
-        window.dispatchEvent(new Event('vl:bulk-covers-saved'));
       }else if(st.phase==='done'){break;}
       else throw Error('Tiến độ không hợp lệ; cần tạo đợt quét mới');
       st.updatedAt=Date.now();
@@ -194,6 +193,7 @@
     }
     if(st?.phase==='done'){
       await saveState();
+      window.dispatchEvent(new Event('vl:bulk-covers-saved'));
       notice=st.failures.length?'Một số folder chưa ghi được. Có thể thử lại riêng các folder lỗi.':
         'Hoàn tất. Thumbnail đã lưu trên Google Drive, không tạo file ảnh mới.';
     }
