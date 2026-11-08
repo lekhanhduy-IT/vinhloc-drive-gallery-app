@@ -1,7 +1,7 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.39",
-  "source_commit": "ec79bc9281b82dddac1898f01218183421a0aaa1",
-  "deployment_purpose": "Fix folder thumbnail image picker obscured by elevated mobile header: lift the folder info and picker dialog above header stacking context, preserve picker-over-info ordering, and keep iPhone notch safe-area padding.",
+  "version": "3.1.40",
+  "source_commit": "19c5332571a242babecd477f898e82435d459e30",
+  "deployment_purpose": "Admin-only one-time bulk folder thumbnail tool. Paginated Drive folder/image metadata scan, best available direct-child photo by resolution/size/aspect/name, write Drive appProperties.vlCoverImageId, skip existing by default, persist progress and resume.",
   "deployment_trigger_date": "2026-11-09"
 }
