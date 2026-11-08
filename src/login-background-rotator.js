@@ -1,99 +1,120 @@
-/* Progressive login slideshow: the first <img> already has a real src in HTML.
- * If manifest fetch or JavaScript fails, the login background still appears.
- * This is a Vite module entry in index.html so Vercel includes it in the build. */
+/* Login background is visible in HTML even if this module fails.
+ * Manifest is refreshed on each deploy. If local assets return 404, use the
+ * exact same files from this public GitHub repo rather than a white page. */
 (() => {
   'use strict';
   const overlay = document.getElementById('auth-overlay');
-  const container = document.getElementById('vl-login-backgrounds');
-  if (!overlay || !container) return;
-  const layers = Array.from(container.querySelectorAll('img.vl-login-bg'));
-  if (layers.length !== 2) return;
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const ROTATION_MS = 8500;
-  let photos = [];
-  let pointer = 0;
-  let current = 0;
-  let loading = false;
+  const preview = document.getElementById('vl-login-backgrounds');
+  if (!overlay || !preview) return;
+  const fade = "linear-gradient(to bottom, transparent 0%, transparent 30%, rgba(255,255,255,.12) 41%, rgba(255,255,255,.78) 63%, #ffffff 82%)";
+  const baseSources = ["/login-backgrounds/316e9496-bd61-457c-a431-37259a524b75.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_37%209%20thg%2011%2C%202026-1.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_38%209%20thg%2011%2C%202026-2.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_38%209%20thg%2011%2C%202026-3.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_39%209%20thg%2011%2C%202026-4.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_40%209%20thg%2011%2C%202026-5.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_40%209%20thg%2011%2C%202026-6.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_41%209%20thg%2011%2C%202026-7.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_42%209%20thg%2011%2C%202026-8.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_43%209%20thg%2011%2C%202026-9.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_43%209%20thg%2011%2C%202026-10.png"];
+  const remoteBases = [
+    'https://raw.githubusercontent.com/lekhanhduy-IT/vinhloc-drive-gallery-app/main/public',
+    'https://cdn.jsdelivr.net/gh/lekhanhduy-IT/vinhloc-drive-gallery-app@main/public'
+  ];
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const ROTATE_MS = 8500;
+  const FADE_MS = 1150;
+  let photos = baseSources.slice();
+  let position = 0;
   let timer = null;
+  let running = false;
 
-  function loginVisible() {
-    return !document.hidden && !overlay.hidden &&
-      getComputedStyle(overlay).display !== 'none';
+  function active() {
+    return !document.hidden && !overlay.hidden && getComputedStyle(overlay).display !== 'none';
   }
-  function pause() {
+  function clear() {
     if (timer !== null) clearTimeout(timer);
     timer = null;
   }
-  function nextTimer() {
-    pause();
-    if (!loginVisible() || reduceMotion.matches || !photos.length) return;
-    timer = setTimeout(() => {
-      timer = null;
-      void rotate();
-    }, ROTATION_MS);
+  function next() {
+    clear();
+    if (!photos.length || !active() || reducedMotion.matches) return;
+    timer = setTimeout(() => { timer = null; void rotate(); }, ROTATE_MS);
   }
-  function load(src) {
+  function testImage(url) {
     return new Promise(resolve => {
       const img = new Image();
       img.onload = () => resolve(true);
       img.onerror = () => resolve(false);
-      img.src = src;
+      img.src = url;
     });
   }
+  function cssBackground(url) {
+    return fade + ', url(' + JSON.stringify(url) + ')';
+  }
+  async function findWorkingImage(src) {
+    if (!src.startsWith('/login-backgrounds/')) return null;
+    const candidates = [src, ...remoteBases.map(base => base + src)];
+    for (const url of candidates) {
+      if (await testImage(url)) return url;
+    }
+    return null;
+  }
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
   async function rotate() {
-    if (loading || !loginVisible() || !photos.length) return;
-    loading = true;
-    let loaded = false;
+    if (running || !active() || !photos.length) return;
+    running = true;
     try {
-      for (let attempt = 0; attempt < photos.length; attempt++) {
-        const src = photos[pointer++ % photos.length];
-        if (layers[current].getAttribute('src') === src) continue;
-        if (!await load(src)) continue;
-        if (!loginVisible()) return;
-        const other = 1 - current;
-        layers[other].src = src;
-        layers[other].classList.add('is-visible');
-        layers[current].classList.remove('is-visible');
-        current = other;
-        loaded = true;
-        break;
+      let result = null;
+      for (let attempt=0; attempt<photos.length; attempt++) {
+        const src = photos[position++ % photos.length];
+        result = await findWorkingImage(src);
+        if (result) break;
       }
+      if (!result || !active()) return;
+      const background = cssBackground(result);
+      if (reducedMotion.matches) {
+        overlay.style.backgroundImage = background;
+        return;
+      }
+      preview.style.backgroundImage = background;
+      preview.classList.add('is-visible');
+      await sleep(FADE_MS);
+      overlay.style.backgroundImage = background;
+      preview.classList.remove('is-visible');
+    } catch (error) {
+      console.warn('[login backgrounds] Failed to switch photo:', error);
     } finally {
-      loading = false;
-      if (!loaded && loginVisible()) photos = [];
-      nextTimer();
+      running = false;
+      next();
     }
   }
-  function onVisibility() {
-    if (!loginVisible()) { pause(); return; }
-    if (timer === null && !loading) nextTimer();
+  function visibilityChanged() {
+    if (!active()) { clear(); return; }
+    if (!running && timer === null) next();
   }
-  new MutationObserver(onVisibility).observe(overlay, {
+  for (let i=photos.length-1; i>0; i--) {
+    const j=Math.floor(Math.random()*(i+1));
+    [photos[i],photos[j]]=[photos[j],photos[i]];
+  }
+  new MutationObserver(visibilityChanged).observe(overlay, {
     attributes: true, attributeFilter: ['style','class','hidden']
   });
-  document.addEventListener('visibilitychange', onVisibility);
-  window.addEventListener('pageshow', onVisibility);
-  reduceMotion.addEventListener?.('change', onVisibility);
+  addEventListener('pageshow', visibilityChanged);
+  document.addEventListener('visibilitychange', visibilityChanged);
+  reducedMotion.addEventListener?.('change', visibilityChanged);
 
-  fetch('/login-backgrounds/backgrounds.json', {cache: 'no-store'})
-    .then(response => {
-      if (!response.ok) throw new Error('Cannot load background manifest');
-      return response.json();
-    })
+  fetch('/login-backgrounds/backgrounds.json', {cache:'no-store'})
+    .then(r => { if(!r.ok)throw Error('Manifest HTTP '+r.status); return r.json(); })
     .then(data => {
       if (!Array.isArray(data.images)) return;
-      photos = [...new Set(data.images
-        .map(entry => entry?.src)
-        .filter(src => typeof src === 'string' &&
+      const sources = [...new Set(data.images.map(item => item?.src)
+        .filter(src => typeof src==='string' &&
           src.startsWith('/login-backgrounds/') &&
           /\.(png|jpe?g|webp|avif)$/i.test(src)))];
-      for (let i=photos.length-1; i>0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [photos[i], photos[j]] = [photos[j], photos[i]];
+      if (sources.length) {
+        photos = sources;
+        for (let i=photos.length-1; i>0; i--) {
+          const j=Math.floor(Math.random()*(i+1));
+          [photos[i],photos[j]]=[photos[j],photos[i]];
+        }
+        position=0;
+        visibilityChanged();
       }
-      nextTimer();
     })
-    .catch(error => {
-      console.warn('[login backgrounds] Slideshow unavailable; showing static first photo.', error);
-    });
+    .catch(error => console.warn('[login backgrounds] Using embedded image list:',error));
+  // Ensure visible background continues to work if the slideshow file fails.
+  visibilityChanged();
 })();

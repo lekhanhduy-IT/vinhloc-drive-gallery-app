@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.44",
-  "deployment_purpose": "Restore centered login position, ensure a visible background with static fallback, rotate 11 uploaded PNGs, switch to load_login1.gif.",
+  "version": "3.1.45",
+  "deployment_purpose": "Fix white login screen by painting photo directly on auth overlay and using GitHub CDN fallback for 11 images; preserve original centered login layout.",
   "deployment_trigger_date": "2026-11-09"
 }
