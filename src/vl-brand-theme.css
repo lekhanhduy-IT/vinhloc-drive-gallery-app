@@ -82,6 +82,11 @@ body > .sticky.top-0 :is(#viewToggleBtn,#pasteDestBtn):is(:active,.active,[aria-
 .mega-row > .mega-header [class*="item-name-"]{
   color:var(--vl-ui-cyan)!important;
 }
+/* The expandable folder-row icon at the left of each mega heading is a
+   chevron in the current renderer; give it the same red as folder glyphs. */
+#folderList .mega-row > .mega-header i[id^="icon-"]{
+  color:var(--vl-ui-red)!important;
+}
 
 /* Standardize former Tailwind blues across all currently rendered dialogs,
    dropdowns, selection checks, menus and controls, including JS-built nodes. */
@@ -210,6 +215,24 @@ body > .sticky.top-0 :is(#viewToggleBtn,#pasteDestBtn):is(:active,.active,[aria-
   0%{box-shadow:0 0 0 0 rgba(1,173,238,.34)}
   70%{box-shadow:0 0 0 8px rgba(1,173,238,0)}
   100%{box-shadow:0 0 0 0 rgba(1,173,238,0)}
+}
+
+/* Legacy dialogs create heading and primary-button colors through inline
+   style strings; these explicit IDs prevent old royal-blue colors leaking. */
+#vlMemberCreateTitle,
+#vlMemberCreateDialog h2,
+#vlMemberCreateDialog button[style*="background:#2563eb"],
+[data-vl-owned="rename"]{
+  color:var(--vl-ui-cyan)!important;
+}
+#vlMemberCreateDialog button[style*="background:#2563eb"]{
+  background-color:var(--vl-ui-cyan)!important;
+  color:#fff!important;
+}
+/* Scoped text title and selection colors for popovers loaded after startup. */
+#pastePopup #pastePopupPath,
+#infoFolderImagePicker #infoFolderImageTitle{
+  color:var(--vl-ui-cyan)!important;
 }
 
 /* Consistent visible focus on real interactive surfaces. */
