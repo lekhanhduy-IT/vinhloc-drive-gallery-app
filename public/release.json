@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.55",
-  "deployment_purpose": "Random first login photo and reshuffle on re-entry; all-level recursive thumbnail picker for Sửa/Thông tin; batch cover assignment inherits nested descendant images with verification and preserves existing covers.",
+  "version": "3.1.56",
+  "deployment_purpose": "Fix blue login splash while first randomized photo loads: high-priority preload in head and direct image assignment during auth-overlay creation; preserve 11-photo shuffle and 8.5s rotation.",
   "deployment_trigger_date": "2026-11-09"
 }

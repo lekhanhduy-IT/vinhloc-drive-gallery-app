@@ -20,5 +20,15 @@
   } catch (_) {}
   const initial = order[0] || null;
   window.__vlLoginBackgroundBoot = {images, order, initial};
+  // Start fetching the chosen photo immediately, before Tailwind, Google
+  // scripts, stylesheets or the body markup can delay the request.
+  if (initial) {
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'image';
+    link.href = initial;
+    link.setAttribute('fetchpriority', 'high');
+    document.head.appendChild(link);
+  }
   if (initial) document.documentElement.style.setProperty('--vl-login-first-photo', 'url(' + JSON.stringify(initial) + ')');
 })();
