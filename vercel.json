@@ -33,24 +33,6 @@
           "value": "0"
         }
       ]
-    },
-    {
-      "source": "/login-backgrounds/(.*\\.(png|jpg|jpeg|webp|avif))",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=3600, stale-while-revalidate=86400"
-        }
-      ]
-    },
-    {
-      "source": "/login-backgrounds/bootstrap.js",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, must-revalidate"
-        }
-      ]
     }
   ]
 }
