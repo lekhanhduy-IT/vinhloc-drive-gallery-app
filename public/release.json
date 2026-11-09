@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.64",
-  "deployment_purpose": "Restore exact v3.1.54 login overlay CSS, original slideshow fade/timer and original direct full-size background styling. Randomize first photo in a tiny synchronous script without adding any image layers, preview generation, or Vite transform. Prefetch one alternate while logged in. Preserve v3.1.55 thumbnail features.",
+  "version": "3.1.65",
+  "deployment_purpose": "Use HTML-embedded 11-photo list to choose the initial image in the document head before login overlay creation, without replacing a hardcoded photo after the body renders. Retain v3.1.54 slideshow, no extra visual layers.",
   "deployment_trigger_date": "2026-11-09"
 }

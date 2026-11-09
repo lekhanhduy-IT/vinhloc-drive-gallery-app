@@ -5,7 +5,7 @@
   'use strict';
   if(window.__vlVersionManager)return;
   window.__vlVersionManager=true;
-  const RELEASE='3.1.64';
+  const RELEASE='3.1.65';
   const BUILD_KEY='vinhloc_deployed_build_v1';
   const OLD_VERSION='2.9.8'; // old obfuscated script.js still checks this tag
   const knownLegacy=localStorage.getItem('vinhloc_app_version');

@@ -53,7 +53,7 @@
     } catch (_) { return String(src || ''); }
   }
   const initialUrl = /url\((['"]?)(.*?)\1\)/.exec(overlay.style.backgroundImage);
-  let current = canonical(initialUrl ? initialUrl[2] : builtInSources[0]);
+  let current = canonical(window.__vlOpeningPhoto || (initialUrl ? initialUrl[2] : builtInSources[0]));
   let readyForNextLogin = null;
   let preloadEpoch = 0;
   let wasVisible = false;
