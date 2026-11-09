@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.51",
-  "deployment_purpose": "Stabilize login viewport and centered group on first launch/logout, prevent size shifts from async Tailwind/Google fonts and GIF ResizeObserver; retain one full-cover photo crossfade.",
+  "version": "3.1.52",
+  "deployment_purpose": "Prevent duplicate asynchronous Google sign-in buttons at initial login/logout, and reserve a single fixed-height button slot to stop login group from shifting.",
   "deployment_trigger_date": "2026-11-09"
 }

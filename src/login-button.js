@@ -11,7 +11,10 @@
   const query = new URLSearchParams(location.search);
   const isShare = !!(query.get('shareId') && query.get('shareType') === 'folder');
   const targets = new Set(['google-login-btn', 'vlSharedGoogleSignin']);
-  const rendered = new WeakSet();
+  // Google paints its iframe asynchronously. An in-flight render must count
+  // as rendered BEFORE the iframe arrives, otherwise simultaneous login
+  // initializers append two native buttons and resize the centered panel.
+  const renderStates = new WeakMap();
   let installedSDK = null;
 
   function sizeFor(element) {
@@ -68,7 +71,23 @@
         element.replaceChildren();
         return;
       }
-      if (rendered.has(element) && element.querySelector('iframe')) return;
+      const previous = renderStates.get(element);
+      if (previous) {
+        if (element.querySelector('iframe')) {
+          previous.phase = 'ready';
+          return;
+        }
+        // A pending SDK render can have an empty host for several frames.
+        // Do not issue a second request until the first one finishes or
+        // unmistakably fails. This fixes the double-button startup flash.
+        if (previous.phase === 'pending' && (Date.now() - previous.started < 10000 ||
+            element.childElementCount > 0)) return;
+        // A ready iframe removed by logout may be rendered again, but do not
+        // replace a half-initialized Google host.
+        if (element.childElementCount > 0) return;
+        previous.observer?.disconnect();
+        renderStates.delete(element);
+      }
 
       element.querySelectorAll('.vl-google-readable-label')
         .forEach(label => label.remove());
@@ -77,14 +96,26 @@
       const width = sizeFor(element);
       element.style.width = width + 'px';
       element.style.maxWidth = '100%';
-      element.style.height = 'auto';
-      element.style.minHeight = '44px';
+      // Reserve exactly one native-button slot from the FIRST paint.
+      element.style.height = '48px';
+      element.style.minHeight = '48px';
       element.style.position = 'relative';
       element.style.overflow = 'visible';
 
-      rendered.add(element);
+      const state = {phase: 'pending', started: Date.now(), observer: null};
+      renderStates.set(element, state);
+      if (typeof MutationObserver !== 'undefined') {
+        state.observer = new MutationObserver(() => {
+          if (element.querySelector('iframe')) {
+            state.phase = 'ready';
+            state.observer?.disconnect();
+            state.observer = null;
+          }
+        });
+        state.observer.observe(element, {childList: true, subtree: true});
+      }
       try {
-        return originalRender(element, {
+        const value = originalRender(element, {
           ...requested,
           type: 'standard',
           theme: 'outline',
@@ -95,15 +126,28 @@
           logo_alignment: 'left',
           locale: 'vi'
         });
-      } catch (error) {
-        rendered.delete(element);
-        throw error;
-      } finally {
-        // An unavailable Google renderer may leave the host empty;
-        // permit a later explicit render to retry.
+        if (element.querySelector('iframe')) {
+          state.phase = 'ready';
+          state.observer?.disconnect();
+          state.observer = null;
+        }
+        // If Google genuinely rendered no DOM, a future explicit call can
+        // retry after a long enough timeout. Never reset while a native
+        // render is still adding nodes.
         setTimeout(() => {
-          if (!element.querySelector('iframe')) rendered.delete(element);
-        }, 1200);
+          if (renderStates.get(element) !== state) return;
+          if (element.querySelector('iframe')) {
+            state.phase = 'ready';
+          } else if (element.childElementCount === 0) {
+            state.observer?.disconnect();
+            renderStates.delete(element);
+          }
+        }, 10000);
+        return value;
+      } catch (error) {
+        state.observer?.disconnect();
+        renderStates.delete(element);
+        throw error;
       }
     }
     renderNative.__vlNativeGoogleSigninV315 = true;

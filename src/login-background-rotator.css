@@ -87,6 +87,16 @@
   backface-visibility: visible !important;
   -webkit-backface-visibility: visible !important;
 }
+/* The GIS iframe mounts asynchronously. Its host must never grow into
+   two rows or change the height of the centered login group. */
+#auth-overlay #google-login-btn {
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
+  box-sizing: border-box !important;
+  flex: 0 0 48px !important;
+  overflow: hidden !important;
+}
 #auth-overlay #vl-login-title {
   grid-column: 1;
   grid-row: 2;
