@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.63",
-  "deployment_purpose": "Use actual photographic first paint element selected randomly with inline data URI; release only when full resolution is loaded; preserve layout and slideshow behavior.",
+  "version": "3.1.64",
+  "deployment_purpose": "Restore exact v3.1.54 login overlay CSS, original slideshow fade/timer and original direct full-size background styling. Randomize first photo in a tiny synchronous script without adding any image layers, preview generation, or Vite transform. Prefetch one alternate while logged in. Preserve v3.1.55 thumbnail features.",
   "deployment_trigger_date": "2026-11-09"
 }

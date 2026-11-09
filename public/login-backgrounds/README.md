@@ -1,11 +1,13 @@
 # Hình nền đăng nhập QL Ảnh
 
-Thêm ảnh JPG, JPEG, PNG, WebP hoặc AVIF vào thư mục `public/login-backgrounds/`. Lúc build, script `scripts/generate-login-backgrounds.mjs` cập nhật tự động `backgrounds.json`, không cần sửa danh sách thủ công.
+Bạn có thể **tự tải ảnh** (PNG, JPG, JPEG, WebP, AVIF) vào thư mục `public/login-backgrounds/`.
 
-Cơ chế hình nền được giữ nguyên như bản 3.1.54: ảnh mặc định gắn trực tiếp trong HTML và được hiển thị ngay khi trình duyệt tải xong ảnh đó. Chỉ có **một lớp ảnh nền chính** và **một lớp chuyển mờ** đã có sẵn; không có ảnh xem trước, bootstrap động, ảnh lặp hoặc lớp lọc mới.
+- Hiện có 11 ảnh. Khi deploy, `npm run build` tự quét các file ảnh và tạo lại `backgrounds.json`; không cần thêm từng file bằng tay.
+- Trang đăng nhập lấy danh sách trong `backgrounds.json`, **xáo trộn thứ tự** và **chuyển ảnh sau mỗi 8,5 giây** bằng hiệu ứng mờ.
+- Trên điện thoại, ảnh tập trung phía trên; phần dưới trắng dần để nút Google và thông tin đăng nhập dễ đọc.
+- Ảnh tiếp theo chỉ tải sau khi ảnh trước xuất hiện; khi tab ẩn hoặc đã đóng màn hình đăng nhập sẽ tạm dừng.
+- Nếu không có ảnh hoặc ảnh lỗi, màn hình đăng nhập vẫn hiển thị nền trắng và hoạt động bình thường.
+- Ảnh thuộc `public` được truy cập công khai. Không đưa dữ liệu riêng tư vào đây.
+- Không có đồng bộ ảnh từ Google Drive.
 
-Sau mỗi lần mở màn hình đăng nhập, hệ thống **xáo trộn thứ tự các ảnh trong vòng luân phiên**, không chuyển ảnh liên tục khi khởi động. Chu kỳ 8,5 giây, chuyển mờ 1,15 giây trên thiết bị không bật giảm chuyển động.
-
-Ảnh đầu tiên được chọn ngẫu nhiên ngay trong HTML trước khi màn hình đăng nhập được vẽ. Danh sách được tạo lại từ kho ảnh lúc build. Khi đăng xuất, hệ thống sử dụng ảnh ngẫu nhiên đã tải sẵn nếu có. Không dùng ảnh xem trước hoặc hiệu ứng mới.
-
-Sau khi tải ảnh mới lên GitHub và Vercel triển khai, danh sách ảnh nền tự cập nhật.
+Các file được thêm trên GitHub cần một lượt build/deploy mới để xuất hiện trong danh sách.

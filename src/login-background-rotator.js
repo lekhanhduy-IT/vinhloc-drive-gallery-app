@@ -53,23 +53,24 @@
     } catch (_) { return String(src || ''); }
   }
   const initialUrl = /url\((['"]?)(.*?)\1\)/.exec(overlay.style.backgroundImage);
-  let current = canonical(window.__vlInitialLoginPhoto || (initialUrl ? initialUrl[2] : builtInSources[0]));
-  let firstSession = true;
-  let preloadedReturn = null;
+  let current = canonical(initialUrl ? initialUrl[2] : builtInSources[0]);
+  let readyForNextLogin = null;
   let preloadEpoch = 0;
-  function prepareForReturn() {
-    const candidates = sources.filter(src => canonical(src) !== current);
-    if (!candidates.length) return;
-    const candidate = candidates[Math.floor(Math.random() * candidates.length)];
-    const generation = ++preloadEpoch;
-    const image = new Image();
-    preloadedReturn = null;
-    image.onload = () => {
-      if (generation === preloadEpoch) preloadedReturn = {src:candidate,image};
+  let wasVisible = false;
+  function prepareForNextLogin() {
+    const epoch = ++preloadEpoch;
+    readyForNextLogin = null;
+    const choices = sources.filter(src => canonical(src) !== current);
+    if (!choices.length) return;
+    const src = choices[Math.floor(Math.random() * choices.length)];
+    const img = new Image();
+    img.onload = () => {
+      if (epoch === preloadEpoch) readyForNextLogin = {src, img};
     };
-    image.onerror = () => {};
-    image.src = candidate;
+    img.onerror = () => {};
+    img.src = src;
   }
+
 
   function shown() {
     if (document.hidden || overlay.hidden || overlay.classList.contains('hidden')) return false;
@@ -89,9 +90,6 @@
       if (token === generation && visible) void changeOne(token);
     }, remaining);
   }
-  function retireInitialPhoto() {
-    document.getElementById('vl-login-first-frame')?.remove();
-  }
   function onVisibility() {
     const nowVisible = shown();
     // The overlay's style attribute changes at the end of each fade; those
@@ -102,19 +100,17 @@
     cancelTimer();
     layer.classList.remove('is-visible');
     if (!visible) {
-      // During signed-in time, decode a random next initial photo.
-      prepareForReturn();
+      // Prepare ONE random candidate while signed in, so a subsequent
+      // logout can start with an already loaded image, not a flash.
+      prepareForNextLogin();
       return;
     }
-    if (firstSession) {
-      firstSession = false; // The head script already selected the first photo.
-    } else if (preloadedReturn && canonical(preloadedReturn.src) !== current) {
-      overlay.style.backgroundImage = 'url(' + JSON.stringify(preloadedReturn.src) + ')';
-      retireInitialPhoto();
-      current = canonical(preloadedReturn.src);
-      preloadedReturn = null;
-      ++preloadEpoch;
+    if (wasVisible && readyForNextLogin && canonical(readyForNextLogin.src) !== current) {
+      overlay.style.backgroundImage = 'url(' + JSON.stringify(readyForNextLogin.src) + ')';
+      current = canonical(readyForNextLogin.src);
     }
+    wasVisible = true;
+    readyForNextLogin = null;
     sources = shuffle(sources.slice());
     cursor = 0;
     allowedAt = Math.max(allowedAt, Date.now() + INTERVAL_MS);
@@ -175,7 +171,6 @@
       if (media?.matches) {
         // Reduced motion removes animation only, NEVER stops the slideshow.
         overlay.style.backgroundImage = cssImage;
-        retireInitialPhoto();
       } else {
         layer.classList.remove('is-visible');
         layer.style.backgroundImage = cssImage;
@@ -185,7 +180,6 @@
         await sleep(FADE_MS);
         if (token !== generation || !visible) return;
         overlay.style.backgroundImage = cssImage;
-        retireInitialPhoto();
         layer.classList.remove('is-visible');
       }
       current = canonical(candidate);
