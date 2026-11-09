@@ -6,7 +6,6 @@
   const overlay = document.getElementById('auth-overlay');
   const preview = document.getElementById('vl-login-backgrounds');
   if (!overlay || !preview) return;
-  const fade = "linear-gradient(to bottom, transparent 0%, transparent 30%, rgba(255,255,255,.12) 41%, rgba(255,255,255,.78) 63%, #ffffff 82%)";
   const baseSources = ["/login-backgrounds/316e9496-bd61-457c-a431-37259a524b75.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_37%209%20thg%2011%2C%202026-1.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_38%209%20thg%2011%2C%202026-2.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_38%209%20thg%2011%2C%202026-3.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_39%209%20thg%2011%2C%202026-4.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_40%209%20thg%2011%2C%202026-5.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_40%209%20thg%2011%2C%202026-6.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_41%209%20thg%2011%2C%202026-7.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_42%209%20thg%2011%2C%202026-8.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_43%209%20thg%2011%2C%202026-9.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_43%209%20thg%2011%2C%202026-10.png"];
   const remoteBases = [
     'https://raw.githubusercontent.com/lekhanhduy-IT/vinhloc-drive-gallery-app/main/public',
@@ -41,7 +40,7 @@
     });
   }
   function cssBackground(url) {
-    return fade + ', url(' + JSON.stringify(url) + ')';
+    return 'url(' + JSON.stringify(url) + ')';
   }
   async function findWorkingImage(src) {
     if (!src.startsWith('/login-backgrounds/')) return null;

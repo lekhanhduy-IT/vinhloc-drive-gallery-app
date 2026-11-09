@@ -2,8 +2,8 @@
    The transparent preview layer only cross-fades; it can never mask the photo. */
 #auth-overlay {
   isolation: isolate;
-  background-size: 100% 100%, cover !important;
-  background-position: center center, center 25% !important;
+  background-size: cover !important;
+  background-position: center 25% !important;
   background-repeat: no-repeat !important;
 }
 #vl-login-backgrounds {
@@ -13,9 +13,9 @@
   opacity: 0;
   pointer-events: none;
   background-color: transparent;
-  background-size: 100% 100%, cover;
+  background-size: cover;
   background-repeat: no-repeat;
-  background-position: center center, center 25%;
+  background-position: center 25%;
   transition: opacity 1100ms ease-in-out;
 }
 #vl-login-backgrounds.is-visible { opacity: 1; }
@@ -36,4 +36,12 @@
 }
 @media (prefers-reduced-motion: reduce) {
   #vl-login-backgrounds { transition: none !important; }
+}
+
+/* Keep the login layout fixed; shift only the animated image visually.
+   The extra space below the GIF remains slightly larger than title-to-version. */
+#auth-overlay .vl-login-panel > img[src$="LOAD.gif"] {
+  position: relative;
+  top: 56px;
+  max-width: 100%;
 }

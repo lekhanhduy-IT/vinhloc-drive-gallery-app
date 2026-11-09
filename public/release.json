@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.46",
-  "deployment_purpose": "Continuous capture with Drive queue; safe-area media viewer controls; folder-specific scroll restoration; no delete navigation flicker; sidebar active icon and text only.",
+  "version": "3.1.47",
+  "deployment_purpose": "Remove white wallpaper fade outside login card, switch loader to the existing LOAD.gif and shift GIF 56px closer to login heading without moving form.",
   "deployment_trigger_date": "2026-11-09"
 }
