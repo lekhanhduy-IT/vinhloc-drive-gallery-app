@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.60",
-  "deployment_purpose": "Keep v3.1.54 original full-image wallpaper rendering but randomly select the FIRST image synchronously in HTML head; preload a different random picture when signed in for logout, while preserving 8.5s cycle and existing login UI.",
+  "version": "3.1.61",
+  "deployment_purpose": "Fix blank blue login background on cold first load with truly embedded first-paint preview chosen at random in Vite transformIndexHtml; verify emitted HTML, then upgrade same photo to high-res. Keep 8.5-second rotation and existing login UI.",
   "deployment_trigger_date": "2026-11-09"
 }
