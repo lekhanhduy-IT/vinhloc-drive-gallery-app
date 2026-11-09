@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.52",
-  "deployment_purpose": "Prevent duplicate asynchronous Google sign-in buttons at initial login/logout, and reserve a single fixed-height button slot to stop login group from shifting.",
+  "version": "3.1.53",
+  "deployment_purpose": "Prevent Google login button flicker on iOS: hide native GIS iframe until its first paint stabilizes, preserve fixed 48px layout, adopt existing iframe without replacing it.",
   "deployment_trigger_date": "2026-11-09"
 }

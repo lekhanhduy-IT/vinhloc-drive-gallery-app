@@ -17,6 +17,51 @@
   const renderStates = new WeakMap();
   let installedSDK = null;
 
+  // Keep the native Google iframe invisible during its intermediate paints.
+  // The host keeps its 48px footprint, so the login layout never shifts.
+  const appearanceGates = new WeakMap();
+  function gateNativeButton(element) {
+    if (element.id !== 'google-login-btn') return;
+    let gate = appearanceGates.get(element);
+    if (gate) { gate.sync(); return; }
+    gate = {frame: null, timer: null, fallback: null, sync: null};
+    appearanceGates.set(element, gate);
+
+    function cancel() {
+      if (gate.timer !== null) clearTimeout(gate.timer);
+      if (gate.fallback !== null) clearTimeout(gate.fallback);
+      gate.timer = null;
+      gate.fallback = null;
+    }
+    function markReady(frame) {
+      if (element.querySelector('iframe') !== frame || !element.isConnected) return;
+      element.classList.add('vl-google-ready');
+    }
+    function afterLoad(frame) {
+      if (gate.frame !== frame) return;
+      cancel();
+      // Allow iOS Safari to complete the cross-origin iframe paint before
+      // showing the one interactive Google button.
+      gate.timer = setTimeout(() => markReady(frame), 250);
+    }
+    function sync() {
+      const frame = element.querySelector('iframe');
+      if (frame === gate.frame) return;
+      cancel();
+      gate.frame = frame;
+      element.classList.remove('vl-google-ready');
+      if (!frame) return;
+      // The iframe may already have fired load before we observed it.
+      frame.addEventListener('load', () => afterLoad(frame), {once: true});
+      // A load event is not guaranteed on every iOS PWA resume. Never leave
+      // a valid native button hidden forever if Google missed that event.
+      gate.fallback = setTimeout(() => markReady(frame), 1600);
+    }
+    gate.sync = sync;
+    new MutationObserver(sync).observe(element, {childList: true, subtree: true});
+    sync();
+  }
+
   function sizeFor(element) {
     const available = Math.max(140, (window.innerWidth || 390) - 90);
     // <200px is the documented supported method to disable Google's
@@ -69,6 +114,13 @@
 
       if (isShare && element.id === 'google-login-btn') {
         element.replaceChildren();
+        return;
+      }
+      gateNativeButton(element);
+      // Another initializer may already have rendered this native iframe
+      // before our wrapper arrived. Adopt it; never destroy a working button.
+      if (element.querySelector('iframe') && !renderStates.has(element)) {
+        renderStates.set(element, {phase: 'ready', started: Date.now(), observer: null});
         return;
       }
       const previous = renderStates.get(element);
@@ -147,6 +199,7 @@
       } catch (error) {
         state.observer?.disconnect();
         renderStates.delete(element);
+        // There is no iframe to reveal when the renderer actually failed.
         throw error;
       }
     }
