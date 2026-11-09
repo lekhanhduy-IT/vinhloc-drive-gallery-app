@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.53",
-  "deployment_purpose": "Prevent Google login button flicker on iOS: hide native GIS iframe until its first paint stabilizes, preserve fixed 48px layout, adopt existing iframe without replacing it.",
+  "version": "3.1.54",
+  "deployment_purpose": "Unify desktop/mobile login background timer: always rotate every >=8.5s even with reduced motion; avoid image bursts on login/logout/reload; bound image loading and show one candidate per cycle.",
   "deployment_trigger_date": "2026-11-09"
 }
