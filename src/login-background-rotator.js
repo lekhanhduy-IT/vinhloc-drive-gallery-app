@@ -100,6 +100,9 @@
     return null;
   }
   function paint(src,url) {
+    // Cancel late completion of the first high-res image so it cannot
+    // overwrite a newer slide or a freshly randomized login session.
+    overlay.dataset.vlLoginPhoto = src;
     overlay.style.backgroundImage = 'url(' + JSON.stringify(url) + ')';
     current = src;
   }

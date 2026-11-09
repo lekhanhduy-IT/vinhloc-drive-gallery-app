@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.56",
-  "deployment_purpose": "Fix blue login splash while first randomized photo loads: high-priority preload in head and direct image assignment during auth-overlay creation; preserve 11-photo shuffle and 8.5s rotation.",
+  "version": "3.1.57",
+  "deployment_purpose": "Remove blue first-paint login on desktop and mobile by generating tiny same-photo PNG previews during prebuild, embedding previews in login bootstrap, then replacing in place on full-image load; keep random order and 8.5s slideshow.",
   "deployment_trigger_date": "2026-11-09"
 }
