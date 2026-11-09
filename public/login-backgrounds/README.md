@@ -1,11 +1,13 @@
-# Kho ảnh nền đăng nhập QL Ảnh
+# Hình nền đăng nhập QL Ảnh
 
-Đặt ảnh PNG vào `public/login-backgrounds/` và push lên GitHub. Lệnh build tạo lại `backgrounds.json` và đưa **ảnh xem trước nhỏ của từng ảnh thật** vào HTML kết quả. Đường dẫn ảnh gốc có fingerprint SHA-256 để khi ghi đè nội dung ảnh, thiết bị dùng phiên bản ảnh mới.
+Bạn có thể **tự tải ảnh** (PNG, JPG, JPEG, WebP, AVIF) vào thư mục `public/login-backgrounds/`.
 
-**Lần mở đầu trên thiết bị mới:** HTML chứa ảnh xem trước nên hình nền ngẫu nhiên có thể được vẽ ngay trong lần dựng giao diện đầu, không đợi tải ảnh gốc lớn. Ảnh gốc được tải và giải mã rồi mới thay thế ảnh xem trước. Không có màn hình nền màu trống nếu bản build hợp lệ.
+- Hiện có 11 ảnh. Khi deploy, `npm run build` tự quét các file ảnh và tạo lại `backgrounds.json`; không cần thêm từng file bằng tay.
+- Trang đăng nhập lấy danh sách trong `backgrounds.json`, **xáo trộn thứ tự** và **chuyển ảnh sau mỗi 8,5 giây** bằng hiệu ứng mờ.
+- Trên điện thoại, ảnh tập trung phía trên; phần dưới trắng dần để nút Google và thông tin đăng nhập dễ đọc.
+- Ảnh tiếp theo chỉ tải sau khi ảnh trước xuất hiện; khi tab ẩn hoặc đã đóng màn hình đăng nhập sẽ tạm dừng.
+- Nếu không có ảnh hoặc ảnh lỗi, màn hình đăng nhập vẫn hiển thị nền trắng và hoạt động bình thường.
+- Ảnh thuộc `public` được truy cập công khai. Không đưa dữ liệu riêng tư vào đây.
+- Không có đồng bộ ảnh từ Google Drive.
 
-**Các lần tiếp theo:** Service Worker `/login-photos-sw.js` chỉ cache ảnh `/login-backgrounds/`; nó không cache HTML, API hay thông tin đăng nhập. Tải dần 11 ảnh qua hai kết nối khi ứng dụng đang mở, rồi dùng cache-first ở các lần mở sau. Việc này tốn dữ liệu khoảng 19 MB một lần cho mỗi thiết bị khi cache chưa có. Một thiết bị mới không thể dùng trực tiếp bộ nhớ cache của thiết bị khác; nó vẫn cần tải lần đầu. Trình duyệt/iOS có thể xóa cache khi thiếu dung lượng hoặc khi người dùng xóa dữ liệu.
-
-Giữ tỷ lệ ảnh `cover`, vị trí `center 25%`, GIF, nút Google, chu kỳ chuyển 8,5 giây và chuyển mờ 1,15 giây của phiên bản 3.1.54.
-
-Build sẽ thất bại nếu HTML cuối cùng không chứa ảnh PNG xem trước. Hiện hỗ trợ ảnh PNG để tạo preview; các định dạng khác cần bổ sung bộ giải mã trước khi đưa vào kho.
+Các file được thêm trên GitHub cần một lượt build/deploy mới để xuất hiện trong danh sách.

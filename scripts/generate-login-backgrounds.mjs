@@ -1,14 +1,24 @@
-// Source of truth for all login backgrounds. New/changed photos are
-// detected by their content hash, so every device fetches the new version.
-import { writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { listLoginPhotos, photoDirectory } from './login-photo-assets.mjs';
+// Regenerate the static login photo manifest before Vite's dev/build commands.
+// New images added to public/login-backgrounds are automatically included at the next deploy.
+import { readdir, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 
-const photos=await listLoginPhotos();
-const manifest={
-  version:2,
-  title:'QL Ảnh — login background collection',
-  images:photos.map(({src,alt})=>({src,alt}))
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const directory = resolve(root, 'public/login-backgrounds');
+const files = await readdir(directory, { withFileTypes: true });
+const photos = files
+  .filter(entry => entry.isFile() && /\.(png|jpe?g|webp|avif)$/i.test(entry.name))
+  .map(entry => entry.name)
+  .sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }));
+const manifest = {
+  version: 1,
+  title: 'QL Ảnh — login background collection',
+  description: 'Auto-rotating login backgrounds; regenerated from the images in this directory during build.',
+  images: photos.map(name => ({
+    src: '/login-backgrounds/' + encodeURIComponent(name),
+    alt: name.replace(/\.[^.]+$/, '')
+  }))
 };
-await writeFile(resolve(photoDirectory,'backgrounds.json'),JSON.stringify(manifest,null,2)+'\n');
-console.log('[login] prepared '+photos.length+' photo URLs with content fingerprints');
+await writeFile(resolve(directory, 'backgrounds.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+console.log('[login backgrounds] ' + photos.length + ' image(s) registered.');

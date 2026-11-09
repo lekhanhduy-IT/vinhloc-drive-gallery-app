@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.67",
-  "deployment_purpose": "Fix persistent blue login screen by directly painting selected inline PNG as background-image on #auth-overlay with a true photographic fallback in final HTML; preserve 11-photo cache-first SW, login UI and 8.5s fade. Browser-rendered visual test validated that fallback color is covered.",
+  "version": "3.1.68",
+  "deployment_purpose": "Restore original v3.1.54 login background display and slideshow exactly: hardcoded first wallpaper, 8.5s rotation and 1.15s fade. Revert experimental photo selectors, inline previews, Vite plugin and image-only service worker. Preserve all later non-login features.",
   "deployment_trigger_date": "2026-11-09"
 }
