@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.59",
-  "deployment_purpose": "Revert all login first-paint preview/bootstrap experiments to the proven 3.1.54 full-image mechanism, preserving photo and layout; only reshuffle slideshow order when returning to login, preserving 8.5-second pacing and nested thumbnail features.",
+  "version": "3.1.60",
+  "deployment_purpose": "Keep v3.1.54 original full-image wallpaper rendering but randomly select the FIRST image synchronously in HTML head; preload a different random picture when signed in for logout, while preserving 8.5s cycle and existing login UI.",
   "deployment_trigger_date": "2026-11-09"
 }

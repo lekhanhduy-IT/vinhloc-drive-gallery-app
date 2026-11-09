@@ -53,7 +53,23 @@
     } catch (_) { return String(src || ''); }
   }
   const initialUrl = /url\((['"]?)(.*?)\1\)/.exec(overlay.style.backgroundImage);
-  let current = canonical(initialUrl ? initialUrl[2] : builtInSources[0]);
+  let current = canonical(window.__vlInitialLoginPhoto || (initialUrl ? initialUrl[2] : builtInSources[0]));
+  let firstSession = true;
+  let preloadedReturn = null;
+  let preloadEpoch = 0;
+  function prepareForReturn() {
+    const candidates = sources.filter(src => canonical(src) !== current);
+    if (!candidates.length) return;
+    const candidate = candidates[Math.floor(Math.random() * candidates.length)];
+    const generation = ++preloadEpoch;
+    const image = new Image();
+    preloadedReturn = null;
+    image.onload = () => {
+      if (generation === preloadEpoch) preloadedReturn = {src:candidate,image};
+    };
+    image.onerror = () => {};
+    image.src = candidate;
+  }
 
   function shown() {
     if (document.hidden || overlay.hidden || overlay.classList.contains('hidden')) return false;
@@ -82,9 +98,19 @@
     generation++;
     cancelTimer();
     layer.classList.remove('is-visible');
-    if (!visible) return;
-    // A new login screen session must start with a fresh randomized order.
-    // Keep the currently painted image unchanged (no startup flash).
+    if (!visible) {
+      // During signed-in time, decode a random next initial photo.
+      prepareForReturn();
+      return;
+    }
+    if (firstSession) {
+      firstSession = false; // The head script already selected the first photo.
+    } else if (preloadedReturn && canonical(preloadedReturn.src) !== current) {
+      overlay.style.backgroundImage = 'url(' + JSON.stringify(preloadedReturn.src) + ')';
+      current = canonical(preloadedReturn.src);
+      preloadedReturn = null;
+      ++preloadEpoch;
+    }
     sources = shuffle(sources.slice());
     cursor = 0;
     allowedAt = Math.max(allowedAt, Date.now() + INTERVAL_MS);

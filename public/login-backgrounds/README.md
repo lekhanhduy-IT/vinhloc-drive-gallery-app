@@ -6,6 +6,6 @@ Cơ chế hình nền được giữ nguyên như bản 3.1.54: ảnh mặc đ�
 
 Sau mỗi lần mở màn hình đăng nhập, hệ thống **xáo trộn thứ tự các ảnh trong vòng luân phiên**, không chuyển ảnh liên tục khi khởi động. Chu kỳ 8,5 giây, chuyển mờ 1,15 giây trên thiết bị không bật giảm chuyển động.
 
-Để bảo đảm không làm xuất hiện màu nền trống hoặc nhảy ảnh khi khởi động, ảnh đầu tiên đang dùng ảnh mặc định gắn trong HTML. Các ảnh ở lượt tiếp theo được xáo trộn ngẫu nhiên. Chọn ngẫu nhiên ảnh đầu tiên trên một thiết bị mới chưa có bộ nhớ đệm sẽ yêu cầu thay đổi cơ chế tải ảnh; không thực hiện trong bản sửa này.
+Ảnh đầu tiên được chọn ngẫu nhiên ngay trong HTML trước khi màn hình đăng nhập được vẽ. Danh sách được tạo lại từ kho ảnh lúc build. Khi đăng xuất, hệ thống sử dụng ảnh ngẫu nhiên đã tải sẵn nếu có. Không dùng ảnh xem trước hoặc hiệu ứng mới.
 
 Sau khi tải ảnh mới lên GitHub và Vercel triển khai, danh sách ảnh nền tự cập nhật.
