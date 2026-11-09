@@ -1,7 +1,9 @@
-/* The real login background is painted directly on #auth-overlay.
-   The transparent preview layer only cross-fades; it can never mask the photo. */
+/* Login wallpaper uses one unchanged image at a time.
+   cover fills the entire screen while preserving its original aspect ratio.
+   No duplicated pseudo-element photo, white form card, blur or gradient. */
 #auth-overlay {
   isolation: isolate;
+  background-color: #01adee !important;
   background-size: cover !important;
   background-position: center 25% !important;
   background-repeat: no-repeat !important;
@@ -10,57 +12,43 @@
   position: absolute;
   inset: 0;
   z-index: 0;
-  opacity: 0;
   pointer-events: none;
-  background-color: transparent;
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-position: center 25%;
+  opacity: 0;
+  background-color: transparent !important;
+  background-size: cover !important;
+  background-position: center 25% !important;
+  background-repeat: no-repeat !important;
   transition: opacity 1100ms ease-in-out;
 }
 #vl-login-backgrounds.is-visible { opacity: 1; }
-#auth-overlay .vl-login-panel {
+/* Remove the duplicated and blurred lower wallpaper added in v3.1.48. */
+#auth-overlay::before,
+#auth-overlay::after,
+#vl-login-backgrounds::before,
+#vl-login-backgrounds::after {
+  content: none !important;
+  display: none !important;
+}
+/* The login group has no CSS-created white or translucent panel. */
+#auth-overlay .vl-login-panel,
+#auth-overlay .rounded-3xl.vl-login-panel {
   position: relative;
   z-index: 1;
-  background: rgba(255,255,255,.92);
-  border-radius: 24px;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 @media (max-width: 767px) {
-  #auth-overlay {
-    justify-content: center !important;
-  }
-  #auth-overlay .vl-login-panel {
-    margin: 0;
-    background: rgba(255,255,255,.94);
-  }
+  #auth-overlay { justify-content: center !important; }
+  #auth-overlay .vl-login-panel { margin: 0 !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   #vl-login-backgrounds { transition: none !important; }
 }
-
-/* The uploaded thumbnail is itself white near the bottom.
-   Reuse its photographic upper area as a soft continuation BELOW the card;
-   unlike a white gradient, this remains colorful on tall PWA screens. */
-#auth-overlay::before,
-#vl-login-backgrounds::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  display: block;
-  pointer-events: none;
-  background-image:
-    linear-gradient(to bottom, rgba(1,173,238,.05),rgba(1,173,238,.13)),
-    var(--vl-login-photo);
-  background-repeat: no-repeat;
-  background-position: center, center top;
-  background-size: 100% 100%, 100% 255%;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, transparent 55%, #000 77%, #000 100%);
-  mask-image: linear-gradient(to bottom, transparent 0%, transparent 55%, #000 77%, #000 100%);
-  filter: blur(16px) saturate(1.18);
-}
-#auth-overlay::before { z-index: 0; }
-#vl-login-backgrounds::before { z-index: 0; }
-
 /* No visual offset: GIF and heading occupy normal document flow. */
 #auth-overlay .vl-login-panel #vl-login-animation {
   display: block;

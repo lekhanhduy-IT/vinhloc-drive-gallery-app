@@ -66,15 +66,12 @@
       const background = cssBackground(result);
       if (reducedMotion.matches) {
         overlay.style.backgroundImage = background;
-        overlay.style.setProperty('--vl-login-photo', 'url(' + JSON.stringify(result) + ')');
         return;
       }
       preview.style.backgroundImage = background;
-      preview.style.setProperty('--vl-login-photo', 'url(' + JSON.stringify(result) + ')');
       preview.classList.add('is-visible');
       await sleep(FADE_MS);
       overlay.style.backgroundImage = background;
-      overlay.style.setProperty('--vl-login-photo', 'url(' + JSON.stringify(result) + ')');
       preview.classList.remove('is-visible');
     } catch (error) {
       console.warn('[login backgrounds] Failed to switch photo:', error);

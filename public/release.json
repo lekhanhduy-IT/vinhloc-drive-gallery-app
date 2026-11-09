@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.48",
-  "deployment_purpose": "Fix LOAD.gif overlap; match its width to measured login heading; fill white area below popup with a blurred continuation of the upper photo while preserving slideshow.",
+  "version": "3.1.49",
+  "deployment_purpose": "Remove CSS white login card and repeated blurred wallpaper; show original background image with aspect-ratio-preserving cover at full screen; keep existing LOAD.gif and layout.",
   "deployment_trigger_date": "2026-11-09"
 }
