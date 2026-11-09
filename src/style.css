@@ -913,3 +913,26 @@ body > #infoFolderImagePicker > div {
     padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
   }
 }
+
+
+/* v3.1.69: place the mini paste destination browser BELOW the actual app
+   header. The legacy popup used top:85px and its title hid behind the
+   iPhone PWA header/status area. No changes to paste/selection logic. */
+body > #pastePopup{
+  top:calc(var(--vl-paste-header-bottom,85px) + 12px)!important;
+  right:max(10px,env(safe-area-inset-right,0px))!important;
+  max-width:calc(100vw - 20px)!important;
+  max-height:min(66dvh,calc(100dvh - var(--vl-paste-header-bottom,85px) - 24px))!important;
+  z-index:1000002!important;
+  box-sizing:border-box!important;
+}
+body > #pastePopup > :first-child{flex:none;min-width:0}
+body > #pastePopup #pastePopupContent{
+  flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+}
+@supports not (height:100dvh){
+  body > #pastePopup {
+    max-height:min(66vh,calc(100vh - var(--vl-paste-header-bottom,85px) - 24px))!important;
+  }
+}

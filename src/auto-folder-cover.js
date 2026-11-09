@@ -243,14 +243,70 @@
       'Đã gán thumbnail từ ảnh trực tiếp hoặc ảnh ở mọi cấp folder con.';
     refreshVisible();
   }
+  // Non-blocking, branded confirmation for the Admin's one-time cover job.
+  // The job state is not touched until the user explicitly confirms.
+  function confirmCoverRun(overwrite){
+    return new Promise(resolve=>{
+      const previous=document.activeElement;
+      const dialog=document.createElement('div');
+      dialog.id='vlCoverRunConfirm';
+      dialog.setAttribute('role','presentation');
+      dialog.innerHTML=
+        '<section class="vl-cover-confirm-card" role="alertdialog" aria-modal="true" '+
+        'aria-labelledby="vlCoverConfirmTitle" aria-describedby="vlCoverConfirmText">'+
+        '<div class="vl-cover-confirm-icon" aria-hidden="true">✓</div>'+
+        '<h2 id="vlCoverConfirmTitle">Xác nhận gán thumbnail</h2>'+
+        '<p id="vlCoverConfirmText"></p>'+
+        '<div class="vl-cover-confirm-actions">'+
+        '<button type="button" data-cover-cancel>Hủy</button>'+
+        '<button type="button" data-cover-approve>Xác nhận</button>'+
+        '</div></section>';
+      const message=dialog.querySelector('#vlCoverConfirmText');
+      message.textContent=overwrite?
+        'Chạy từ 06. HÌNH ẢNH CONTENT và GHI ĐÈ cả thumbnail đã có?':
+        'Chỉ duyệt 06. HÌNH ẢNH CONTENT cùng các thư mục con, lưu thumbnail ngay khi đến từng folder và giữ ảnh bìa đã có?';
+      const approve=dialog.querySelector('[data-cover-approve]');
+      const cancel=dialog.querySelector('[data-cover-cancel]');
+      approve.textContent=overwrite?'Ghi đè thumbnail':'Bắt đầu';
+      if(overwrite)approve.classList.add('vl-cover-confirm-danger');
+      let finished=false;
+      const onKey=event=>{
+        if(event.key==='Escape'){
+          event.preventDefault();event.stopPropagation();finish(false);
+        }else if(event.key==='Tab'){
+          const current=document.activeElement;
+          if(event.shiftKey&&current===cancel){
+            event.preventDefault();approve.focus();
+          }else if(!event.shiftKey&&current===approve){
+            event.preventDefault();cancel.focus();
+          }
+        }
+      };
+      function finish(accepted){
+        if(finished)return;
+        finished=true;
+        document.removeEventListener('keydown',onKey,true);
+        dialog.remove();
+        if(previous?.isConnected&&typeof previous.focus==='function')previous.focus();
+        resolve(accepted);
+      }
+      dialog.addEventListener('click',event=>{
+        if(event.target===dialog)finish(false);
+      });
+      cancel.addEventListener('click',()=>finish(false));
+      approve.addEventListener('click',()=>finish(true));
+      document.body.appendChild(dialog);
+      document.addEventListener('keydown',onKey,true);
+      cancel.focus();
+    });
+  }
+
   async function start(){
     if(running||!admin()||!email())return;
     const begin=!job||job.owner!==email()||job.phase==='done';
     if(begin){
       const overwrite=el('vlCoverAutoOverwrite').checked;
-      if(!window.confirm(overwrite?
-        'Chạy từ 06. HÌNH ẢNH CONTENT và GHI ĐÈ cả thumbnail đã có?':
-        'Chỉ duyệt 06. HÌNH ẢNH CONTENT cùng các thư mục con, lưu thumbnail ngay khi đến từng folder và giữ ảnh bìa đã có?'))return;
+      if(!await confirmCoverRun(overwrite))return;
       job=fresh(overwrite);
       try{await saveState();}
       catch(error){notice='Lỗi: '+error.message;paint();return;}

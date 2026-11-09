@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.68",
-  "deployment_purpose": "Restore original v3.1.54 login background display and slideshow exactly: hardcoded first wallpaper, 8.5s rotation and 1.15s fade. Revert experimental photo selectors, inline previews, Vite plugin and image-only service worker. Preserve all later non-login features.",
+  "version": "3.1.69",
+  "deployment_purpose": "Use branded custom confirmation instead of browser confirm for Admin one-time recursive folder thumbnail operation; position paste destination popup below the measured top app header on iPhone and desktop. No gallery/paste or login wallpaper logic changes.",
   "deployment_trigger_date": "2026-11-09"
 }

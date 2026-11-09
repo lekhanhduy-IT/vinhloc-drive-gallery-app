@@ -79,3 +79,58 @@ body[data-vl-account-view="true"] #contentArea > #fileList{display:none!importan
   #vlCoverAutoCard .vl-cover-progress-fill{transition:none}
   #vlCoverAutoCard .vl-cover-progress-running .vl-cover-progress-fill:after,#vlCoverAutoCard .vl-cover-progress-running:before{animation:none}
 }
+
+
+/* v3.1.69: custom confirmation for the admin single-pass thumbnail job.
+   Rendered directly under body, above the app header/sidebar and iOS notch. */
+body > #vlCoverRunConfirm{
+  position:fixed;inset:0;z-index:2000001;
+  display:flex;align-items:center;justify-content:center;
+  box-sizing:border-box;
+  padding:max(20px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px))
+          max(20px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
+  background:rgba(10,30,49,.58);backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px);
+}
+#vlCoverRunConfirm .vl-cover-confirm-card{
+  box-sizing:border-box;width:min(100%,440px);max-height:100%;overflow-y:auto;
+  background:#fff;border:1px solid #dbeaf2;border-radius:20px;
+  box-shadow:0 24px 70px rgba(7,34,53,.23);
+  padding:clamp(20px,4vw,28px);font-family:Roboto,system-ui,sans-serif;
+  color:#233449;text-align:left;
+}
+#vlCoverRunConfirm .vl-cover-confirm-icon{
+  display:grid;place-items:center;width:48px;height:48px;
+  border-radius:15px;background:#eaf9ff;color:#01adee;
+  font-size:25px;font-weight:800;margin-bottom:14px;
+}
+#vlCoverRunConfirm #vlCoverConfirmTitle{
+  font-size:20px;line-height:1.35;margin:0 0 10px;font-weight:800;color:#132c3c;
+}
+#vlCoverRunConfirm #vlCoverConfirmText{
+  font-size:14px;line-height:1.7;margin:0 0 24px;color:#50647b;overflow-wrap:anywhere;
+}
+#vlCoverRunConfirm .vl-cover-confirm-actions{
+  display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;
+}
+#vlCoverRunConfirm .vl-cover-confirm-actions button{
+  flex:1 1 130px;min-height:44px;padding:10px 14px;border-radius:11px;
+  font-size:14px;font-weight:750;cursor:pointer;transition:filter .15s;
+}
+#vlCoverRunConfirm [data-cover-cancel]{
+  background:#f0f4f8;color:#34475c;border:1px solid #dde5ed;
+}
+#vlCoverRunConfirm [data-cover-approve]{
+  background:#01adee;color:white;border:1px solid #01adee;
+}
+#vlCoverRunConfirm [data-cover-approve].vl-cover-confirm-danger{
+  background:#db1010;border-color:#db1010;
+}
+#vlCoverRunConfirm .vl-cover-confirm-actions button:focus-visible{
+  outline:3px solid #01adee80;outline-offset:2px;
+}
+#vlCoverRunConfirm .vl-cover-confirm-actions button:hover{filter:brightness(.96)}
+@media(max-width:520px){
+  #vlCoverRunConfirm .vl-cover-confirm-card{border-radius:17px;padding:22px 18px}
+  #vlCoverRunConfirm .vl-cover-confirm-actions button{flex-basis:110px}
+}
