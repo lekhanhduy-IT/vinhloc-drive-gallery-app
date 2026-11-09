@@ -66,7 +66,7 @@
       try { await hires.decode?.(); } catch (_) {}
       if (canonical(selected) !== current || !basePhoto.isConnected) return;
       basePhoto.src = selected;
-      overlay.style.backgroundImage = 'url(' + JSON.stringify(selected) + ')';
+      overlay.style.setProperty('background-image', 'url(' + JSON.stringify(selected) + ')', 'important');
     };
     hires.onerror = () => {
       // Keep the photographic preview; never reveal empty blue CSS.
@@ -126,7 +126,7 @@
       return;
     }
     if (wasVisible && readyForNextLogin && canonical(readyForNextLogin.src) !== current) {
-      overlay.style.backgroundImage = 'url(' + JSON.stringify(readyForNextLogin.src) + ')';
+      overlay.style.setProperty('background-image', 'url(' + JSON.stringify(readyForNextLogin.src) + ')', 'important');
       if (basePhoto) basePhoto.src = readyForNextLogin.src;
       current = canonical(readyForNextLogin.src);
     }
@@ -194,7 +194,7 @@
 
       if (media?.matches) {
         // Reduced motion removes animation only, NEVER stops the slideshow.
-        overlay.style.backgroundImage = cssImage;
+        overlay.style.setProperty('background-image', cssImage, 'important');
         if (basePhoto) basePhoto.src = url;
       } else {
         layer.classList.remove('is-visible');
@@ -204,7 +204,7 @@
         layer.classList.add('is-visible');
         await sleep(FADE_MS);
         if (token !== generation || !visible) return;
-        overlay.style.backgroundImage = cssImage;
+        overlay.style.setProperty('background-image', cssImage, 'important');
         // The fade layer is still in front while the already decoded
         // image becomes the new base. The original fade duration is intact.
         if (basePhoto) basePhoto.src = url;

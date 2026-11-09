@@ -35,6 +35,10 @@ async function injectFirstPaint(html){
     const selected=eligible[Math.floor(Math.random()*eligible.length)];
     const preview=previews[selected];
     window.__vlLoginPhotoSetup={photos,selected,preview};
+    // Chosen actual photo pixels are in the HTML already, even offline.
+    // Paint on #auth-overlay ITSELF, rather than relying on a child image.
+    document.documentElement.style.setProperty(
+      '--vl-login-first-paint','url('+JSON.stringify(preview)+')');
     try{localStorage.setItem('vl-login-last-first-photo',selected)}catch(_){}
     // Request the ONE selected large image early, but never delay its
     // already-embedded preview or the login button.
@@ -46,6 +50,9 @@ async function injectFirstPaint(html){
                  .replace('__PREVIEWS__',JSON.stringify(previews));
 
   const css=String.raw`
+  #auth-overlay {
+    background-image:var(--vl-login-first-paint, __PHOTO_FALLBACK__)!important;
+  }
   #auth-overlay #vl-login-base-photo {
     position:absolute!important;inset:0!important;
     width:100%!important;height:100%!important;
@@ -56,7 +63,7 @@ async function injectFirstPaint(html){
   }
   #auth-overlay #vl-login-backgrounds {z-index:1!important;}
   #auth-overlay .vl-login-panel {z-index:2!important;}
-  `;
+  `.replace('__PHOTO_FALLBACK__','url('+JSON.stringify(firstPreview)+')');
 
   const head=START+'\n<style id="vl-login-first-image-style">'+css+'</style>\n'+
     '<script id="vl-login-random-selection">'+headScript+'</script>\n'+END;
@@ -93,7 +100,10 @@ export default defineConfig({
           images:assets.map(({src,alt})=>({src,alt}))},null,2)+'\n','utf8');
       const html=await readFile(resolve(appRoot,buildOut,'index.html'),'utf8');
       const imageCount=(html.match(/data:image\/png;base64,/g)||[]).length;
-      if(imageCount<12 || !html.includes('id="vl-login-base-photo"') ||
+      const requiredBackground=/background-image:\s*var\(--vl-login-first-paint,\s*url\(["']?data:image\/png;base64,/;
+      if(imageCount<13 || !requiredBackground.test(html) ||
+          !html.includes("'--vl-login-first-paint'") ||
+          !html.includes('id="vl-login-base-photo"') ||
           !html.includes('id="vl-login-photo-mount"') ||
           !html.includes('id="vl-login-first-image-style"') ||
           html.includes('data:image/png;base64,undefined')) {

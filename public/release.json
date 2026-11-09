@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.66",
-  "deployment_purpose": "First paint always shows a real randomly selected inline photographic thumbnail, then the decoded original; image-only Service Worker CacheStorage warms all 11 PNGs once per device for immediate subsequent logins without changing the v3.1.54 fade and layout.",
+  "version": "3.1.67",
+  "deployment_purpose": "Fix persistent blue login screen by directly painting selected inline PNG as background-image on #auth-overlay with a true photographic fallback in final HTML; preserve 11-photo cache-first SW, login UI and 8.5s fade. Browser-rendered visual test validated that fallback color is covered.",
   "deployment_trigger_date": "2026-11-09"
 }
