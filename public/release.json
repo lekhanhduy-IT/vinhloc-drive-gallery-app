@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.50",
-  "deployment_purpose": "Prevent 3-4 rapid login wallpaper changes at launch/logout: enforce first-photo hold, a single 8.5-second timer per visible session, and cancel outdated asynchronous transitions.",
+  "version": "3.1.51",
+  "deployment_purpose": "Stabilize login viewport and centered group on first launch/logout, prevent size shifts from async Tailwind/Google fonts and GIF ResizeObserver; retain one full-cover photo crossfade.",
   "deployment_trigger_date": "2026-11-09"
 }

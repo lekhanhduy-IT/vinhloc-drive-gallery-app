@@ -1,13 +1,25 @@
-/* Login wallpaper uses one unchanged image at a time.
-   cover fills the entire screen while preserving its original aspect ratio.
-   No duplicated pseudo-element photo, white form card, blur or gradient. */
+/* Login wallpaper has one unchanged aspect-ratio-preserving cover frame.
+   The stable CSS geometry is supplied inline in the document head to prevent
+   first-paint shifts while Tailwind / fonts / Google SDK are still loading. */
 #auth-overlay {
+  position: fixed !important;
+  inset: 0 auto auto 0 !important;
+  width: 100% !important;
+  height: 100vh !important; /* fallback for older engines */
+  height: 100lvh !important; /* stable when browser chrome expands/collapses */
+  min-height: 0 !important;
+  box-sizing: border-box !important;
   isolation: isolate;
+  contain: none !important;
+  transform: none !important;
+  transition: none !important;
+  animation: none !important;
   background-color: #01adee !important;
   background-size: cover !important;
   background-position: center 25% !important;
   background-repeat: no-repeat !important;
 }
+#auth-overlay[hidden], #auth-overlay.hidden { display: none !important; }
 #vl-login-backgrounds {
   position: absolute;
   inset: 0;
@@ -18,10 +30,10 @@
   background-size: cover !important;
   background-position: center 25% !important;
   background-repeat: no-repeat !important;
+  transform: none !important;
   transition: opacity 1100ms ease-in-out;
 }
 #vl-login-backgrounds.is-visible { opacity: 1; }
-/* Remove the duplicated and blurred lower wallpaper added in v3.1.48. */
 #auth-overlay::before,
 #auth-overlay::after,
 #vl-login-backgrounds::before,
@@ -29,41 +41,70 @@
   content: none !important;
   display: none !important;
 }
-/* The login group has no CSS-created white or translucent panel. */
 #auth-overlay .vl-login-panel,
 #auth-overlay .rounded-3xl.vl-login-panel {
   position: relative;
   z-index: 1;
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: 420px !important;
   background: transparent !important;
-  background-color: transparent !important;
   background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  box-shadow: none !important;
-  border: none !important;
+  transform: none !important;
+  transition: none !important;
+  animation: none !important;
+  backface-visibility: visible !important;
+  -webkit-backface-visibility: visible !important;
 }
-@media (max-width: 767px) {
+#auth-overlay #vl-login-identity {
+  display: inline-grid !important;
+  grid-template-columns: min-content !important;
+  grid-template-rows: auto auto;
+  justify-items: center;
+  max-width: 100%;
+  vertical-align: top;
+  transform: none !important;
+}
+#auth-overlay #vl-login-animation {
+  grid-column: 1;
+  grid-row: 1;
+  display: block !important;
+  position: static !important;
+  width: 100% !important;
+  height: auto !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  margin: 0 0 30px !important;
+  flex-shrink: 0;
+  transform: none !important;
+  transition: none !important;
+  backface-visibility: visible !important;
+  -webkit-backface-visibility: visible !important;
+}
+#auth-overlay #vl-login-title {
+  grid-column: 1;
+  grid-row: 2;
+  font: 700 16px/24px system-ui,-apple-system,BlinkMacSystemFont,sans-serif !important;
+  white-space: nowrap !important;
+  margin: 0 0 16px !important;
+  color: #000 !important;
+  transform: none !important;
+}
+#auth-overlay #version-subtitle {
+  font: 400 14px/21px system-ui,-apple-system,BlinkMacSystemFont,sans-serif !important;
+  margin: 0 0 32px !important;
+  color: #000 !important;
+}
+@media (max-width:767px) {
   #auth-overlay { justify-content: center !important; }
   #auth-overlay .vl-login-panel { margin: 0 !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   #vl-login-backgrounds { transition: none !important; }
-}
-/* No visual offset: GIF and heading occupy normal document flow. */
-#auth-overlay .vl-login-panel #vl-login-animation {
-  display: block;
-  position: static !important;
-  top: auto !important;
-  left: auto !important;
-  width: var(--vl-login-heading-width, 165px) !important;
-  height: var(--vl-login-heading-width, 165px) !important;
-  max-width: 100% !important;
-  aspect-ratio: 1 / 1;
-  object-fit: contain;
-  margin: 0 auto 30px !important;
-  flex-shrink: 0;
-}
-#auth-overlay #vl-login-title {
-  white-space: nowrap;
-  position: relative;
 }

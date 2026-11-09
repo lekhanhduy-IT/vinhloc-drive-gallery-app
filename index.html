@@ -32,6 +32,56 @@
     </script>
     
  
+    <!-- First-paint login geometry: does not depend on async Tailwind/Google fonts.
+         100lvh locks iOS browser-bar viewport changes without scaling the wallpaper. -->
+    <style id="vl-login-critical">
+    #auth-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: auto;
+      box-sizing: border-box; width: 100%; height: 100vh; height: 100lvh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 24px; overflow: hidden; text-align: center;
+      background-color: #01adee; background-size: cover;
+      background-position: center 25%; background-repeat: no-repeat;
+    }
+    #auth-overlay[hidden], #auth-overlay.hidden { display: none !important; }
+    #auth-overlay .vl-login-panel {
+      position: relative; z-index: 1; box-sizing: border-box;
+      width: 100%; max-width: 420px; padding: 20px;
+      text-align: center; background: transparent;
+    }
+    #auth-overlay #vl-login-identity {
+      display: inline-grid; grid-template-columns: min-content;
+      grid-template-rows: auto auto; justify-items: center;
+      max-width: 100%; vertical-align: top;
+    }
+    #auth-overlay #vl-login-animation {
+      display: block; grid-column: 1; grid-row: 1;
+      width: 100%; min-width: 0; height: auto; aspect-ratio: 1 / 1;
+      object-fit: contain; margin: 0 0 30px;
+    }
+    #auth-overlay #vl-login-title {
+      grid-column: 1; grid-row: 2; white-space: nowrap;
+      font: 700 16px/24px system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #000; margin: 0 0 16px;
+    }
+    #auth-overlay #version-subtitle {
+      font: 400 14px/21px system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #000; margin: 0 0 32px;
+    }
+    #auth-overlay #google-login-btn {
+      display: flex; justify-content: center; align-items: center;
+      min-height: 48px; margin: 0 auto;
+    }
+    @media(min-width:640px){#auth-overlay .vl-login-panel {padding:32px;}}
+    @supports (padding:max(0px)) {
+      #auth-overlay {
+        padding-top: max(20px,env(safe-area-inset-top,0px));
+        padding-bottom: max(20px,env(safe-area-inset-bottom,0px));
+        padding-left: max(20px,env(safe-area-inset-left,0px));
+        padding-right: max(20px,env(safe-area-inset-right,0px));
+      }
+    }
+    </style>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@400;700&family=Roboto:wght@400;700&family=Saira:wght@400;700&display=swap" rel="stylesheet">
@@ -43,7 +93,7 @@
     <link rel="stylesheet" href="./src/account-management.css?v=3.1.41">
     <link rel="stylesheet" href="./src/vl-brand-theme.css?v=3.1.42">
     <link rel="stylesheet" href="./src/mobile-stability.css?v=1.0.0">
-    <link rel="stylesheet" href="./src/login-background-rotator.css?v=1.0.5">
+    <link rel="stylesheet" href="./src/login-background-rotator.css?v=1.0.6">
 
 </head>
 
@@ -52,10 +102,11 @@
     <div id="vl-login-backgrounds" aria-hidden="true"></div>
     <div class="rounded-3xl vl-login-panel p-5 sm:p-8 w-full max-w-md">
         
-        <img id="vl-login-animation" src="LOAD.gif" alt="Loading" class="object-contain mx-auto">
-        
-        <h2 id="vl-login-title" class="text-1xl font-bold text-black mb-4">QUẢN LÝ ẢNH</h2>
-        <p id="version-subtitle" class="text-black opacity-100 mb-8 text-sm">Phiên bản 3.1.50</p>
+        <div id="vl-login-identity">
+            <img id="vl-login-animation" src="LOAD.gif" alt="Loading">
+            <h2 id="vl-login-title">QUẢN LÝ ẢNH</h2>
+        </div>
+        <p id="version-subtitle" class="text-black opacity-100 mb-8 text-sm">Phiên bản 3.1.51</p>
         
         <div class="flex justify-center items-center w-full min-h-[48px]" id="google-login-btn" aria-label="Đăng nhập"></div>
         
@@ -487,7 +538,7 @@
         </div>
     </div>
 
-    <script src="./src/version-manager.js?v=1.1.50"></script>
+    <script src="./src/version-manager.js?v=1.1.51"></script>
     <script src="./src/shared-folder.js?v=1.3.1"></script>
     <script src="./src/login-auth-wait.js?v=1.0.0"></script>
     <script type="module" src="./src/login-background-rotator.js?v=1.0.6"></script>
@@ -518,7 +569,6 @@
     <script src="./src/shared-folder-preload.js?v=1.0.1"></script>
     <script src="./src/account-management.js?v=3.1.34"></script>
     <script src="./src/auto-folder-cover.js?v=3.1.41"></script>
-    <script src="./src/login-logo-layout.js?v=1.0.0"></script>
     <script src="./src/continuous-camera.js?v=1.0.0"></script>
     <script src="./src/folder-navigation-stability.js?v=1.0.0"></script>
 
