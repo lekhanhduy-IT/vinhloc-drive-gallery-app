@@ -7,11 +7,11 @@
   window.__vlAutoFolderCoverInstalled=true;
   const API='/api/bulk-folder-covers';
   const ROOT='1xWDed1IBzGdCA4r5vbds1x6AF31hSIUT';
-  const VERSION=2; // invalidate v1 full Shared Drive scan state
+  const VERSION=3; // v3: recursive descendant fallback and bottom-up assignment
   const el=id=>document.getElementById(id);
   const email=()=>String(localStorage.getItem('vinhloc_authenticated_email')||'').trim().toLowerCase();
   const admin=()=>document.body.dataset.vlAccountRole==='admin' && !window.vlShareScope;
-  const key=()=> 'vl:auto-folder-covers:v2:'+email();
+  const key=()=> 'vl:auto-folder-covers:v3:'+email();
   const fmt=n=>Number(n||0).toLocaleString('vi-VN');
   let running=false,stop=false,job=null,notice='';
 
@@ -47,8 +47,10 @@
   const isId=x=>typeof x==='string'&&/^[A-Za-z0-9_-]{10,180}$/.test(x);
   function fresh(overwrite){
     return {v:VERSION,owner:email(),overwrite,queue:[ROOT],index:0,
-      current:null,phase:'walk',found:1,scanned:0,images:0,
-      written:0,existing:0,empty:0,failed:[],lastFolder:'',updatedAt:Date.now()};
+      current:null,phase:'scan',applyIndex:-1,
+      nodes:{[ROOT]:{parent:null,name:'06. HÌNH ẢNH CONTENT',best:null,fallback:null,hasCover:false}},
+      found:1,scanned:0,images:0,written:0,existing:0,empty:0,
+      failed:[],lastFolder:'',updatedAt:Date.now()};
   }
   // Evaluate only metadata. No full-size images are downloaded or duplicated.
   function score(image){
@@ -73,9 +75,14 @@
     window.dispatchEvent(new Event('vl:bulk-covers-saved'));
   }
   function progress(){
-    const done=job?.index||0, found=Math.max(1,job?.queue?.length||0);
-    const pct=job?.phase==='done'?100:Math.min(99,Math.floor(100*done/found));
-    return {done,found,pct};
+    const found=Math.max(1,job?.queue?.length||0);
+    const scanned=job?.index||0;
+    const applied=job?.phase==='apply'||job?.phase==='done'?
+      Math.max(0,found-1-(job?.applyIndex??-1)):0;
+    const pct=job?.phase==='done'?100:job?.phase==='apply'?
+      Math.min(99,50+Math.floor(50*applied/found)):
+      Math.min(49,Math.floor(50*scanned/found));
+    return {done:scanned,applied,found,pct};
   }
   function paint(){
     const start=el('vlCoverAutoStart'),pause=el('vlCoverAutoPause');
@@ -96,14 +103,15 @@
     bar.classList.toggle('vl-cover-progress-running',running);
     fill.style.width=(job?p.pct:0)+'%';
     el('vlCoverAutoPercent').textContent=(job?p.pct:0)+'%';
-    el('vlCoverAutoProgressCount').textContent=
-      job?fmt(p.done)+' / '+fmt(p.found)+' folder đã tìm thấy':'Chưa bắt đầu';
+    el('vlCoverAutoProgressCount').textContent=job?
+      fmt(p.done)+' đã duyệt · '+fmt(p.applied)+' đã xử lý / '+fmt(p.found)+' folder':'Chưa bắt đầu';
     const msg=el('vlCoverAutoMessage');
     const status=el('vlCoverAutoStats');
     if(job){
       const current=job.current;
       const action=job.phase==='done'?'Đã hoàn tất':
-        running?'Đang xử lý từng folder':'Đã tạm dừng';
+        running?(job.phase==='scan'?'Đang tìm ảnh trong tất cả folder con':
+          'Đang gán ảnh từ folder con lên folder cha'):'Đã tạm dừng';
       status.textContent=action+' · Đã kiểm tra '+fmt(job.images)+' ảnh'+
         ' · Đã gán '+fmt(job.written)+' thumbnail'+
         ' · Đã có '+fmt(job.existing)+
@@ -111,8 +119,9 @@
         (job.skippedGone?' · Đã xóa '+fmt(job.skippedGone):'')+
         (job.failed.length?' · Lỗi '+fmt(job.failed.length):'');
       el('vlCoverAutoCurrent').textContent=job.phase==='done'?
-        'Đã duyệt xong toàn bộ thư mục hiện có dưới 06. HÌNH ẢNH CONTENT':
-        'Đang duyệt: '+(current?.name||current?.id||job.queue[job.index]||'Đang chuẩn bị');
+        'Đã duyệt và gán xong từ folder con lên folder cha':
+        'Đang xử lý: '+(current?.name||current?.id||
+          (job.phase==='apply'?job.queue[job.applyIndex]:job.queue[job.index])||'Đang chuẩn bị');
     }else{
       status.textContent='Chưa chạy lần nào trên cây thư mục này.';
       el('vlCoverAutoCurrent').textContent=
@@ -120,32 +129,33 @@
     }
     msg.textContent=notice||(!can?'Chỉ tài khoản Admin được thao tác.':
       job?.phase==='done'?'Hoàn tất. ID ảnh được lưu vào Google Drive appProperties.vlCoverImageId.':
-      'Chạy tới folder nào thì gán thumbnail ngay folder đó. Có thể tạm dừng và tiếp tục.');
+      'Duyệt mọi cấp thư mục trước, rồi gán ảnh từ folder con lên cha nếu cha không có ảnh. Có thể tạm dừng và tiếp tục.');
     msg.classList.toggle('vl-error',notice.startsWith('Lỗi'));
   }
 
+  // Phase 1 scans all descendants page by page. Phase 2 traverses the
+  // discovered folder tree in reverse order to inherit child cover candidates.
   async function step(){
-    if(job.index>=job.queue.length){
-      job.phase='done';job.current=null;
-      await saveState();refreshVisible();return;
-    }
-    const id=job.queue[job.index];
-    if(!job.current||job.current.id!==id){
-      job.current={id,name:id,cursor:'',stage:'browse',best:null,
-        hasCover:false,images:0,pages:0};
-      await saveState();
-    }
-    const current=job.current;
-    if(current.stage==='browse'){
-      // Every page is strictly "folderId in parents AND trashed=false".
+    if(job.phase==='scan'){
+      if(job.index>=job.queue.length){
+        job.phase='apply';job.applyIndex=job.queue.length-1;
+        job.current=null;await saveState();paint();return;
+      }
+      const id=job.queue[job.index];
+      if(!job.current||job.current.id!==id){
+        job.current={id,name:job.nodes[id]?.name||id,cursor:'',
+          best:null,hasCover:false,pages:0};
+        await saveState();
+      }
+      const current=job.current;
       let result;
-      try{result=await send('browse',{folderId:id,pageToken:current.cursor||''});}
-      catch(error){
-        // A folder deleted/moved to trash after discovery must not block
-        // processing the remaining valid folders in the tree.
+      try{
+        result=await send('browse',{folderId:id,pageToken:current.cursor||''});
+      }catch(error){
         if(error.status===404){
           job.scanned++;job.index++;job.current=null;
           job.skippedGone=(job.skippedGone||0)+1;
+          job.nodes[id].gone=true;
           await saveState();paint();return;
         }
         throw error;
@@ -154,56 +164,74 @@
         throw Error('Danh sách con trả về không đúng folder');
       current.name=result.folderName||current.name;
       current.hasCover=!!result.hasCover;
-      const newIds=[];
       for(const item of result.items){
         if(!isId(item.id))continue;
         if(item.kind==='folder'){
-          // Prevent cycles or duplicates on unexpected Drive results.
-          if(!job.queue.includes(item.id)&&!newIds.includes(item.id))newIds.push(item.id);
+          if(!job.nodes[item.id]){
+            job.nodes[item.id]={parent:id,name:item.name||item.id,best:null,
+              fallback:null,hasCover:false};
+            job.queue.push(item.id);
+          }
         }else if(item.kind==='image'){
-          current.images++;job.images++;
-          if(current.hasCover&&!job.overwrite)continue;
+          job.images++;
           const value=score(item);
           if(!current.best||value>current.best.value||
               (value===current.best.value&&item.id<current.best.id))
             current.best={id:item.id,value};
         }
       }
-      if(newIds.length)job.queue.push(...newIds);
       job.found=job.queue.length;
       current.pages++;
       current.cursor=result.nextPageToken||'';
-      if(!current.cursor)current.stage='apply';
-      await saveState();
-      paint();
-      return;
+      if(!current.cursor){
+        const node=job.nodes[id];
+        node.best=current.best;node.hasCover=current.hasCover;
+        node.name=current.name;
+        job.scanned++;job.index++;job.current=null;
+      }
+      await saveState();paint();return;
     }
-    if(current.stage!=='apply')throw Error('Tiến độ folder không hợp lệ');
-    if(current.hasCover&&!job.overwrite){
+    if(job.phase!=='apply')throw Error('Tiến độ quét không hợp lệ');
+    if(job.applyIndex<0){
+      job.phase='done';job.current=null;
+      await saveState();refreshVisible();paint();return;
+    }
+    const id=job.queue[job.applyIndex],node=job.nodes[id];
+    job.current={id,name:node?.name||id};
+    if(!node||node.gone){
+      job.applyIndex--;job.current=null;await saveState();paint();return;
+    }
+    const chosen=node.best||node.fallback;
+    // A folder prefers a direct photo; only an empty folder uses one of
+    // its descendant images. Propagation still happens if its cover exists.
+    if(chosen&&node.parent&&job.nodes[node.parent]){
+      const parent=job.nodes[node.parent];
+      if(!parent.fallback||chosen.value>parent.fallback.value||
+          (chosen.value===parent.fallback.value&&chosen.id<parent.fallback.id))
+        parent.fallback={...chosen};
+    }
+    if(node.hasCover&&!job.overwrite){
       job.existing++;
-    }else if(!current.best){
+    }else if(!chosen){
       job.empty++;
     }else{
       const response=await send('apply',{
-        folderId:id,imageId:current.best.id,overwrite:!!job.overwrite
+        folderId:id,imageId:chosen.id,overwrite:!!job.overwrite
       });
       const result=response.result;
-      if(!result||result.folderId!==id)throw Error('Máy chủ trả sai kết quả lưu thumbnail');
+      if(!result||result.folderId!==id)
+        throw Error('Máy chủ trả sai kết quả lưu thumbnail');
       if(result.status==='written'){
         job.written++;
-        // At most one UI refresh per ten successful writes.
         if(job.written%10===0)refreshVisible();
       }else if(result.status==='existing')job.existing++;
       else if(result.status==='failed'){
         if(job.failed.length<500)job.failed.push({folderId:id,message:result.message||'Lỗi không rõ'});
       }else throw Error('Trạng thái thumbnail không hợp lệ');
     }
-    job.scanned++;
-    job.lastFolder=current.name;
-    job.index++;
-    job.current=null;
-    await saveState();
-    paint();
+    job.lastFolder=node.name;
+    job.applyIndex--;job.current=null;
+    await saveState();paint();
   }
   async function run(){
     while(!stop&&admin()&&job?.owner===email()&&job.phase!=='done'){
@@ -212,7 +240,7 @@
     if(stop&&job?.phase!=='done')notice='Đã tạm dừng, tiến độ được giữ lại trên thiết bị.';
     if(job?.phase==='done')notice=job.failed.length?
       'Hoàn tất với '+fmt(job.failed.length)+' folder lỗi. Có thể chạy lại để thử lại các folder chưa được gán.':
-      'Đã gán xong thumbnail theo từng folder trong 06. HÌNH ẢNH CONTENT.';
+      'Đã gán thumbnail từ ảnh trực tiếp hoặc ảnh ở mọi cấp folder con.';
     refreshVisible();
   }
   async function start(){
@@ -244,7 +272,7 @@
     card.id='vlCoverAutoCard';card.className='vl-admin-card';
     card.innerHTML=[
       '<h3 class="vl-admin-heading">Tự động gán thumbnail cho folder</h3>',
-      '<p class="vl-admin-intro">Chỉ duyệt <strong>06. HÌNH ẢNH CONTENT</strong> và các folder con hiện hữu. Mở đến folder nào, chọn ảnh chất lượng nằm trực tiếp trong folder đó và ghi <code>vlCoverImageId</code> ngay trước khi duyệt tiếp. Không quét toàn bộ Shared Drive, không tính thùng rác.</p>',
+      '<p class="vl-admin-intro">Chỉ duyệt <strong>06. HÌNH ẢNH CONTENT</strong> và mọi cấp folder con. Ưu tiên ảnh trực tiếp trong mỗi folder; nếu folder trống, tự chọn ảnh phù hợp từ các folder cháu. Duyệt toàn cây rồi lưu từ folder sâu lên cha. Không quét toàn Shared Drive hay thùng rác.</p>',
       '<label class="vl-cover-auto-choice"><input id="vlCoverAutoOverwrite" type="checkbox"> Ghi đè thumbnail đã có (không khuyến nghị)</label>',
       '<div class="vl-cover-auto-actions"><button type="button" id="vlCoverAutoStart" class="vl-admin-submit">Chạy một lần</button>',
       '<button type="button" id="vlCoverAutoPause" class="vl-admin-reload" disabled>Tạm dừng</button></div>',
@@ -264,7 +292,7 @@
       paint();
     });
     job=await readState(); // v1 scan state is not imported or resumed
-    if(!job)notice='Bắt đầu lượt quét mới, không sử dụng dữ liệu quét toàn Shared Drive của phiên bản cũ.';
+    if(!job)notice='Bắt đầu quét mới hỗ trợ ảnh trong mọi cấp folder con; dữ liệu v2 không được tái sử dụng.';
     paint();
     window.addEventListener('vl:account-role',()=>{
       if(running&&!admin())stop=true;

@@ -21,7 +21,9 @@
   let focused = null;
   let choice = null; // selected in the grid, but not yet confirmed
   let images = [];
-  let page = '';
+  let queue = [];
+  let visitedFolders = new Set();
+  let pagesRead = 0;
   let loading = false;
   let generation = 0;
 
@@ -221,7 +223,8 @@
   function render() {
     const filter = search.value.trim().toLocaleLowerCase('vi');
     grid.replaceChildren();
-    const visible = images.filter(item => item.name.toLocaleLowerCase('vi').includes(filter));
+    const matching = images.filter(item => (item.path + ' / ' + item.name).toLocaleLowerCase('vi').includes(filter));
+    const visible = matching.slice(0,300); // Keep the modal responsive in very large trees.
     const fragment = document.createDocumentFragment();
     for (const item of visible) {
       const tile = document.createElement('button');
@@ -249,7 +252,7 @@
 
       const name = document.createElement('div');
       name.className = 'p-2 text-xs font-medium text-gray-700 truncate';
-      name.textContent = item.name;
+      name.textContent = item.path ? item.path + ' / ' + item.name : item.name;
       tile.append(frame, name);
 
       if (choice?.id === item.id) {
@@ -262,7 +265,7 @@
       }
       tile.addEventListener('click', () => {
         choice = item;
-        selectedLabel.textContent = 'Đã chọn: ' + item.name;
+        selectedLabel.textContent = 'Đã chọn: ' + (item.path ? item.path + ' / ' : '') + item.name;
         confirm.disabled = false;
         render();
       });
@@ -273,43 +276,79 @@
       const empty = document.createElement('p');
       empty.className = 'col-span-full py-10 text-center text-gray-500 text-sm';
       empty.textContent = images.length
-        ? 'Không có ảnh trùng tên tìm kiếm trong các ảnh đã tải.'
-        : (page ? 'Chưa có ảnh trong trang này. Hãy tải thêm.' : 'Thư mục này chưa có ảnh để chọn.');
+        ? 'Không có ảnh trùng từ khóa tìm kiếm.'
+        : loading ? 'Đang kiểm tra thư mục này và các thư mục con…'
+        : 'Không tìm thấy ảnh trong thư mục hoặc toàn bộ thư mục con.';
       grid.appendChild(empty);
     }
-    more.classList.toggle('hidden', !page || loading);
+    more.classList.toggle('hidden', !queue.length || loading);
   }
 
+  // Breadth-first traversal: each request is scoped to ONE verified Drive
+  // folder. Paging and a visited set handle arbitrarily deep descendants
+  // without scanning the entire Shared Drive in any single server call.
   async function loadPage() {
-    if (loading || !edit) return;
+    if (loading || !edit || !queue.length) return;
     const folderId = edit.id;
     const stamp = generation;
-    const nextPage = page;
     loading = true;
     more.classList.add('hidden');
-    setStatus('Đang tải ảnh từ thư mục…');
+    setStatus('Đang tìm ảnh trong thư mục và tất cả thư mục con…');
     try {
-      const url = '/api/folder-images?' + new URLSearchParams({
-        folderId, ...(nextPage ? {pageToken:nextPage} : {})
-      });
-      const response = await fetch(url, {credentials:'same-origin',cache:'no-store'});
-      const json = await response.json().catch(() => ({}));
-      if (!response.ok || !json.success) throw Error(json.message || 'Không thể đọc danh sách ảnh');
-      if (stamp !== generation || !edit || folderId !== edit.id) return;
-      if (json.folderId !== folderId || !Array.isArray(json.images))
-        throw Error('Danh sách ảnh trả về không hợp lệ');
-      const seen = new Set(images.map(x => x.id));
-      for (const item of json.images) {
-        if (!idOk(item.id) || seen.has(item.id) || !item.mimeType?.startsWith('image/')) continue;
-        images.push({id:item.id,name:String(item.name || 'Ảnh không tên').slice(0,300)});
-        seen.add(item.id);
+      let changes = 0;
+      while (queue.length && stamp === generation && edit?.id === folderId &&
+             !picker.classList.contains('hidden')) {
+        const task = queue[0];
+        const url = '/api/folder-images?' + new URLSearchParams({
+          folderId:task.id, withFolders:'1',
+          ...(task.page ? {pageToken:task.page} : {})
+        });
+        const response = await fetch(url, {credentials:'same-origin',cache:'no-store'});
+        const json = await response.json().catch(() => ({}));
+        if (!response.ok || !json.success) throw Error(json.message || 'Không thể duyệt thư mục con');
+        if (stamp !== generation || !edit || folderId !== edit.id) return;
+        if (json.folderId !== task.id || !Array.isArray(json.images) ||
+            !Array.isArray(json.folders))
+          throw Error('Danh sách ảnh/thư mục trả về không hợp lệ');
+
+        const known = new Set(images.map(x=>x.id));
+        for (const item of json.images) {
+          if (!idOk(item.id) || known.has(item.id) || !item.mimeType?.startsWith('image/')) continue;
+          images.push({id:item.id,name:String(item.name || 'Ảnh không tên').slice(0,300),
+            path:task.path});
+          known.add(item.id);
+        }
+        for (const sub of json.folders) {
+          if (!idOk(sub.id) || visitedFolders.has(sub.id)) continue;
+          visitedFolders.add(sub.id);
+          const path = task.path ? task.path + ' / ' + String(sub.name || 'Thư mục') :
+            String(sub.name || 'Thư mục');
+          queue.push({id:sub.id,page:'',path});
+        }
+        task.page=String(json.nextPageToken||'');
+        if (!task.page) queue.shift();
+        pagesRead++;
+        changes++;
+        setStatus('Đã tìm thấy '+images.length+' ảnh · đang duyệt '+
+          visitedFolders.size+' thư mục (gồm các cấp con).');
+        // Render in batches so image nodes never flash/rebuild per API page.
+        if (changes >= 3 || !queue.length) {
+          changes=0;
+          render();
+          await new Promise(resolve=>setTimeout(resolve,0));
+        }
+        // Prevent unbounded automatic request storms in extremely large
+        // trees. The user can continue at exactly this position with Xem thêm.
+        if (pagesRead % 300 === 0 && queue.length) {
+          setStatus('Đã kiểm tra '+pagesRead+' trang. Còn thư mục con; bấm Tải thêm để tiếp tục.');
+          break;
+        }
       }
-      page = String(json.nextPageToken || '');
-      setStatus('Đã tải ' + images.length + ' ảnh trong thư mục.' +
-        (page ? ' Có thể tải thêm để xem các ảnh còn lại.' : ''));
+      if (!queue.length && stamp === generation)
+        setStatus('Đã duyệt toàn bộ '+visitedFolders.size+' thư mục · tìm thấy '+images.length+' ảnh.');
     } catch (error) {
       if (stamp !== generation) return;
-      setStatus(error.message || 'Không tải được ảnh', true);
+      setStatus(error.message || 'Không tải được ảnh trong thư mục con', true);
       notify(error.message || 'Không tải được ảnh', true);
     } finally {
       if (stamp === generation) {
@@ -326,12 +365,14 @@
     generation++;
     loading = false;
     images = [];
-    page = '';
+    queue = [{id:edit.id,page:'',path:''}];
+    visitedFolders = new Set([edit.id]);
+    pagesRead = 0;
     choice = null;
     search.value = '';
     confirm.disabled = true;
     selectedLabel.textContent = 'Chưa chọn ảnh';
-    byId('infoFolderImagePath').textContent = edit.name;
+    byId('infoFolderImagePath').textContent = edit.name + ' (gồm mọi cấp thư mục con)';
     grid.replaceChildren();
     picker.classList.remove('hidden');
     picker.classList.add('flex');

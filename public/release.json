@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.54",
-  "deployment_purpose": "Unify desktop/mobile login background timer: always rotate every >=8.5s even with reduced motion; avoid image bursts on login/logout/reload; bound image loading and show one candidate per cycle.",
+  "version": "3.1.55",
+  "deployment_purpose": "Random first login photo and reshuffle on re-entry; all-level recursive thumbnail picker for Sửa/Thông tin; batch cover assignment inherits nested descendant images with verification and preserves existing covers.",
   "deployment_trigger_date": "2026-11-09"
 }

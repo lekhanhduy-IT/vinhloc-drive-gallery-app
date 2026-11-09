@@ -1,4 +1,4 @@
-/* Authenticated direct-child image listing for choosing a folder cover.
+/* Authenticated paginated image/folder listing for recursively choosing a cover.
    No public Drive links; browsers fetch thumbnails through /api/media. */
 import {verifiedAccount,serverDriveToken} from './media.js';
 
@@ -55,8 +55,10 @@ export default async function handler(req,res){
     if(folder.trashed||folder.driveId!==DRIVE_ID||
       folder.mimeType!=='application/vnd.google-apps.folder')
       return respond(res,404,'Không tìm thấy thư mục hợp lệ');
+    const withFolders=req.query.withFolders==='1';
     const params=new URLSearchParams({
-      q:"'"+id+"' in parents and trashed=false and mimeType contains 'image/'",
+      q:"'"+id+"' in parents and trashed=false and ("+
+        "mimeType contains 'image/'"+(withFolders?" or mimeType = 'application/vnd.google-apps.folder'":"")+")",
       corpora:'drive',driveId:DRIVE_ID,
       includeItemsFromAllDrives:'true',supportsAllDrives:'true',
       pageSize:'100',fields:'nextPageToken,files(id,name,mimeType,parents,driveId,trashed)',
@@ -68,7 +70,13 @@ export default async function handler(req,res){
       item.driveId===DRIVE_ID&&!item.trashed&&
       Array.isArray(item.parents)&&item.parents.includes(id)
     ).map(({id,name,mimeType})=>({id,name,mimeType}));
-    return respond(res,200,'OK',{folderId:id,images,nextPageToken:listing.nextPageToken||''});
+    const folders=withFolders?(listing.files||[]).filter(item=>
+      idOk(item.id)&&item.mimeType==='application/vnd.google-apps.folder'&&
+      item.driveId===DRIVE_ID&&!item.trashed&&
+      Array.isArray(item.parents)&&item.parents.includes(id)
+    ).map(({id,name})=>({id,name:String(name||'Thư mục').slice(0,200)})):[];
+    return respond(res,200,'OK',{folderId:id,images,folders,
+      nextPageToken:listing.nextPageToken||''});
   }catch(error){
     const status=error.status===404?404:error.status===403?403:502;
     return respond(res,status,'Không thể đọc ảnh trong thư mục này');

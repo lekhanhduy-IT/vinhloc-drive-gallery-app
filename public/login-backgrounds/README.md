@@ -1,13 +1,11 @@
 # Hình nền đăng nhập QL Ảnh
 
-Bạn có thể **tự tải ảnh** (PNG, JPG, JPEG, WebP, AVIF) vào thư mục `public/login-backgrounds/`.
+Tải các ảnh PNG, JPG, JPEG, WebP hoặc AVIF vào `public/login-backgrounds/` và commit lên GitHub. Sau khi Vercel build lại, toàn bộ ảnh trong thư mục được tự động đưa vào danh sách.
 
-- Hiện có 11 ảnh. Khi deploy, `npm run build` tự quét các file ảnh và tạo lại `backgrounds.json`; không cần thêm từng file bằng tay.
-- Trang đăng nhập lấy danh sách trong `backgrounds.json`, **xáo trộn thứ tự** và **chuyển ảnh sau mỗi 8,5 giây** bằng hiệu ứng mờ.
-- Trên điện thoại, ảnh tập trung phía trên; phần dưới trắng dần để nút Google và thông tin đăng nhập dễ đọc.
-- Ảnh tiếp theo chỉ tải sau khi ảnh trước xuất hiện; khi tab ẩn hoặc đã đóng màn hình đăng nhập sẽ tạm dừng.
-- Nếu không có ảnh hoặc ảnh lỗi, màn hình đăng nhập vẫn hiển thị nền trắng và hoạt động bình thường.
-- Ảnh thuộc `public` được truy cập công khai. Không đưa dữ liệu riêng tư vào đây.
-- Không có đồng bộ ảnh từ Google Drive.
+**Mỗi lần mở app:** `bootstrap.js` chọn ngẫu nhiên ảnh đầu tiên từ toàn bộ kho trước khi giao diện đăng nhập hiển thị; không hiện ảnh mặc định rồi nhảy qua ảnh khác.
 
-Các file được thêm trên GitHub cần một lượt build/deploy mới để xuất hiện trong danh sách.
+**Mỗi lần đăng xuất/trở lại đăng nhập:** chọn ngẫu nhiên ảnh khác, và xáo trộn thứ tự mới. Sau đó ảnh chuyển **từng tấm cách nhau ít nhất 8,5 giây**, mờ dần trong 1,15 giây khi được phép chuyển động.
+
+`backgrounds.json` và `bootstrap.js` được tạo lại bằng `npm run build` (prebuild), không cần sửa mã nguồn hoặc thêm thủ công từng tên ảnh. Khi thêm/xóa ảnh cần một lần commit và deploy mới.
+
+Hình nền chỉ hiển thị một ảnh `cover` toàn màn hình, giữ tỷ lệ ảnh, không thêm lớp trắng hoặc mờ phụ.

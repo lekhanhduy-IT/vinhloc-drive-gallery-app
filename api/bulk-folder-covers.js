@@ -68,17 +68,33 @@ function browseUrl(folderId,pageToken){
   if(pageToken)params.set('pageToken',pageToken);
   return API+'?'+params.toString();
 }
+async function imageIsDescendant(imageId,folderId,token){
+  const image=await metadata(imageId,token,'id,mimeType,parents,driveId,trashed');
+  if(image.trashed||image.driveId!==DRIVE||
+     !image.mimeType?.startsWith('image/')||image.parents?.length!==1)return false;
+  let cursor=image.parents[0];
+  const visited=new Set([imageId]);
+  for(let depth=0;depth<60;depth++){
+    if(cursor===folderId)return true;
+    if(!isId(cursor)||visited.has(cursor))return false;
+    visited.add(cursor);
+    let node;
+    try{node=await metadata(cursor,token,'id,mimeType,parents,driveId,trashed');}
+    catch(error){if(error.status===404)return false;throw error;}
+    if(node.trashed||node.driveId!==DRIVE||node.mimeType!==FOLDER||
+       node.parents?.length!==1)return false;
+    cursor=node.parents[0];
+  }
+  return false;
+}
 async function applyOne(folderId,imageId,overwrite,token){
   const folder=await folderForGallery(folderId,token);
   const existing=folder.appProperties?.[COVER];
   // User's existing selection always wins unless an explicit overwrite is on.
   if(isId(existing)&&!overwrite)return {folderId,status:'existing',imageId:existing};
   if(existing===imageId)return {folderId,status:'existing',imageId};
-  const image=await metadata(imageId,token,'id,mimeType,parents,driveId,trashed');
-  if(image.trashed||image.driveId!==DRIVE||
-     !image.mimeType?.startsWith('image/')||
-     !image.parents?.includes(folderId))
-    return {folderId,status:'failed',message:'Ảnh không còn nằm trực tiếp trong folder'};
+  if(!await imageIsDescendant(imageId,folderId,token))
+    return {folderId,status:'failed',message:'Ảnh không thuộc cây thư mục này'};
   const updated=await google(API+'/'+encodeURIComponent(folderId)+
     '?supportsAllDrives=true&fields=id,appProperties',token,{
       method:'PATCH',headers:{'Content-Type':'application/json; charset=UTF-8'},

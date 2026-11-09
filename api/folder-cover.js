@@ -28,6 +28,24 @@ function valid(item,type){
   return item&&item.driveId===DRIVE&&item.trashed!==true&&
     (type==='folder'?item.mimeType===FOLDER:item.mimeType?.startsWith('image/'));
 }
+// A cover may be an image from any nested descendant of the chosen folder,
+ // but not from a sibling, ancestor or a different Shared Drive.
+async function imageBelongsToTree(image,target,token){
+  if(!valid(image,'image'))return false;
+  let parent=image.parents?.length===1?image.parents[0]:null;
+  const seen=new Set([image.id]);
+  for(let depth=0;depth<60 && parent;depth++){
+    if(parent===target)return true;
+    if(!idOK(parent)||seen.has(parent))return false;
+    seen.add(parent);
+    let node;
+    try{node=await file(parent,token,'id,mimeType,driveId,trashed,parents');}
+    catch(error){if(error.status===404)return false;throw error;}
+    if(!valid(node,'folder')||node.parents?.length!==1)return false;
+    parent=node.parents[0];
+  }
+  return false;
+}
 async function inShareScope(id,root,token){
   if(!root)return true;
   const visited=new Set();
@@ -91,8 +109,8 @@ export default async function handler(req,res){
       if(!await inShareScope(folderId,account.scopeRoot||null,token))
         return respond(res,403,'Thư mục nằm ngoài phạm vi được chia sẻ');
       const [folder,image]=await Promise.all([file(folderId,token),file(imageId,token)]);
-      if(!valid(folder,'folder')||!valid(image,'image')||!image.parents?.includes(folderId))
-        return respond(res,400,'Chỉ được chọn ảnh nằm trực tiếp trong thư mục này');
+      if(!valid(folder,'folder')||!await imageBelongsToTree(image,folderId,token))
+        return respond(res,400,'Ảnh không thuộc thư mục hoặc các thư mục con của nó');
       const properties={...(folder.appProperties||{}),[COVER_KEY]:imageId};
       const written=await google(API+'/'+encodeURIComponent(folderId)+
         '?supportsAllDrives=true&fields=id,appProperties',token,{
