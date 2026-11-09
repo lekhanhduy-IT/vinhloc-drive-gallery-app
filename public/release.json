@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.57",
-  "deployment_purpose": "Remove blue first-paint login on desktop and mobile by generating tiny same-photo PNG previews during prebuild, embedding previews in login bootstrap, then replacing in place on full-image load; keep random order and 8.5s slideshow.",
+  "version": "3.1.58",
+  "deployment_purpose": "Remove blue login flash by embedding randomly selected photographic previews directly in HTML head at build time; no separate bootstrap network download; retain sharp image loading and slideshow.",
   "deployment_trigger_date": "2026-11-09"
 }
