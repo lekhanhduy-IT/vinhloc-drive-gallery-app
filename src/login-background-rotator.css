@@ -38,10 +38,44 @@
   #vl-login-backgrounds { transition: none !important; }
 }
 
-/* Keep the login layout fixed; shift only the animated image visually.
-   The extra space below the GIF remains slightly larger than title-to-version. */
-#auth-overlay .vl-login-panel > img[src$="LOAD.gif"] {
+/* The uploaded thumbnail is itself white near the bottom.
+   Reuse its photographic upper area as a soft continuation BELOW the card;
+   unlike a white gradient, this remains colorful on tall PWA screens. */
+#auth-overlay::before,
+#vl-login-backgrounds::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to bottom, rgba(1,173,238,.05),rgba(1,173,238,.13)),
+    var(--vl-login-photo);
+  background-repeat: no-repeat;
+  background-position: center, center top;
+  background-size: 100% 100%, 100% 255%;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, transparent 55%, #000 77%, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, transparent 55%, #000 77%, #000 100%);
+  filter: blur(16px) saturate(1.18);
+}
+#auth-overlay::before { z-index: 0; }
+#vl-login-backgrounds::before { z-index: 0; }
+
+/* No visual offset: GIF and heading occupy normal document flow. */
+#auth-overlay .vl-login-panel #vl-login-animation {
+  display: block;
+  position: static !important;
+  top: auto !important;
+  left: auto !important;
+  width: var(--vl-login-heading-width, 165px) !important;
+  height: var(--vl-login-heading-width, 165px) !important;
+  max-width: 100% !important;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  margin: 0 auto 30px !important;
+  flex-shrink: 0;
+}
+#auth-overlay #vl-login-title {
+  white-space: nowrap;
   position: relative;
-  top: 56px;
-  max-width: 100%;
 }

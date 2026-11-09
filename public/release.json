@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.47",
-  "deployment_purpose": "Remove white wallpaper fade outside login card, switch loader to the existing LOAD.gif and shift GIF 56px closer to login heading without moving form.",
+  "version": "3.1.48",
+  "deployment_purpose": "Fix LOAD.gif overlap; match its width to measured login heading; fill white area below popup with a blurred continuation of the upper photo while preserving slideshow.",
   "deployment_trigger_date": "2026-11-09"
 }
