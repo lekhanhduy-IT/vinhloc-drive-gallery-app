@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.61",
-  "deployment_purpose": "Fix blank blue login background on cold first load with truly embedded first-paint preview chosen at random in Vite transformIndexHtml; verify emitted HTML, then upgrade same photo to high-res. Keep 8.5-second rotation and existing login UI.",
+  "version": "3.1.62",
+  "deployment_purpose": "Guarantee a real image rather than a blue CSS color at login first paint: Vite embeds a valid photographic data URI as the overlay's own CSS fallback, while existing synchronous random selector chooses among all previews. No slideshow changes.",
   "deployment_trigger_date": "2026-11-09"
 }

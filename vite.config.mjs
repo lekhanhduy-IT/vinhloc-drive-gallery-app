@@ -28,6 +28,12 @@ async function makeInlineBootstrap() {
     previews[sources[i]]=makePreviewPNGDataURI(
       await readFile(resolve(folder,files[i])),96);
   }
+  // Put a REAL image directly into the auth overlay's CSS fallback.
+  // This is painted even if the runtime selector fails, arrives late,
+  // localStorage is denied or a browser ignores the custom property.
+  const firstPreview=previews[sources.find(src=>previews[src])];
+  if(!firstPreview?.startsWith('data:image/png;base64,'))
+    throw Error('Login needs a valid inline photographic fallback');
   const code=String.raw`
 (() => {
   'use strict';
@@ -65,7 +71,10 @@ async function makeInlineBootstrap() {
 `
     .replace('__PHOTOS__',JSON.stringify(sources))
     .replace('__PREVIEWS__',JSON.stringify(previews));
-  return '<script id="vl-login-random-first">\n'+code+'\n</script>';
+  return {
+    script:'<script id="vl-login-random-first">\n'+code+'\n</script>',
+    fallback:'url('+JSON.stringify(firstPreview)+')'
+  };
 }
 
 export default defineConfig({
@@ -82,16 +91,21 @@ export default defineConfig({
         const start=html.indexOf(START);
         const end=html.indexOf(END,start+START.length);
         if(start<0 || end<start)throw Error('Missing login photo markers');
-        const embedded=await makeInlineBootstrap();
-        return html.slice(0,start)+START+'\n'+embedded+'\n'+END+
+        const {script,fallback}=await makeInlineBootstrap();
+        const out=html.slice(0,start)+START+'\n'+script+'\n'+END+
           html.slice(end+END.length);
+        const fixedFallback="url('https://raw.githubusercontent.com/lekhanhduy-IT/vinhloc-drive-gallery-app/main/public/login-backgrounds/316e9496-bd61-457c-a431-37259a524b75.png')";
+        const original='var(--vl-login-start-photo, '+fixedFallback+')';
+        if(!out.includes(original))throw Error('Missing original login wallpaper style');
+        return out.replace(original,'var(--vl-login-start-photo, '+fallback+')');
       }
     },
     async closeBundle(){
       if(!isBuild)return;
       const html=await readFile(resolve(process.cwd(),buildFolder,'index.html'),'utf8');
       const previewCount=(html.match(/data:image\/png;base64,/g)||[]).length;
-      if(previewCount<1 ||
+      const pictureFallback=/background-image:\s*var\(--vl-login-start-photo,\s*url\((?:"|')data:image\/png;base64,/;
+      if(previewCount<2 || !pictureFallback.test(html) ||
          !html.includes('id="vl-login-random-first"') ||
          !html.includes('window.__vlInitialLoginPhoto=selected;') ||
          !html.includes('const previews=') ||
