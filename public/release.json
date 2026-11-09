@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.65",
-  "deployment_purpose": "Use HTML-embedded 11-photo list to choose the initial image in the document head before login overlay creation, without replacing a hardcoded photo after the body renders. Retain v3.1.54 slideshow, no extra visual layers.",
+  "version": "3.1.66",
+  "deployment_purpose": "First paint always shows a real randomly selected inline photographic thumbnail, then the decoded original; image-only Service Worker CacheStorage warms all 11 PNGs once per device for immediate subsequent logins without changing the v3.1.54 fade and layout.",
   "deployment_trigger_date": "2026-11-09"
 }

@@ -8,6 +8,8 @@
   const layer = document.getElementById('vl-login-backgrounds');
   if (!overlay || !layer) return;
   window.__vlStableLoginWallpaperInstalled = true;
+  const basePhoto = document.getElementById('vl-login-base-photo');
+  const startup = window.__vlLoginPhotoSetup || null;
 
   const INTERVAL_MS = 8500;
   const FADE_MS = 1150;
@@ -18,7 +20,7 @@
     'https://cdn.jsdelivr.net/gh/lekhanhduy-IT/vinhloc-drive-gallery-app@main/public'
   ];
   const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-  let sources = shuffle(builtInSources.slice());
+  let sources = shuffle((startup?.photos?.length > 1 ? startup.photos : builtInSources).slice());
   let cursor = 0;
   let timer = null;
   let busy = false;
@@ -53,7 +55,24 @@
     } catch (_) { return String(src || ''); }
   }
   const initialUrl = /url\((['"]?)(.*?)\1\)/.exec(overlay.style.backgroundImage);
-  let current = canonical(window.__vlOpeningPhoto || (initialUrl ? initialUrl[2] : builtInSources[0]));
+  let current = canonical(startup?.selected || window.__vlOpeningPhoto ||
+    (initialUrl ? initialUrl[2] : builtInSources[0]));
+  // The page already paints a real inline PNG preview before this module
+  // executes. Upgrade the SAME image only after the full PNG is decoded.
+  if (basePhoto && startup?.selected) {
+    const selected = startup.selected;
+    const hires = new Image();
+    hires.onload = async () => {
+      try { await hires.decode?.(); } catch (_) {}
+      if (canonical(selected) !== current || !basePhoto.isConnected) return;
+      basePhoto.src = selected;
+      overlay.style.backgroundImage = 'url(' + JSON.stringify(selected) + ')';
+    };
+    hires.onerror = () => {
+      // Keep the photographic preview; never reveal empty blue CSS.
+    };
+    hires.src = selected;
+  }
   let readyForNextLogin = null;
   let preloadEpoch = 0;
   let wasVisible = false;
@@ -64,7 +83,8 @@
     if (!choices.length) return;
     const src = choices[Math.floor(Math.random() * choices.length)];
     const img = new Image();
-    img.onload = () => {
+    img.onload = async () => {
+      try { await img.decode?.(); } catch (_) {}
       if (epoch === preloadEpoch) readyForNextLogin = {src, img};
     };
     img.onerror = () => {};
@@ -107,6 +127,7 @@
     }
     if (wasVisible && readyForNextLogin && canonical(readyForNextLogin.src) !== current) {
       overlay.style.backgroundImage = 'url(' + JSON.stringify(readyForNextLogin.src) + ')';
+      if (basePhoto) basePhoto.src = readyForNextLogin.src;
       current = canonical(readyForNextLogin.src);
     }
     wasVisible = true;
@@ -130,7 +151,10 @@
         img.onerror = null;
         resolve(ok);
       }
-      img.onload = () => finish(true);
+      img.onload = async () => {
+        try { await img.decode?.(); } catch (_) {}
+        finish(true);
+      };
       img.onerror = () => finish(false);
       img.src = src;
     });
@@ -171,6 +195,7 @@
       if (media?.matches) {
         // Reduced motion removes animation only, NEVER stops the slideshow.
         overlay.style.backgroundImage = cssImage;
+        if (basePhoto) basePhoto.src = url;
       } else {
         layer.classList.remove('is-visible');
         layer.style.backgroundImage = cssImage;
@@ -180,6 +205,9 @@
         await sleep(FADE_MS);
         if (token !== generation || !visible) return;
         overlay.style.backgroundImage = cssImage;
+        // The fade layer is still in front while the already decoded
+        // image becomes the new base. The original fade duration is intact.
+        if (basePhoto) basePhoto.src = url;
         layer.classList.remove('is-visible');
       }
       current = canonical(candidate);
@@ -210,7 +238,7 @@
       const valid = data.images.map(item => item?.src).filter(src =>
         typeof src === 'string' &&
         src.startsWith('/login-backgrounds/') &&
-        /\.(?:png|jpe?g|webp|avif)$/i.test(src)
+        /\.(?:png|jpe?g|webp|avif)(?:\?v=[a-f0-9]{8,64})?$/i.test(src)
       );
       if (valid.length > 1) {
         sources = shuffle([...new Set(valid)]);
@@ -221,8 +249,28 @@
     })
     .catch(err => console.warn('[login background] Embedded image list in use:',err));
 
-  // The HTML has already painted the initial background. No slideshow image
-  // is painted until its full first 8.5-second hold completes.
+  // Warm every image in persistent CacheStorage without blocking login.
+  // The SW intercepts ONLY /login-backgrounds images, not app/API/auth files.
+  (function cacheLoginPhotos() {
+    if (!('serviceWorker' in navigator)) return;
+    const photos = startup?.photos || builtInSources;
+    const start = () => {
+      navigator.serviceWorker.register('/login-photos-sw.js', {scope:'/'})
+        .then(() => navigator.serviceWorker.ready)
+        .then(registration => {
+          const worker = navigator.serviceWorker.controller ||
+            registration.active || registration.waiting;
+          worker?.postMessage({type:'VL_WARM_LOGIN_PHOTOS',photos});
+        })
+        .catch(error => console.warn('[login photo cache]', error));
+    };
+    if (typeof requestIdleCallback === 'function')
+      requestIdleCallback(start,{timeout:5000});
+    else setTimeout(start,1500);
+  })();
+
+  // The embedded photographic preview is already painted during HTML parse.
+  // Do not transition until the 8.5-second first hold completes.
   rememberDue();
   onVisibility();
 })();
