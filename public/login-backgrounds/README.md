@@ -1,11 +1,11 @@
 # Hình nền đăng nhập QL Ảnh
 
-Tải các ảnh PNG, JPG, JPEG, WebP hoặc AVIF vào `public/login-backgrounds/` và commit lên GitHub. Sau khi Vercel build lại, toàn bộ ảnh trong thư mục được tự động đưa vào danh sách.
+Thêm ảnh JPG, JPEG, PNG, WebP hoặc AVIF vào thư mục `public/login-backgrounds/`. Lúc build, script `scripts/generate-login-backgrounds.mjs` cập nhật tự động `backgrounds.json`, không cần sửa danh sách thủ công.
 
-**Mỗi lần mở app:** `bootstrap.js` chọn ngẫu nhiên ảnh đầu tiên từ toàn bộ kho trước khi giao diện đăng nhập hiển thị; không hiện ảnh mặc định rồi nhảy qua ảnh khác.
+Cơ chế hình nền được giữ nguyên như bản 3.1.54: ảnh mặc định gắn trực tiếp trong HTML và được hiển thị ngay khi trình duyệt tải xong ảnh đó. Chỉ có **một lớp ảnh nền chính** và **một lớp chuyển mờ** đã có sẵn; không có ảnh xem trước, bootstrap động, ảnh lặp hoặc lớp lọc mới.
 
-**Mỗi lần đăng xuất/trở lại đăng nhập:** chọn ngẫu nhiên ảnh khác, và xáo trộn thứ tự mới. Sau đó ảnh chuyển **từng tấm cách nhau ít nhất 8,5 giây**, mờ dần trong 1,15 giây khi được phép chuyển động.
+Sau mỗi lần mở màn hình đăng nhập, hệ thống **xáo trộn thứ tự các ảnh trong vòng luân phiên**, không chuyển ảnh liên tục khi khởi động. Chu kỳ 8,5 giây, chuyển mờ 1,15 giây trên thiết bị không bật giảm chuyển động.
 
-`backgrounds.json` và `bootstrap.js` được tạo lại bằng `npm run build` (prebuild), không cần sửa mã nguồn hoặc thêm thủ công từng tên ảnh. Khi thêm/xóa ảnh cần một lần commit và deploy mới.
+Để bảo đảm không làm xuất hiện màu nền trống hoặc nhảy ảnh khi khởi động, ảnh đầu tiên đang dùng ảnh mặc định gắn trong HTML. Các ảnh ở lượt tiếp theo được xáo trộn ngẫu nhiên. Chọn ngẫu nhiên ảnh đầu tiên trên một thiết bị mới chưa có bộ nhớ đệm sẽ yêu cầu thay đổi cơ chế tải ảnh; không thực hiện trong bản sửa này.
 
-Hình nền chỉ hiển thị một ảnh `cover` toàn màn hình, giữ tỷ lệ ảnh, không thêm lớp trắng hoặc mờ phụ.
+Sau khi tải ảnh mới lên GitHub và Vercel triển khai, danh sách ảnh nền tự cập nhật.

@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.58",
-  "deployment_purpose": "Remove blue login flash by embedding randomly selected photographic previews directly in HTML head at build time; no separate bootstrap network download; retain sharp image loading and slideshow.",
+  "version": "3.1.59",
+  "deployment_purpose": "Revert all login first-paint preview/bootstrap experiments to the proven 3.1.54 full-image mechanism, preserving photo and layout; only reshuffle slideshow order when returning to login, preserving 8.5-second pacing and nested thumbnail features.",
   "deployment_trigger_date": "2026-11-09"
 }
