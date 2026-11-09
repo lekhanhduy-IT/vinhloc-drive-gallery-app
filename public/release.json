@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.62",
-  "deployment_purpose": "Guarantee a real image rather than a blue CSS color at login first paint: Vite embeds a valid photographic data URI as the overlay's own CSS fallback, while existing synchronous random selector chooses among all previews. No slideshow changes.",
+  "version": "3.1.63",
+  "deployment_purpose": "Use actual photographic first paint element selected randomly with inline data URI; release only when full resolution is loaded; preserve layout and slideshow behavior.",
   "deployment_trigger_date": "2026-11-09"
 }

@@ -89,6 +89,9 @@
       if (token === generation && visible) void changeOne(token);
     }, remaining);
   }
+  function retireInitialPhoto() {
+    document.getElementById('vl-login-first-frame')?.remove();
+  }
   function onVisibility() {
     const nowVisible = shown();
     // The overlay's style attribute changes at the end of each fade; those
@@ -107,6 +110,7 @@
       firstSession = false; // The head script already selected the first photo.
     } else if (preloadedReturn && canonical(preloadedReturn.src) !== current) {
       overlay.style.backgroundImage = 'url(' + JSON.stringify(preloadedReturn.src) + ')';
+      retireInitialPhoto();
       current = canonical(preloadedReturn.src);
       preloadedReturn = null;
       ++preloadEpoch;
@@ -171,6 +175,7 @@
       if (media?.matches) {
         // Reduced motion removes animation only, NEVER stops the slideshow.
         overlay.style.backgroundImage = cssImage;
+        retireInitialPhoto();
       } else {
         layer.classList.remove('is-visible');
         layer.style.backgroundImage = cssImage;
@@ -180,6 +185,7 @@
         await sleep(FADE_MS);
         if (token !== generation || !visible) return;
         overlay.style.backgroundImage = cssImage;
+        retireInitialPhoto();
         layer.classList.remove('is-visible');
       }
       current = canonical(candidate);

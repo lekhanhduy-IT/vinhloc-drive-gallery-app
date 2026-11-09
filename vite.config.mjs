@@ -48,6 +48,7 @@ async function makeInlineBootstrap() {
   const preview=previews[selected];
   if(!preview || !preview.startsWith('data:image/png;base64,'))return;
   window.__vlInitialLoginPhoto=selected;
+  window.__vlInitialLoginPreview=preview;
   document.documentElement.style.setProperty('--vl-login-start-photo',
     'url('+JSON.stringify(preview)+')');
   try { localStorage.setItem('vl-login-last-first-photo', selected); } catch (_) {}
@@ -62,6 +63,7 @@ async function makeInlineBootstrap() {
       const current=overlay.style.backgroundImage.trim();
       if(!current.startsWith('var(--vl-login-start-photo'))return;
       overlay.style.backgroundImage='url('+JSON.stringify(selected)+')';
+      document.getElementById('vl-login-first-frame')?.remove();
     };
     if(document.getElementById('auth-overlay'))apply();
     else document.addEventListener('DOMContentLoaded', apply, {once:true});
@@ -73,7 +75,8 @@ async function makeInlineBootstrap() {
     .replace('__PREVIEWS__',JSON.stringify(previews));
   return {
     script:'<script id="vl-login-random-first">\n'+code+'\n</script>',
-    fallback:'url('+JSON.stringify(firstPreview)+')'
+    fallback:'url('+JSON.stringify(firstPreview)+')',
+    firstPreview
   };
 }
 
@@ -91,13 +94,27 @@ export default defineConfig({
         const start=html.indexOf(START);
         const end=html.indexOf(END,start+START.length);
         if(start<0 || end<start)throw Error('Missing login photo markers');
-        const {script,fallback}=await makeInlineBootstrap();
+        const {script,fallback,firstPreview}=await makeInlineBootstrap();
         const out=html.slice(0,start)+START+'\n'+script+'\n'+END+
           html.slice(end+END.length);
         const fixedFallback="url('https://raw.githubusercontent.com/lekhanhduy-IT/vinhloc-drive-gallery-app/main/public/login-backgrounds/316e9496-bd61-457c-a431-37259a524b75.png')";
         const original='var(--vl-login-start-photo, '+fixedFallback+')';
         if(!out.includes(original))throw Error('Missing original login wallpaper style');
-        return out.replace(original,'var(--vl-login-start-photo, '+fallback+')');
+        const result=out.replace(original,'var(--vl-login-start-photo, '+fallback+')');
+        const mount='<div id="vl-login-backgrounds" aria-hidden="true"></div>';
+        if(!result.includes(mount))throw Error('Login photo host not found');
+        // Paintable before any external JS or CSS resolves on iOS/desktop.
+        const photo='<img id="vl-login-first-frame" src="'+firstPreview+'" '+
+          'alt="" aria-hidden="true" decoding="sync" fetchpriority="high" '+
+          'style="position:absolute;inset:0;display:block;width:100%;height:100%;'+
+          'object-fit:cover;object-position:center 25%;z-index:0;'+
+          'max-width:none;transform:none!important;pointer-events:none;">';
+        const select='<script id="vl-login-first-frame-select">'+
+          '(function(){var f=document.getElementById("vl-login-first-frame");'+
+          'var p=window.__vlInitialLoginPreview;'+
+          'if(f&&typeof p==="string"&&p.startsWith("data:image/png;base64,"))f.src=p;'+
+          '})();'+'</script>';
+        return result.replace(mount,photo+'\n'+select+'\n'+mount);
       }
     },
     async closeBundle(){
@@ -105,7 +122,10 @@ export default defineConfig({
       const html=await readFile(resolve(process.cwd(),buildFolder,'index.html'),'utf8');
       const previewCount=(html.match(/data:image\/png;base64,/g)||[]).length;
       const pictureFallback=/background-image:\s*var\(--vl-login-start-photo,\s*url\((?:"|')data:image\/png;base64,/;
-      if(previewCount<2 || !pictureFallback.test(html) ||
+      const actualPhoto=/<img id="vl-login-first-frame"[^>]*src="data:image\/png;base64,/;
+      if(previewCount<3 || !pictureFallback.test(html) ||
+         !actualPhoto.test(html) ||
+         !html.includes('id="vl-login-first-frame-select"') ||
          !html.includes('id="vl-login-random-first"') ||
          !html.includes('window.__vlInitialLoginPhoto=selected;') ||
          !html.includes('const previews=') ||

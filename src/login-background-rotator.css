@@ -14,7 +14,7 @@
   transform: none !important;
   transition: none !important;
   animation: none !important;
-  background-color: #01adee !important;
+  background-color: transparent !important;
   background-size: cover !important;
   background-position: center 25% !important;
   background-repeat: no-repeat !important;
@@ -23,7 +23,7 @@
 #vl-login-backgrounds {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 1;
   pointer-events: none;
   opacity: 0;
   background-color: transparent !important;
@@ -44,7 +44,7 @@
 #auth-overlay .vl-login-panel,
 #auth-overlay .rounded-3xl.vl-login-panel {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   box-sizing: border-box;
   width: 100% !important;
   max-width: 420px !important;
