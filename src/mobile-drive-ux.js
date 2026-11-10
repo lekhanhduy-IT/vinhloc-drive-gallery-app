@@ -1,130 +1,321 @@
-/* Mobile action bottom sheet + stable media tiles. */
+/* VinhLoc mobile action sheet + decoded thumbnail continuity.
+   Keep original action elements (and their permission handlers) intact. */
 (() => {
- 'use strict';
- if(window.__vlMobileDriveUX)return;
- window.__vlMobileDriveUX=true;
- const mobile=()=>matchMedia('(max-width:767px)').matches;
- const style=document.createElement('style');
- style.textContent=`
- @media(max-width:767px){
- #fileList>div{min-width:0;contain:layout style;}
- #fileList>div .drive-img-name{overflow-wrap:anywhere;}
- #fileList>div img{display:block;width:100%;height:100%;object-fit:cover;}
- #fileList>div:has(img) :is(.relative,.overflow-hidden){min-width:0;}
- #fileList>div>div:first-child:has(img),#fileList>div .relative:has(>img){aspect-ratio:1 / 1;min-height:0;overflow:hidden;}
- #folderList img,.mega-header img,.subfolder-row img{object-fit:cover;}
- }
- #vlDriveSheetLayer{position:fixed;inset:0;z-index:2147482000;visibility:hidden;pointer-events:none;}
- #vlDriveSheetLayer.open{visibility:visible;pointer-events:auto;}
- #vlDriveSheetDim{position:absolute;inset:0;background:rgba(0,0,0,.42);opacity:0;transition:opacity .24s;}
- #vlDriveSheetLayer.open #vlDriveSheetDim{opacity:1;}
- #vlDriveSheet{position:absolute;left:0;right:0;bottom:0;max-height:85dvh;display:flex;flex-direction:column;border-radius:24px 24px 0 0;background:#fff;box-shadow:0 -12px 35px #0003;padding-bottom:max(14px,env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .28s cubic-bezier(.2,.8,.2,1);overflow:hidden;}
- #vlDriveSheetLayer.open #vlDriveSheet{transform:translateY(0);}
- #vlSheetGrip{width:38px;height:5px;border-radius:6px;background:#cbd5e1;align-self:center;margin:10px 0;}
- #vlSheetHeading{display:flex;align-items:center;gap:12px;padding:6px 17px 12px;border-bottom:1px solid #e5e7eb;}
- #vlSheetTitle{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#1f2937;font:600 15px system-ui;}
- #vlSheetClose{display:grid;place-items:center;width:38px;height:38px;flex:none;border:0;border-radius:50%;background:#fff1f2;color:#db1010;font:600 27px system-ui;cursor:pointer;}
- #vlSheetActions{overflow-y:auto;overscroll-behavior:contain;padding:6px 14px 10px;}
- #vlSheetActions>.item-action-menu,#vlSheetActions>#headerDropdown{display:block!important;position:static!important;inset:auto!important;transform:none!important;width:100%!important;min-width:0!important;max-width:none!important;max-height:none!important;overflow:visible!important;box-shadow:none!important;border:0!important;border-radius:0!important;background:transparent!important;margin:0!important;opacity:1!important;visibility:visible!important;}
- #vlSheetActions>.item-action-menu>*,#vlSheetActions>#headerDropdown>*{min-height:48px;display:flex;align-items:center;width:100%;padding:10px 14px!important;font-size:15px!important;position:relative!important;}
- @media(prefers-reduced-motion:reduce){#vlDriveSheet,#vlDriveSheetDim{transition:none!important;}}
- `;
- document.head.appendChild(style);
- const layer=document.createElement('div');layer.id='vlDriveSheetLayer';
- layer.innerHTML='<div id="vlDriveSheetDim"></div><section id="vlDriveSheet" role="dialog" aria-modal="true" aria-label="Tùy chọn"><div id="vlSheetGrip"></div><div id="vlSheetHeading"><span id="vlSheetTitle">Tùy chọn</span><button id="vlSheetClose" type="button" aria-label="Đóng menu">×</button></div><div id="vlSheetActions"></div></section>';
- document.body.appendChild(layer);
- const slot=layer.querySelector('#vlSheetActions');
- let active=null,placeholder=null,closing=null,previousFocus=null;
- const close=()=>{
-  if(!active)return;
-  layer.classList.remove('open');
-  document.body.classList.remove('vl-sheet-open');
-  const original=active;
-  active=null;
-  setTimeout(()=>{
-   if(placeholder?.parentNode){placeholder.replaceWith(original);original.classList.add('hidden');original.style.removeProperty('display');}
-   else original.remove();
-   placeholder=null;slot.replaceChildren();
-   if(!active&&previousFocus?.isConnected)previousFocus.focus({preventScroll:true});
-  },290);
- };
- layer.querySelector('#vlDriveSheetDim').addEventListener('click',close);
- layer.querySelector('#vlSheetClose').addEventListener('click',close);
- document.addEventListener('keydown',e=>{if(e.key==='Escape'&&active){e.preventDefault();close();}},true);
- slot.addEventListener('click',e=>{if(e.target.closest('button,a,[onclick]'))setTimeout(close,0);});
- function open(menu,trigger){
-  if(!mobile()||!menu)return;
-  if(active) {const old=active;active=null;if(placeholder?.parentNode)placeholder.replaceWith(old);else old.remove();old.classList.add('hidden');}
-  previousFocus=trigger;
-  placeholder=document.createComment('vl mobile menu location');
-  menu.parentNode.insertBefore(placeholder,menu);
-  menu.classList.remove('hidden');
-  slot.replaceChildren(menu);
-  menu.style.setProperty('display','block','important');
-  const item=trigger.closest('.subfolder-row,.mega-header,#fileList > div,#folderList > div');
-  const name=item?.querySelector('.drive-img-name,[class*="item-name-"],.font-bold,.font-semibold')?.textContent?.trim();
-  layer.querySelector('#vlSheetTitle').textContent=name?.slice(0,90)||'Tùy chọn';
-  layer.classList.add('open');
- }
- if(window.vlMenuController?.onItem)window.vlMenuController.onItem(({menu})=>{
-  if(mobile()&&!active){const trigger=document.querySelector('[aria-expanded="true"]')||document.activeElement;open(menu,trigger);}
- });
- // The item menu has already been toggled by legacy handler when this runs.
- document.addEventListener('click',e=>{
-  if(!mobile()||active)return;
-  const button=e.target.closest('button[onclick*="toggleItemMenu"],[onclick*="toggleItemMenu"]');
-  if(!button)return;
-  const match=button.getAttribute('onclick')?.match(/toggleItemMenu\(['"]([^'"]+)/);
-  setTimeout(()=>{
-   const menu=(match&&document.getElementById('menu-'+match[1]))||
-    button.closest('.subfolder-row,.mega-header,#fileList > div,#folderList > div')?.querySelector('.item-action-menu:not(.hidden)');
-   if(menu&&!menu.classList.contains('hidden'))open(menu,button);
-  },0);
- },true);
- // Keep an image decoded and sized while the listing DOM is reconstructed.
- // Match by stable media id and scope to the same authenticated browser session.
- const known=new Map();
- const getKey=img=>{
-  const url=img.getAttribute('src')||'';
-  try{
-   const u=new URL(url,location.href),id=u.searchParams.get('fileId')||u.searchParams.get('id');
-   if(id&&/^[\w-]{10,160}$/.test(id))return id;
-  }catch(_){}
-  const row=img.closest('.subfolder-row,.mega-header,#folderList > div');
-  const key=row?.querySelector('[class*="item-name-"]')?.className?.match(/item-name-([^ ]+)/)?.[1];
-  return key||null;
- };
- const apply=img=>{
-  if(!(img instanceof HTMLImageElement)||!img.isConnected)return;
-  const key=getKey(img);
-  if(!key)return;
-  const old=known.get(key);
-  if(old && old.src && img.getAttribute('src')!==old.src && !img.dataset.vlOriginalThumb){
-   // Only reuse verified first-party media, not temporary signed URLs.
-   const safe=old.src.startsWith('/api/media?')||old.src.startsWith(location.origin+'/api/media?');
-   if(safe)img.src=old.src;
+  'use strict';
+  if (window.__vlMobileDriveUX) return;
+  window.__vlMobileDriveUX = true;
+  const mobile = () => window.matchMedia('(max-width: 767px)').matches;
+  const ID = /^[A-Za-z0-9_-]{10,180}$/;
+  const style = document.createElement('style');
+  style.textContent = `
+    @media(max-width:767px){
+      #fileList.vl-pinterest:not(.list-view)>div{min-width:0!important;contain:layout style;}
+      #fileList.vl-pinterest:not(.list-view)>div>.h-32{
+        position:relative!important;display:block!important;flex:none!important;
+        width:100%!important;height:auto!important;min-height:0!important;
+        max-height:none!important;aspect-ratio:4 / 5!important;
+        overflow:hidden!important;background:#f1f5f9!important;
+        margin-bottom:10px!important;
+      }
+      #fileList.vl-pinterest:not(.list-view)>div>.h-32>img.drive-img-item,
+      #fileList.vl-pinterest:not(.list-view)>div>.h-32>img,
+      #fileList.vl-pinterest:not(.list-view)>div>.h-32>video{
+        position:absolute!important;inset:0!important;display:block!important;
+        width:100%!important;height:100%!important;min-height:0!important;
+        max-height:none!important;aspect-ratio:auto!important;
+        object-fit:contain!important;object-position:center!important;
+      }
+      #fileList.vl-pinterest:not(.list-view)>div:not(:has(>.h-32)):has([id^="menu-"])::before{
+        content:"";display:block;flex:none;width:100%;aspect-ratio:4 / 5;
+        border-radius:10px;background:#f1f5f9;margin-bottom:10px;
+      }
+      #fileList.vl-pinterest:not(.list-view)>div .drive-img-name{overflow-wrap:anywhere;}
+      #folderList img,.mega-header img,.subfolder-row img{object-fit:cover;}
+    }
+    #vlDriveSheetLayer{position:fixed;inset:0;z-index:2147482000;visibility:hidden;pointer-events:none;}
+    #vlDriveSheetLayer.open{visibility:visible;pointer-events:auto;}
+    #vlDriveSheetDim{position:absolute;inset:0;background:rgba(0,0,0,.42);opacity:0;transition:opacity .23s;}
+    #vlDriveSheetLayer.open #vlDriveSheetDim{opacity:1;}
+    #vlDriveSheet{position:absolute;left:0;right:0;bottom:0;max-height:85dvh;
+      display:flex;flex-direction:column;overflow:hidden;border-radius:24px 24px 0 0;
+      background:#fff;box-shadow:0 -12px 35px #0003;
+      padding-bottom:max(14px,env(safe-area-inset-bottom));
+      transform:translate3d(0,105%,0);
+      transition:transform .26s cubic-bezier(.2,.8,.2,1);isolation:isolate;}
+    #vlDriveSheetLayer.open #vlDriveSheet{transform:translate3d(0,0,0);}
+    #vlSheetGrip{width:38px;height:5px;flex:none;border-radius:6px;background:#cbd5e1;align-self:center;margin:10px 0;}
+    #vlSheetHeading{display:flex;align-items:center;gap:12px;flex:none;padding:6px 17px 12px;border-bottom:1px solid #e5e7eb;}
+    #vlSheetTitle{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+      white-space:nowrap;color:#1f2937;font:650 16px system-ui;}
+    #vlSheetClose{
+      appearance:none!important;box-sizing:border-box!important;display:flex!important;
+      align-items:center!important;justify-content:center!important;
+      flex:0 0 42px!important;width:42px!important;height:42px!important;
+      min-width:42px!important;min-height:42px!important;
+      margin:0!important;padding:0!important;line-height:0!important;
+      border:0!important;border-radius:50%!important;background:#fff1f2!important;
+      color:#db1010!important;cursor:pointer!important;touch-action:manipulation;
+      transform:none!important;position:relative;z-index:10;
+    }
+    #vlSheetClose svg{display:block;width:22px;height:22px;pointer-events:none;}
+    #vlSheetActions{overflow-y:auto;overscroll-behavior:contain;padding:6px 14px 10px;min-height:0;}
+    #vlSheetActions>.item-action-menu,#vlSheetActions>#headerDropdown{
+      display:block!important;position:static!important;inset:auto!important;
+      transform:none!important;width:100%!important;min-width:0!important;
+      max-width:none!important;max-height:none!important;overflow:visible!important;
+      box-shadow:none!important;border:0!important;border-radius:0!important;
+      background:transparent!important;margin:0!important;opacity:1!important;
+      visibility:visible!important;
+    }
+    #vlSheetActions :is(button,a,[role="menuitem"]){
+      box-sizing:border-box;min-height:46px;cursor:pointer;touch-action:manipulation;
+    }
+    #vlSheetActions .vl-sheet-empty{padding:18px 12px;color:#64748b;
+      font:500 14px/1.55 system-ui;text-align:center;}
+    @media(prefers-reduced-motion:reduce){
+      #vlDriveSheet,#vlDriveSheetDim{transition:none!important;}
+    }
+  `;
+  document.head.appendChild(style);
+
+  const layer = document.createElement('div');
+  layer.id = 'vlDriveSheetLayer';
+  layer.innerHTML =
+    '<div id="vlDriveSheetDim"></div>' +
+    '<section id="vlDriveSheet" role="dialog" aria-modal="true" aria-labelledby="vlSheetTitle">' +
+      '<div id="vlSheetGrip"></div><div id="vlSheetHeading">' +
+      '<span id="vlSheetTitle"></span><button id="vlSheetClose" type="button" aria-label="Đóng menu">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" aria-hidden="true">' +
+      '<path d="M5 5L19 19M19 5L5 19"></path></svg></button></div>' +
+      '<div id="vlSheetActions"></div></section>';
+  document.body.appendChild(layer);
+  const slot = layer.querySelector('#vlSheetActions');
+  const title = layer.querySelector('#vlSheetTitle');
+  const closeButton = layer.querySelector('#vlSheetClose');
+  let active = null, placeholder = null, trigger = null, timer = 0, lastTrigger = null;
+  const currentFolder = () => {
+    try { return typeof currentFolderId !== 'undefined' ? currentFolderId : window.currentFolderId; }
+    catch (_) { return window.currentFolderId; }
+  };
+  function cacheList() {
+    try { return typeof currentDriveItems !== 'undefined' ? currentDriveItems : window.currentDriveItems; }
+    catch (_) { return window.currentDriveItems; }
   }
-  img.style.aspectRatio='1 / 1';
-  img.style.objectFit='cover';
- };
- document.addEventListener('load',e=>{
-  const img=e.target;
-  if(!(img instanceof HTMLImageElement)||!img.naturalWidth)return;
-  const key=getKey(img);
-  if(key){
-   known.delete(key);known.set(key,{src:img.getAttribute('src')||''});
-   if(known.size>1000)known.delete(known.keys().next().value);
+  function meta() {
+    try { return typeof appMeta !== 'undefined' ? appMeta : window.appMeta; }
+    catch (_) { return window.appMeta; }
   }
- },true);
- const watch=new MutationObserver(records=>{
-  for(const record of records)for(const node of record.addedNodes){
-   if(node.nodeType!==1)continue;
-   if(node.matches?.('img'))apply(node);
-   node.querySelectorAll?.('img').forEach(apply);
+  function scopeKey() {
+    const shared = window.vlShareScope;
+    if (shared) return 'shared:' + String(shared.root || '') + ':' + String(shared.ready?.() || false);
+    return 'account:' + (localStorage.getItem('vinhloc_authenticated_email') || '') + ':' +
+      String(document.body.dataset.vlAccountRole || '');
   }
- });
- for(const id of ['folderList','fileList']){const el=document.getElementById(id);if(el)watch.observe(el,{childList:true,subtree:true});}
- document.querySelectorAll('#folderList img,#fileList img').forEach(apply);
- window.addEventListener('vl:account-role',()=>known.clear());
- window.addEventListener('storage',e=>{if(e.key==='vinhloc_authenticated_email')known.clear();});
+  const escapeId = id => window.CSS?.escape ? CSS.escape(id) : id.replace(/[^\w-]/g, '');
+  function labelFor(id, menu, button) {
+    const row = menu.closest('.mega-row,.subfolder-row,.mega-header,#fileList > div,#folderList > div') ||
+      button?.closest('.mega-row,.subfolder-row,.mega-header,#fileList > div,#folderList > div');
+    const node = row?.querySelector('.item-name-' + escapeId(id)) ||
+      row?.querySelector('.drive-img-name,[class*="item-name-"]') ||
+      document.querySelector('#folderList .item-name-' + escapeId(id)) ||
+      document.querySelector('#fileList .item-name-' + escapeId(id));
+    const name = node?.textContent?.trim() ||
+      cacheList()?.find?.(item => item.id === id)?.name ||
+      meta()?.[id]?.name ||
+      row?.querySelector('.font-bold,.font-semibold')?.textContent?.trim();
+    return name || 'Mục đã chọn';
+  }
+  function restore() {
+    if (!active) return;
+    const node = active, marker = placeholder;
+    active = null; placeholder = null;
+    if (node.isConnected && marker?.parentNode) marker.replaceWith(node);
+    else if (node.isConnected) node.remove();
+    else marker?.remove();
+    node.classList.add('hidden');
+    node.style.removeProperty('display');
+    node.style.removeProperty('max-height');
+    node.style.removeProperty('overflow-y');
+    node.style.removeProperty('width');
+    slot.replaceChildren();
+  }
+  function close(immediate = false) {
+    if (!active && !layer.classList.contains('open')) return;
+    layer.classList.remove('open');
+    document.body.classList.remove('vl-sheet-open');
+    clearTimeout(timer);
+    if (immediate || matchMedia('(prefers-reduced-motion: reduce)').matches) restore();
+    else timer = setTimeout(restore, 280);
+    if (trigger?.isConnected) {
+      try { trigger.focus({preventScroll:true}); } catch (_) {}
+    }
+    trigger = null;
+  }
+  closeButton.addEventListener('click', e => {
+    e.preventDefault(); e.stopImmediatePropagation(); close();
+  }, true);
+  layer.querySelector('#vlDriveSheetDim').addEventListener('click', e => {
+    e.preventDefault(); e.stopImmediatePropagation(); close();
+  }, true);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && layer.classList.contains('open')) {
+      e.preventDefault(); e.stopPropagation(); close();
+    }
+  }, true);
+  slot.addEventListener('click', e => {
+    if (e.target.closest('button,a,[onclick],[data-vl-owned],[data-vl-owner-action]')) {
+      setTimeout(() => close(), 0);
+    }
+  });
+  document.addEventListener('click', e => {
+    if (active && e.target.closest('#btnBack,.subfolder-row,.mega-header,[onclick*="loadFolder"]')) close(true);
+  }, true);
+
+  function showEmpty(menu) {
+    menu.querySelector('.vl-sheet-empty')?.remove();
+    // The existing permission-aware menu is authoritative. Never force
+    // display:none restricted actions to become visible or create a mutation.
+    const visible = [...menu.querySelectorAll('button,a,[onclick],[role="menuitem"]')]
+      .some(el => !el.disabled && !el.classList.contains('hidden') &&
+        getComputedStyle(el).display !== 'none' &&
+        getComputedStyle(el).visibility !== 'hidden' &&
+        !el.closest('[hidden],.hidden'));
+    if (!visible) {
+      const message = document.createElement('p');
+      message.className = 'vl-sheet-empty';
+      message.textContent = window.vlShareScope
+        ? 'Tài khoản dùng chung chưa có thao tác được cấp quyền cho mục này.'
+        : 'Chưa có thao tác khả dụng cho mục này.';
+      menu.appendChild(message);
+    }
+  }
+  function open(menu, id, source, isHeader = false) {
+    if (!mobile() || !menu || !menu.parentNode) return;
+    clearTimeout(timer);
+    if (active) restore();
+    const displayName = isHeader
+      ? (window.vlShareScope ? (window.vlShareScope.name || 'Bộ nhớ dùng chung') :
+         (String(currentFolder() || '') ? 'Tùy chọn ' + (document.getElementById('currentFolderName')?.textContent?.trim() || 'thư mục') : 'Tùy chọn'))
+      : labelFor(id, menu, source);
+    trigger = source || lastTrigger || document.activeElement;
+    placeholder = document.createComment('Original action menu slot');
+    menu.parentNode.insertBefore(placeholder, menu);
+    active = menu; // Important: close() must know which menu to restore.
+    slot.replaceChildren(menu);
+    menu.classList.remove('hidden');
+    menu.style.setProperty('display', 'block', 'important');
+    title.textContent = displayName.slice(0, 150);
+    showEmpty(menu);
+    layer.classList.add('open');
+    document.body.classList.add('vl-sheet-open');
+  }
+  // Capture the clicked element before the protected legacy handlers run.
+  document.addEventListener('pointerdown', e => {
+    const button = e.target.closest?.('[onclick*="toggleItemMenu"],[onclick*="toggleHeaderMenu"]');
+    if (button) lastTrigger = button;
+  }, true);
+  window.vlMenuController?.onItem?.(({id, menu}) => {
+    if (mobile()) open(menu, id, lastTrigger);
+  });
+  window.vlMenuController?.onHeader?.(({menu}) => {
+    if (mobile()) open(menu, 'header', lastTrigger ||
+      document.querySelector('#headerDropdownContainer > button'), true);
+  });
+  // Legacy toggles can be triggered without the coordinator. Guard only
+  // the fallback path, so a single tap never opens the sheet twice.
+  document.addEventListener('click', e => {
+    if (!mobile()) return;
+    const button = e.target.closest?.('[onclick*="toggleItemMenu"]');
+    if (!button || layer.classList.contains('open')) return;
+    const inline = button.getAttribute('onclick') || '';
+    const id = inline.match(/toggleItemMenu\(\s*['"]([^'"]+)/)?.[1];
+    setTimeout(() => {
+      const menu = id ? document.getElementById('menu-' + id) : null;
+      if (menu && !menu.classList.contains('hidden') && !active) open(menu, id, button);
+    }, 0);
+  }, true);
+  window.addEventListener('resize', () => { if (!mobile()) close(true); }, {passive:true});
+
+  // An already-decoded IMG remains decoded when the exact DOM image element
+  // is reinserted. Only hold a bounded RAM LRU, never store private pixels or
+  // tokens in LocalStorage, IndexedDB or a public Service Worker cache.
+  const decoded = new Map();
+  const MAX_IMAGES = 180;
+  let identity = scopeKey();
+  function imageKey(img) {
+    if (!img || !img.matches('img')) return '';
+    if (!img.closest('#fileList,#folderList') &&
+        !img.closest('.mega-row,.mega-header,.subfolder-row')) return '';
+    for (const cls of img.classList) {
+      if (cls.startsWith('item-cover-img-')) {
+        const id = cls.slice('item-cover-img-'.length);
+        if (ID.test(id)) return 'cover:' + id;
+      }
+    }
+    const row = img.closest('.subfolder-row,.mega-row,.mega-header,#fileList > div,#folderList > div');
+    const id = row?.querySelector('.item-action-menu[id^="menu-"]')?.id?.slice(5) ||
+      row?.querySelector('[class*="item-name-"]')?.className?.match(/item-name-([\w-]{10,180})/)?.[1] || '';
+    if (ID.test(id)) return row.closest('#fileList') ? 'file:' + id : 'folder:' + id;
+    try {
+      const url = new URL(img.getAttribute('src') || '', location.href);
+      const key = url.searchParams.get('fileId') || url.searchParams.get('id');
+      if (ID.test(key || '')) return 'image:' + key;
+    } catch (_) {}
+    return '';
+  }
+  function rememberRemoved(node) {
+    if (node.nodeType !== 1) return;
+    const imgs = node.matches?.('img') ? [node] : [...node.querySelectorAll('img')];
+    for (const img of imgs) {
+      if (img.isConnected || !img.complete || img.naturalWidth <= 0) continue;
+      const key = imageKey(img);
+      if (!key) continue;
+      decoded.delete(key);
+      decoded.set(key, img);
+      if (decoded.size > MAX_IMAGES) decoded.delete(decoded.keys().next().value);
+    }
+  }
+  function restoreAdded(node) {
+    if (node.nodeType !== 1) return;
+    const imgs = node.matches?.('img') ? [node] : [...node.querySelectorAll('img')];
+    for (const img of imgs) {
+      if (!img.isConnected) continue;
+      const key = imageKey(img);
+      const previous = decoded.get(key);
+      if (!key || !previous || previous === img || previous.isConnected ||
+          !previous.complete || !previous.naturalWidth) continue;
+      // Do not resurrect a different Drive cover or a different video frame.
+      const oldURL = previous.getAttribute('src') || '';
+      const newURL = img.getAttribute('src') || '';
+      const coverSource = url => {
+        try { const u = new URL(url, location.href); return u.searchParams.get('fileId') || u.searchParams.get('id') || ''; }
+        catch (_) { return ''; }
+      };
+      if (key.startsWith('cover:') && coverSource(oldURL) && coverSource(newURL) &&
+          coverSource(oldURL) !== coverSource(newURL)) continue;
+      decoded.delete(key);
+      img.replaceWith(previous);
+    }
+  }
+  const observer = new MutationObserver(records => {
+    const next = scopeKey();
+    if (next !== identity) { decoded.clear(); identity = next; return; }
+    // Collect detached pixels before attempting to attach fresh cards.
+    for (const rec of records) for (const node of rec.removedNodes) rememberRemoved(node);
+    for (const rec of records) for (const node of rec.addedNodes) restoreAdded(node);
+  });
+  for (const id of ['folderList','fileList']) {
+    const el = document.getElementById(id);
+    if (el) observer.observe(el, {childList:true,subtree:true});
+  }
+  window.addEventListener('vl:media-authorized', () => { decoded.clear(); identity = scopeKey(); });
+  window.addEventListener('vl:share-member-ready', () => { decoded.clear(); identity = scopeKey(); });
+  window.addEventListener('storage', e => {
+    if (e.key === 'vinhloc_authenticated_email') { decoded.clear(); identity = scopeKey(); }
+  });
+  // Avoid keeping decoded images from an old account after an in-tab logout.
+  setInterval(() => {
+    const next = scopeKey();
+    if (next !== identity) { decoded.clear(); identity = next; }
+  }, 2000);
 })();

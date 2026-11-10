@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.70",
-  "deployment_purpose": "Mobile action menus slide up as Drive-style bottom sheets with dim backdrop and red close button. Stabilize folder, mega-row, image and video thumbnail tile dimensions and reuse thumbnails loaded in the current browser session.",
+  "version": "3.1.71",
+  "deployment_purpose": "Fix mobile sheet close and centered red X, item-specific menu titles and shared account empty-state; prevent mobile media tile jumps and retain decoded folder/mega-row/file thumbnail elements across navigation.",
   "deployment_trigger_date": "2026-11-10"
 }
