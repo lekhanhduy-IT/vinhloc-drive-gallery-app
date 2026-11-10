@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.72",
-  "deployment_purpose": "Emergency fix: restore image/video thumbnail rendering without DOM image replacement, reserve mobile gallery slots, grant media access from the initial Google sign-in, retain verified session on application updates, and preserve mobile action sheet controls.",
+  "version": "3.1.73",
+  "deployment_purpose": "Preserve native menu action handling under a mobile mirrored sheet, remove successfully deleted Pinterest cards by Drive ID, refresh shared-folder snapshots, and correct selected file targeting.",
   "deployment_trigger_date": "2026-11-11"
 }
