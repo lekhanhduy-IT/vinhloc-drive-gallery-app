@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.77",
-  "deployment_purpose": "Fix repeating folder-cover src rewrites and image/fallback width jumps. Move folder child cover IDs and verified uploader metadata into the existing authenticated Redis folder cache for cross-device hydration; propagate only changed cover refs and prime verified owner actions without weakening delete authorization.",
+  "version": "3.1.78",
+  "deployment_purpose": "Eliminate thumbnail flashing on returning to previously visited folders by reusing decoded file/video/folder IMG elements by scoped Drive ID, restoring intrinsic aspect ratios, and preserving current menus, selection and permissions. No Drive data or authorization changes.",
   "deployment_trigger_date": "2026-11-11"
 }
