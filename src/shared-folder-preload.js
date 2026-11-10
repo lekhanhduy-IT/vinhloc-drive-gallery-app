@@ -16,6 +16,8 @@
   let cacheHealthy=false;
   let auth=false,booting=false,failedUntil=0,active=0,lastAuth=0;
   let flushTimer=null,bootedScope='',lastSnapshot=0;
+  let lastVisiblePollAt=0,lastVisiblePollFolder='';
+  const POLL_VISIBLE_MS=30000;
   const localCache=()=>{
     try{return typeof folderDataCache!=='undefined'?folderDataCache:window.folderDataCache;}
     catch(_){return window.folderDataCache;}
@@ -301,6 +303,16 @@
     else {
       disableOldSpider();
       work();
+      // Poll one OPEN folder's Redis snapshot, not every thumbnail and
+      // not a new Drive listing on each render. Other devices' cover
+      // changes arrive through the same signed metadata event.
+      const id=activeFolder(),now=Date.now();
+      if(!document.hidden && ID.test(id||'') &&
+         (id!==lastVisiblePollFolder || now-lastVisiblePollAt>POLL_VISIBLE_MS)){
+        lastVisiblePollFolder=id;
+        lastVisiblePollAt=now;
+        void hydrateFolder(id).catch(()=>{});
+      }
     }
   },2000);
   if(document.readyState==='loading')
