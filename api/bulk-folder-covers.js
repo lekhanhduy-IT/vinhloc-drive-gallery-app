@@ -13,7 +13,7 @@ const COVER='vlCoverImageId';
 const redis=Redis.fromEnv();
 async function syncParentCachedCover(folderId,parentId,imageId){
   if(!isId(parentId))return;
-  const key='vl:folder:v3:'+ROOT+':'+parentId;
+  const key='vl:folder:v2:'+ROOT+':'+parentId;
   const saved=await redis.get(key);
   if(!saved||!Array.isArray(saved.items))return;
   const items=saved.items.map(item=>item.id===folderId&&item.type==='folder'?

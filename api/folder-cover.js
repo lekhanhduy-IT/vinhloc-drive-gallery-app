@@ -15,7 +15,7 @@ async function publishCover(folderId,parentId,imageId,scopeRoot){
   if(!idOK(parentId))return;
   const scopes=[...new Set([ROOT,scopeRoot].filter(idOK))];
   await Promise.all(scopes.map(async root=>{
-    const key='vl:folder:v3:'+root+':'+parentId;
+    const key='vl:folder:v2:'+root+':'+parentId;
     const saved=await redis.get(key);
     if(!saved || !Array.isArray(saved.items))return;
     const next=saved.items.map(item=>item.id===folderId&&item.type==='folder'?

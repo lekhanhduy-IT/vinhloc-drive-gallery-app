@@ -12,7 +12,7 @@
   const RETRY=90*1000;
   const WORKERS=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)?1:2;
   const queued=new Set(),queue=[],verified=new Map(),verifiedItems=new Map();
-  const serverPermitted=new Set(),refreshTimers=new Map();
+  const serverPermitted=new Set(),refreshTimers=new Map(),upgradePending=new Set();
   let cacheHealthy=false;
   let auth=false,booting=false,failedUntil=0,active=0,lastAuth=0;
   let flushTimer=null,bootedScope='',lastSnapshot=0;
@@ -238,6 +238,14 @@
        !serverPermitted.has(id))return false;
     const response=await call('get',{folderId:id});
     apply(id,response.data,response.updatedAt,'snapshot',response.viewerEmail);
+    if(response.needsUpgrade && !upgradePending.has(id)){
+      // Serve the PREVIOUS shared Redis cache immediately, then enrich
+      // it with folder-cover/uploader fields in the background. Avoid
+      // wiping all existing cross-device folders during a schema release.
+      upgradePending.add(id);
+      void warm(id,true).catch(error=>console.warn('[QL Ảnh] Cập nhật metadata cache',error))
+        .finally(()=>upgradePending.delete(id));
+    }
     return true;
   }
   function refreshFolder(id){

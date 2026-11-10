@@ -19,8 +19,8 @@ const reply=(res,status,message,extra={})=>{
   res.setHeader('X-Content-Type-Options','nosniff');
   return res.status(status).json({success:status<400,message,...extra});
 };
-const key=(root,id)=>'vl:folder:v3:'+root+':'+id;
-const indexKey=root=>'vl:folder:v3:index:'+root;
+const key=(root,id)=>'vl:folder:v2:'+root+':'+id;
+const indexKey=root=>'vl:folder:v2:index:'+root;
 async function getDrive(url,token){
   const response=await fetch(url,{
     headers:{Authorization:'Bearer '+token},
@@ -129,15 +129,17 @@ export default async function handler(req,res){
     const cacheKey=key(scope,id);
     let cached=await redis.get(cacheKey);
     if(cached&&Array.isArray(cached.items)&&
-      (action==='get'||(!data.force&&Date.now()-Number(cached.updatedAt||0)<FRESH_MS))){
+      (action==='get'||(!data.force&&Number(cached.schemaVersion)===3&&
+       Date.now()-Number(cached.updatedAt||0)<FRESH_MS))){
       return reply(res,200,'OK',{folderId:id,data:cached.items,
+        needsUpgrade:Number(cached.schemaVersion)!==3,
         viewerEmail:String(account.email||'').toLowerCase(),
         updatedAt:cached.updatedAt,source:'shared-cache',
         fresh:Date.now()-Number(cached.updatedAt||0)<FRESH_MS});
     }
     const items=await listFolder(id,token);
     const updatedAt=Date.now();
-    await redis.set(cacheKey,{items,updatedAt},{ex:DATA_TTL});
+    await redis.set(cacheKey,{items,updatedAt,schemaVersion:3},{ex:DATA_TTL});
     await redis.sadd(indexKey(scope),id);
     return reply(res,200,'OK',{folderId:id,data:items,
       viewerEmail:String(account.email||'').toLowerCase(),updatedAt,
