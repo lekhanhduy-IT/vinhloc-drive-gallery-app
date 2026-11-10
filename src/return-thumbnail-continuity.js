@@ -120,6 +120,13 @@
      const id=imageItemId(img,kind,context);
      if(!ID.test(id))continue;
      if(kind==='file')saveRatio(id,img);
+     if(kind==='folder'){
+       const expectedCover=revision(folderId,id,'folder');
+       const actualCover=sourceIdentity(img);
+       // If Drive published a new cover while an older image was still
+       // painted, never cache the stale picture as the new revision.
+       if(expectedCover&&actualCover&&expectedCover!==actualCover)continue;
+     }
      const key=cacheKey(kind,folderId,id);
      images.delete(key);
      images.set(key,{img,at:Date.now(),media:sourceIdentity(img),
@@ -196,18 +203,21 @@
      }
    }
  }
- let trackedFolder=currentFolder();
+ const trackedFolders={file:currentFolder(),folder:currentFolder()};
  resetScope();
  function observe(list,kind){
    new MutationObserver(records=>{
-     if(accountScope()!==scope){resetScope();trackedFolder=currentFolder();return;}
-     const previous=trackedFolder||currentFolder(),next=currentFolder()||previous;
+     if(accountScope()!==scope){
+       resetScope();trackedFolders[kind]=currentFolder();return;
+     }
+     const previous=trackedFolders[kind]||currentFolder();
+     const next=currentFolder()||previous;
      // Mutation records retain detached card descendants. Capture all old
      // decoded images BEFORE matching them to newly created placeholders.
      for(const record of records){
        for(const node of record.removedNodes)capture(node,kind,previous,record.target);
      }
-     trackedFolder=next;
+     trackedFolders[kind]=next;
      for(const record of records){
        for(const node of record.addedNodes)restore(node,kind,next,record.target);
      }
@@ -222,7 +232,8 @@
    resetScope();
    for(const node of folderList.children)capture(node,'folder',id,folderList);
    for(const node of fileList.children)capture(node,'file',id,fileList);
-   trackedFolder=id;
+   trackedFolders.file=id;
+   trackedFolders.folder=id;
  }
  document.addEventListener('click',event=>{
    if(event.target?.closest?.('#btnBack,.subfolder-row,.mega-row,.mega-header,[onclick*="loadFolder"]'))
