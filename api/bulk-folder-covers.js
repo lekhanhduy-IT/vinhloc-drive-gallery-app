@@ -2,6 +2,7 @@
    Browse DIRECT CHILDREN of one verified folder at a time; there is no
    Shared Drive-wide file listing. Preserve appProperties.vlCoverImageId. */
 import {verifiedAccount,serverDriveToken} from './media.js';
+import {Redis} from '@upstash/redis';
 
 export const config={maxDuration:60};
 const DRIVE='0AMLRHzF05fTFUk9PVA';
@@ -9,6 +10,17 @@ const ROOT='1xWDed1IBzGdCA4r5vbds1x6AF31hSIUT';
 const API='https://www.googleapis.com/drive/v3/files';
 const FOLDER='application/vnd.google-apps.folder';
 const COVER='vlCoverImageId';
+const redis=Redis.fromEnv();
+async function syncParentCachedCover(folderId,parentId,imageId){
+  if(!isId(parentId))return;
+  const key='vl:folder:v3:'+ROOT+':'+parentId;
+  const saved=await redis.get(key);
+  if(!saved||!Array.isArray(saved.items))return;
+  const items=saved.items.map(item=>item.id===folderId&&item.type==='folder'?
+    {...item,coverImageId:imageId,coverUpdatedAt:Date.now()}:item);
+  if(items.some((x,i)=>x!==saved.items[i]))
+    await redis.set(key,{...saved,items},{ex:48*3600});
+}
 const isId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{10,180}$/.test(value);
 function respond(res,status,message,extra={}){
   res.setHeader('Cache-Control','private, no-store');
@@ -102,6 +114,8 @@ async function applyOne(folderId,imageId,overwrite,token){
     });
   if(updated.appProperties?.[COVER]!==imageId)
     return {folderId,status:'failed',message:'Drive chưa xác nhận lưu thumbnail'};
+  try{await syncParentCachedCover(folderId,folder.parents?.[0],imageId);}
+  catch(error){console.warn('[bulk-folder-covers] Redis cache will refresh',error);}
   return {folderId,status:'written',imageId};
 }
 export default async function handler(req,res){
