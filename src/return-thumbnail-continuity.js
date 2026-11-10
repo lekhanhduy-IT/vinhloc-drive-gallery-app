@@ -10,7 +10,9 @@
  const fileList=document.getElementById('fileList');
  if(!folderList||!fileList)return;
  const ID=/^[A-Za-z0-9_-]{10,180}$/;
- const MAX_IMAGES=96, MAX_AGE=8*60*1000;
+ // Retain up to 96 decoded IMG elements for the life of this tab; only
+ // account changes, media revisions, explicit deletion and memory caps invalidate them.
+ const MAX_IMAGES=96;
  const images=new Map();
  const ratios=new Map();
  const RATIO_STORAGE='vl-preview-dimensions-v1:';
@@ -171,8 +173,7 @@
      if(incoming.complete&&incoming.naturalWidth>0)continue;
      const key=cacheKey(kind,folderId,id),saved=images.get(key);
      if(!saved || saved.img===incoming || saved.img.isConnected ||
-         !saved.img.complete || saved.img.naturalWidth<1 ||
-         Date.now()-saved.at>MAX_AGE)continue;
+         !saved.img.complete || saved.img.naturalWidth<1)continue;
      const previous=revision(folderId,id,kind);
      if(previous&&saved.revision&&previous!==saved.revision)continue;
      const incomingSource=sourceIdentity(incoming);
