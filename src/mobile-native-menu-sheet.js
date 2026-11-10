@@ -1,154 +1,205 @@
-/* v3.1.74: mobile native menu sheet. Never detach or clone actions.
-   Existing click listeners, permission checks and Drive handlers stay in place. */
+/* v3.1.75: native iOS/Android bottom sheet using the browser top layer.
+   Use the REAL original menu node without moving or cloning it.
+   This avoids reparenting bugs and prevents sibling rows from rising above
+   the backdrop or the three-dot button from shifting. */
 (() => {
  'use strict';
- if (window.__vlNativeMobileSheet) return;
- window.__vlNativeMobileSheet = true;
- const isMobile = () => matchMedia('(max-width:767px)').matches;
- const css = document.createElement('style');
- css.textContent = `
- #vlNativeSheetScrim{position:fixed;inset:0;background:rgba(0,0,0,.43);opacity:0;visibility:hidden;
-   pointer-events:none;z-index:2147482100;transition:opacity .22s ease}
- #vlNativeSheetScrim.open{opacity:1;visibility:visible;pointer-events:auto}
+ if(window.__vlNativeMobileSheet)return;
+ window.__vlNativeMobileSheet=true;
+ const mobile=()=>matchMedia('(max-width:767px)').matches;
+ const stylesheet=document.createElement('style');
+ stylesheet.id='vl-native-mobile-sheet-css';
+ stylesheet.textContent=String.raw`
  @media(max-width:767px){
-  .vl-native-sheet-lift{position:relative!important;z-index:2147482400!important}
-  .item-action-menu.vl-native-sheet,#headerDropdown.vl-native-sheet{
-   box-sizing:border-box!important;display:block!important;position:fixed!important;
-   left:0!important;right:0!important;top:auto!important;bottom:0!important;
-   transform:translate3d(0,0,0)!important;margin:0!important;
+  html:has(.vl-native-sheet:popover-open),
+  body:has(.vl-native-sheet:popover-open){overscroll-behavior:contain}
+  .item-action-menu.vl-native-sheet:popover-open,
+  #headerDropdown.vl-native-sheet:popover-open{
+   display:block!important;visibility:visible!important;opacity:1!important;
+   position:fixed!important;box-sizing:border-box!important;
+   inset:auto 0 0 0!important;top:auto!important;bottom:0!important;
+   left:0!important;right:0!important;
    width:100vw!important;min-width:0!important;max-width:100vw!important;
-   max-height:85dvh!important;overflow-y:auto!important;overflow-x:hidden!important;
-   overscroll-behavior:contain!important;padding:0 16px max(12px,env(safe-area-inset-bottom))!important;
-   background:#fff!important;border:0!important;border-radius:25px 25px 0 0!important;
-   box-shadow:0 -12px 32px rgba(0,0,0,.18)!important;z-index:2147483000!important;
-   opacity:1!important;visibility:visible!important;isolation:isolate!important;
-   animation:vl-native-sheet-enter .25s cubic-bezier(.2,.7,.2,1) both!important
+   height:auto!important;max-height:min(85dvh,850px)!important;
+   overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior:contain!important;
+   transform:none!important;translate:0 0!important;
+   padding:0 16px max(14px,env(safe-area-inset-bottom,0px))!important;
+   margin:0!important;border:0!important;border-radius:24px 24px 0 0!important;
+   box-shadow:0 -12px 35px rgba(0,0,0,.16)!important;
+   background:#fff!important;color:#1f2937!important;
+   isolation:isolate!important;z-index:2147483000!important;
+   animation:vl-native-sheet-enter .24s cubic-bezier(.2,.7,.2,1) both!important
   }
-  .vl-native-sheet-heading{box-sizing:border-box;display:flex;flex-direction:column;width:100%;
-   gap:11px;padding:11px 0 12px;margin:0;border-bottom:1px solid #e5e7eb;
-   background:white;position:sticky;top:0;z-index:4}
-  .vl-native-sheet-grip{display:block;width:38px;height:5px;align-self:center;border-radius:10px;background:#cbd5e1}
-  .vl-native-sheet-title-row{display:flex;align-items:center;gap:12px;min-height:48px}
-  .vl-native-sheet-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
-   white-space:nowrap;font:650 16px/1.35 system-ui;color:#1f2937}
-  .vl-native-sheet-close{appearance:none!important;display:flex!important;justify-content:center!important;
-   align-items:center!important;box-sizing:border-box!important;width:42px!important;
-   min-width:42px!important;height:42px!important;min-height:42px!important;
-   flex:0 0 42px!important;line-height:0!important;border-radius:50%!important;
-   border:0!important;background:#fff1f2!important;color:#db1010!important;
-   padding:0!important;margin:0!important;position:relative!important;
-   cursor:pointer!important;transform:none!important}
-  .vl-native-sheet-close svg{width:21px;height:21px;pointer-events:none;display:block}
-  .item-action-menu.vl-native-sheet > :not(.vl-native-sheet-heading),
-  #headerDropdown.vl-native-sheet > :not(.vl-native-sheet-heading){max-width:100%;box-sizing:border-box}
-  .item-action-menu.vl-native-sheet button:not(.vl-native-sheet-close),
-  #headerDropdown.vl-native-sheet button:not(.vl-native-sheet-close){min-height:44px}
+  .vl-native-sheet:popover-open::backdrop{
+   background:rgba(0,0,0,.46)!important;
+   backdrop-filter:none!important;
+  }
+  .vl-native-sheet-heading{
+   box-sizing:border-box;position:sticky;top:0;z-index:5;
+   width:100%;display:flex;flex-direction:column;gap:10px;
+   margin:0;padding:12px 0 14px;border-bottom:1px solid #e5e7eb;background:#fff
+  }
+  .vl-native-sheet-grip{width:39px;height:5px;border-radius:8px;
+   align-self:center;background:#cbd5e1;display:block}
+  .vl-native-sheet-title-row{display:flex;align-items:center;gap:12px;min-height:46px}
+  .vl-native-sheet-title{
+   min-width:0;flex:1;max-width:100%;overflow:hidden;text-overflow:ellipsis;
+   white-space:nowrap;font:650 16px/1.35 system-ui;color:#1f2937
+  }
+  .vl-native-sheet-close{
+   appearance:none!important;display:flex!important;align-items:center!important;
+   justify-content:center!important;box-sizing:border-box!important;
+   width:44px!important;min-width:44px!important;
+   height:44px!important;min-height:44px!important;
+   flex:0 0 44px!important;position:relative!important;
+   padding:0!important;margin:0!important;transform:none!important;
+   border:0!important;border-radius:50%!important;line-height:0!important;
+   background:#fff1f2!important;color:#db1010!important;
+   box-shadow:none!important;cursor:pointer!important
+  }
+  .vl-native-sheet-close svg{display:block!important;width:21px!important;
+   height:21px!important;pointer-events:none}
+  .vl-native-sheet:popover-open button:not(.vl-native-sheet-close){
+   min-height:42px
+  }
   @keyframes vl-native-sheet-enter{
-   from{opacity:.92;translate:0 100%}to{opacity:1;translate:0 0}
+   from{opacity:.97;translate:0 100%}to{opacity:1;translate:0 0}
   }
  }
  @media(prefers-reduced-motion:reduce){
-  .item-action-menu.vl-native-sheet,#headerDropdown.vl-native-sheet{animation:none!important}
-  #vlNativeSheetScrim{transition:none}
+  .vl-native-sheet:popover-open{animation:none!important}
  }
- `;
- document.head.appendChild(css);
- const scrim=document.createElement('div');scrim.id='vlNativeSheetScrim';
- document.body.appendChild(scrim);
- let current=null,heading=null,lifted=[],oldRole=null,lastTrigger=null;
- const idOk=id=>/^[A-Za-z0-9_-]{10,180}$/.test(String(id||''));
- function currentName(){
-   try{
-     const stack=typeof folderStack!=='undefined'?folderStack:window.folderStack;
-     if(Array.isArray(stack)&&stack.length)return String(stack[stack.length-1].name||'').trim();
-   }catch(_){}
-   return document.getElementById('currentFolderName')?.textContent?.trim().split(/[›>]/).pop()?.trim()||'Thư mục hiện tại';
+`;
+ document.head.appendChild(stylesheet);
+
+ const fileIdOk=/^[A-Za-z0-9_-]{10,180}$/;
+ let active=null,heading=null,oldRole=null,oldPopover=null,observer=null,openedBy=null;
+ function folderName(){
+  try{
+   const stack=typeof folderStack!=='undefined'?folderStack:window.folderStack;
+   if(Array.isArray(stack)&&stack.length)
+    return String(stack[stack.length-1].name||'').trim();
+  }catch(_){}
+  const raw=document.getElementById('currentFolderName')?.textContent?.trim()||'';
+  return raw.split(/[›>]/).pop()?.trim()||'Thư mục hiện tại';
  }
  function itemName(id,menu){
-   const row=menu.closest('.subfolder-row,.mega-header,.mega-row,#fileList > div,#folderList > div');
-   const own=Array.from(row?.querySelectorAll('[class*="item-name-"],.drive-img-name')||[])
-     .find(el=>Array.from(el.classList).some(cl=>cl==='item-name-'+id))||
-     row?.querySelector('.drive-img-name,[class*="item-name-"]');
-   if(own?.textContent?.trim())return own.textContent.trim();
-   const rowTitle=row?.querySelector('.font-bold,.font-semibold,.text-lg');
-   if(rowTitle?.textContent?.trim())return rowTitle.textContent.trim();
-   const all=document.querySelectorAll('#folderList [class*="item-name-"],#fileList [class*="item-name-"]');
-   for(const el of all)if(el.classList.contains('item-name-'+id)&&el.textContent.trim())
-     return el.textContent.trim();
-   try{
-     const items=typeof currentDriveItems!=='undefined'?currentDriveItems:window.currentDriveItems;
-     const name=items?.find?.(it=>it.id===id)?.name;
-     if(name)return String(name);
-   }catch(_){}
-   return 'Mục đã chọn';
+  const card=menu.closest('.subfolder-row,.mega-header,.mega-row,#fileList > div,#folderList > div');
+  const local=card?.querySelector('.drive-img-name,.font-bold,.font-semibold,[class*="item-name-"]');
+  if(local?.textContent?.trim())return local.textContent.trim();
+  for(const e of document.querySelectorAll('#folderList [class*="item-name-"],#fileList [class*="item-name-"]'))
+   if(e.classList.contains('item-name-'+id)&&e.textContent.trim())return e.textContent.trim();
+  try{
+   const arr=typeof currentDriveItems!=='undefined'?currentDriveItems:window.currentDriveItems;
+   const item=arr?.find?.(x=>x.id===id);
+   if(item?.name)return String(item.name);
+  }catch(_){}
+  return 'Mục đã chọn';
  }
  function cleanup(){
-   if(current?.isConnected){
-     current.classList.remove('vl-native-sheet');
-     current.classList.add('hidden');
-     if(oldRole===null)current.removeAttribute('role');
-     else current.setAttribute('role',oldRole);
-     current.removeAttribute('aria-modal');
+  const menu=active;
+  observer?.disconnect();observer=null;
+  active=null;
+  if(menu){
+   if(menu.matches?.(':popover-open')){
+    try{menu.hidePopover();}catch(_){}
    }
-   heading?.remove();heading=null;current=null;oldRole=null;
-   for(const el of lifted)el.classList.remove('vl-native-sheet-lift');
-   lifted=[];
-   scrim.classList.remove('open');
-   document.body.classList.remove('vl-native-sheet-active');
+   menu.classList.remove('vl-native-sheet');
+   menu.classList.add('hidden');
+   if(oldPopover===null)menu.removeAttribute('popover');
+   else menu.setAttribute('popover',oldPopover);
+   if(oldRole===null)menu.removeAttribute('role');
+   else menu.setAttribute('role',oldRole);
+   menu.removeAttribute('aria-modal');
+  }
+  heading?.remove();heading=null;oldPopover=null;oldRole=null;
+  if(openedBy?.isConnected){
+   try{openedBy.focus({preventScroll:true})}catch(_){}
+  }
+  openedBy=null;
  }
- function close(){if(!current)return;cleanup();}
- scrim.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();close();});
+ function close(){if(active)cleanup();}
  window.addEventListener('keydown',e=>{
-   if(e.key==='Escape'&&current){e.preventDefault();e.stopPropagation();close();}
+  if(e.key==='Escape'&&active){e.preventDefault();e.stopPropagation();close();}
  },true);
- // Keep native menu events on their original elements, not synthetic .click().
- // Schedule closing AFTER the existing delegated handlers get the real tap.
+ // Backdrop receives pointer events with the popover itself as target.
+ window.addEventListener('pointerdown',e=>{
+  if(!active)return;
+  const rect=active.getBoundingClientRect();
+  if(e.target===active &&
+    (e.clientY<rect.top || e.clientY>rect.bottom ||
+     e.clientX<rect.left || e.clientX>rect.right)){
+   e.preventDefault();e.stopPropagation();close();
+  }
+ },true);
+ // Window capture delegates all real menu actions untouched.
  window.addEventListener('click',e=>{
-   if(!current || !current.contains(e.target))return;
-   if(e.target.closest('.vl-native-sheet-close')){
-     e.preventDefault();e.stopImmediatePropagation();close();return;
-   }
-   if(!e.target.closest('.vl-native-sheet-heading'))queueMicrotask(close);
+  if(!active)return;
+  if(e.target.closest?.('.vl-native-sheet-close')&&active.contains(e.target)){
+   e.preventDefault();e.stopImmediatePropagation();close();return;
+  }
+  if(!active.contains(e.target))return;
+  if(e.target.closest?.('.vl-native-sheet-heading'))return;
+  const menu=active;
+  queueMicrotask(()=>{if(active===menu)close();});
  },true);
- // Owner action handlers can stop the click event at window capture.
- // A completed touch gesture still closes the sheet without intercepting it.
+ // Some owner-action handlers stop propagation at window capture.
+ // Pointerup is separate from click, so it still closes after their action.
  window.addEventListener('pointerup',e=>{
-   if(!current||!current.contains(e.target)||
-      e.target.closest('.vl-native-sheet-heading'))return;
-   const opened=current;
-   setTimeout(()=>{if(current===opened)close();},260);
+  if(!active||!active.contains(e.target)||
+    e.target.closest?.('.vl-native-sheet-heading'))return;
+  const menu=active;
+  setTimeout(()=>{if(active===menu)close();},250);
  },true);
- window.addEventListener('resize',()=>{if(current&&!isMobile())close();},{passive:true});
+ window.addEventListener('resize',()=>{
+  if(active&&!mobile())close();
+ },{passive:true});
  function open(menu,id,header=false){
-   if(!isMobile()||!menu?.isConnected)return;
-   if(current===menu)return;
-   if(current)cleanup();
-   // These are the very same menu nodes used on desktop. Their native
-   // onclick/listener ancestry is untouched and ownership checks still run.
-   oldRole=menu.getAttribute('role');
-   const name=header?currentName():(idOk(id)?itemName(id,menu):'Mục đã chọn');
-   const wrapper=document.createElement('div');
-   wrapper.className='vl-native-sheet-heading';
-   wrapper.innerHTML='<span class="vl-native-sheet-grip" aria-hidden="true"></span>'+
-    '<div class="vl-native-sheet-title-row"><strong class="vl-native-sheet-title"></strong>'+
-    '<button type="button" class="vl-native-sheet-close" aria-label="Đóng menu">'+
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true">'+
-    '<path d="M5 5L19 19M19 5L5 19"></path></svg></button></div>';
-   wrapper.querySelector('.vl-native-sheet-title').textContent=name;
-   heading=wrapper;
-   menu.prepend(wrapper);
-   menu.classList.remove('hidden');
-   menu.classList.add('vl-native-sheet');
-   menu.setAttribute('role','dialog');
-   menu.setAttribute('aria-modal','true');
-   // Raise existing ancestors above the scrim without moving the menu.
-   for(let el=menu.parentElement;el&&el!==document.body;el=el.parentElement){
-     el.classList.add('vl-native-sheet-lift');
-     lifted.push(el);
-   }
-   current=menu;
-   scrim.classList.add('open');
-   document.body.classList.add('vl-native-sheet-active');
+  if(!mobile()||!menu?.isConnected)return;
+  if(typeof menu.showPopover!=='function')return;
+  if(active===menu)return;
+  if(active)close();
+  openedBy=document.activeElement;
+  oldRole=menu.getAttribute('role');
+  oldPopover=menu.getAttribute('popover');
+  const label=header?folderName():fileIdOk.test(id||'')?itemName(id,menu):'Mục đã chọn';
+  const head=document.createElement('div');
+  head.className='vl-native-sheet-heading';
+  const grip=document.createElement('span');grip.className='vl-native-sheet-grip';
+  grip.setAttribute('aria-hidden','true');
+  const titleRow=document.createElement('div');titleRow.className='vl-native-sheet-title-row';
+  const title=document.createElement('strong');title.className='vl-native-sheet-title';
+  title.textContent=label;
+  const closeButton=document.createElement('button');
+  closeButton.type='button';closeButton.className='vl-native-sheet-close';
+  closeButton.setAttribute('aria-label','Đóng menu');
+  closeButton.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 5L19 19M19 5L5 19"></path></svg>';
+  titleRow.append(title,closeButton);head.append(grip,titleRow);
+  menu.prepend(head);heading=head;
+  menu.classList.remove('hidden');
+  menu.classList.add('vl-native-sheet');
+  menu.setAttribute('popover','manual');
+  menu.setAttribute('role','dialog');
+  menu.setAttribute('aria-modal','true');
+  try{menu.showPopover();}
+  catch(error){
+   console.warn('[QL Ảnh] Không mở được menu mobile',error);
+   menu.classList.remove('vl-native-sheet');head.remove();heading=null;
+   if(oldPopover===null)menu.removeAttribute('popover');else menu.setAttribute('popover',oldPopover);
+   if(oldRole===null)menu.removeAttribute('role');else menu.setAttribute('role',oldRole);
+   menu.removeAttribute('aria-modal');
+   return;
+  }
+  active=menu;
+  observer=new MutationObserver(()=>{
+   if(active!==menu)return;
+   if(!menu.isConnected||menu.classList.contains('hidden')||
+      !menu.matches(':popover-open'))close();
+  });
+  observer.observe(menu,{attributes:true,attributeFilter:['class','popover'],childList:true});
+  menu.addEventListener('toggle',e=>{
+   if(e.newState==='closed'&&active===menu)close();
+  },{once:true});
  }
  window.vlMenuController?.onItem?.(({id,menu})=>open(menu,id,false));
  window.vlMenuController?.onHeader?.(({menu})=>open(menu,'',true));
