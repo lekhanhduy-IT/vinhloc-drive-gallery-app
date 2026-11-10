@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.71",
-  "deployment_purpose": "Fix mobile sheet close and centered red X, item-specific menu titles and shared account empty-state; prevent mobile media tile jumps and retain decoded folder/mega-row/file thumbnail elements across navigation.",
-  "deployment_trigger_date": "2026-11-10"
+  "version": "3.1.72",
+  "deployment_purpose": "Emergency fix: restore image/video thumbnail rendering without DOM image replacement, reserve mobile gallery slots, grant media access from the initial Google sign-in, retain verified session on application updates, and preserve mobile action sheet controls.",
+  "deployment_trigger_date": "2026-11-11"
 }

@@ -9,28 +9,22 @@
   const style = document.createElement('style');
   style.textContent = `
     @media(max-width:767px){
-      #fileList.vl-pinterest:not(.list-view)>div{min-width:0!important;contain:layout style;}
-      #fileList.vl-pinterest:not(.list-view)>div>.h-32{
-        position:relative!important;display:block!important;flex:none!important;
+      /* Keep the media slot stable before the image/video is decoded. */
+      #fileList.vl-pinterest:not(.list-view)>div>.h-32,
+      #fileList.vl-pinterest:not(.list-view)>div>.vl-preview-reserve{
+        display:block!important;position:relative!important;flex:0 0 auto!important;
         width:100%!important;height:auto!important;min-height:0!important;
-        max-height:none!important;aspect-ratio:4 / 5!important;
-        overflow:hidden!important;background:#f1f5f9!important;
+        max-height:none!important;aspect-ratio:4/5!important;
+        background:#f1f5f9!important;border-radius:10px;overflow:hidden!important;
         margin-bottom:10px!important;
       }
-      #fileList.vl-pinterest:not(.list-view)>div>.h-32>img.drive-img-item,
-      #fileList.vl-pinterest:not(.list-view)>div>.h-32>img,
-      #fileList.vl-pinterest:not(.list-view)>div>.h-32>video{
-        position:absolute!important;inset:0!important;display:block!important;
-        width:100%!important;height:100%!important;min-height:0!important;
+      #fileList.vl-pinterest:not(.list-view)>div>.h-32>img.drive-img-item{
+        display:block!important;width:100%!important;height:100%!important;
+        position:absolute!important;inset:0!important;min-height:0!important;
         max-height:none!important;aspect-ratio:auto!important;
         object-fit:contain!important;object-position:center!important;
       }
-      #fileList.vl-pinterest:not(.list-view)>div:not(:has(>.h-32)):has([id^="menu-"])::before{
-        content:"";display:block;flex:none;width:100%;aspect-ratio:4 / 5;
-        border-radius:10px;background:#f1f5f9;margin-bottom:10px;
-      }
       #fileList.vl-pinterest:not(.list-view)>div .drive-img-name{overflow-wrap:anywhere;}
-      #folderList img,.mega-header img,.subfolder-row img{object-fit:cover;}
     }
     #vlDriveSheetLayer{position:fixed;inset:0;z-index:2147482000;visibility:hidden;pointer-events:none;}
     #vlDriveSheetLayer.open{visibility:visible;pointer-events:auto;}
@@ -288,95 +282,33 @@
   }, true);
   window.addEventListener('resize', () => { if (!mobile()) close(true); }, {passive:true});
 
-  // An already-decoded IMG remains decoded when the exact DOM image element
-  // is reinserted. Only hold a bounded RAM LRU, never store private pixels or
-  // tokens in LocalStorage, IndexedDB or a public Service Worker cache.
-  const decoded = new Map();
-  const MAX_IMAGES = 180;
-  let identity = scopeKey();
-  function imageKey(img) {
-    if (!img || !img.matches('img')) return '';
-    if (!img.closest('#fileList,#folderList,.mega-row,.mega-header,.subfolder-row') &&
-        !img.classList.contains('drive-img-item') &&
-        ![...img.classList].some(name => name.startsWith('item-cover-img-'))) return '';
-    for (const cls of img.classList) {
-      if (cls.startsWith('item-cover-img-')) {
-        const id = cls.slice('item-cover-img-'.length);
-        if (ID.test(id)) return 'cover:' + id;
+  /* Do not replace, reparent or rewrite thumbnail IMG nodes.
+     The private media authorizer and the original renderer own each image.
+     Only reserve a fixed space to avoid masonry layout shifting. */
+  const grid=document.getElementById('fileList');
+  let raf=false;
+  function stabilize(){
+    if(!grid || !grid.isConnected || !mobile() || grid.classList.contains('list-view'))return;
+    for(const card of grid.children){
+      if(!(card instanceof HTMLElement) || !card.querySelector('[id^="menu-"]'))continue;
+      const existing=card.querySelector(':scope > .h-32');
+      const reserved=card.querySelector(':scope > .vl-preview-reserve');
+      if(existing){reserved?.remove();continue;}
+      if(!reserved){
+        const stub=document.createElement('div');
+        stub.className='vl-preview-reserve';
+        stub.setAttribute('aria-hidden','true');
+        card.prepend(stub);
       }
     }
-    let row = img.closest('.subfolder-row,.mega-row,.mega-header,#fileList > div,#folderList > div');
-    // Disconnected file cards lose their #fileList parent. Walk upwards to
-    // the nearest card with the immutable item-name/menu id.
-    if (!row) {
-      for (let cursor=img.parentElement, depth=0; cursor && depth<7; cursor=cursor.parentElement,depth++) {
-        if (cursor.querySelector('[id^="menu-"],[class*="item-name-"]')) { row=cursor; break; }
-      }
-    }
-    const id = row?.querySelector('.item-action-menu[id^="menu-"]')?.id?.slice(5) ||
-      row?.querySelector('[class*="item-name-"]')?.className?.match(/item-name-([\w-]{10,180})/)?.[1] || '';
-    if (ID.test(id)) return img.classList.contains('drive-img-item') || !!row.closest('#fileList')
-      ? 'file:' + id : 'folder:' + id;
-    try {
-      const url = new URL(img.getAttribute('src') || '', location.href);
-      const key = url.searchParams.get('fileId') || url.searchParams.get('id');
-      if (ID.test(key || '')) return 'image:' + key;
-    } catch (_) {}
-    return '';
   }
-  function rememberRemoved(node) {
-    if (node.nodeType !== 1) return;
-    const imgs = node.matches?.('img') ? [node] : [...node.querySelectorAll('img')];
-    for (const img of imgs) {
-      if (img.isConnected || !img.complete || img.naturalWidth <= 0) continue;
-      const key = imageKey(img);
-      if (!key) continue;
-      decoded.delete(key);
-      decoded.set(key, img);
-      if (decoded.size > MAX_IMAGES) decoded.delete(decoded.keys().next().value);
-    }
+  function schedule(){
+    if(raf)return;raf=true;
+    requestAnimationFrame(()=>{raf=false;stabilize();});
   }
-  function restoreAdded(node) {
-    if (node.nodeType !== 1) return;
-    const imgs = node.matches?.('img') ? [node] : [...node.querySelectorAll('img')];
-    for (const img of imgs) {
-      if (!img.isConnected) continue;
-      const key = imageKey(img);
-      const previous = decoded.get(key);
-      if (!key || !previous || previous === img || previous.isConnected ||
-          !previous.complete || !previous.naturalWidth) continue;
-      // Do not resurrect a different Drive cover or a different video frame.
-      const oldURL = previous.getAttribute('src') || '';
-      const newURL = img.getAttribute('src') || '';
-      const coverSource = url => {
-        try { const u = new URL(url, location.href); return u.searchParams.get('fileId') || u.searchParams.get('id') || ''; }
-        catch (_) { return ''; }
-      };
-      if (key.startsWith('cover:') && coverSource(oldURL) && coverSource(newURL) &&
-          coverSource(oldURL) !== coverSource(newURL)) continue;
-      decoded.delete(key);
-      img.replaceWith(previous);
-    }
+  if(grid) {
+    new MutationObserver(schedule).observe(grid,{childList:true,subtree:true});
+    schedule();
   }
-  const observer = new MutationObserver(records => {
-    const next = scopeKey();
-    if (next !== identity) { decoded.clear(); identity = next; return; }
-    // Collect detached pixels before attempting to attach fresh cards.
-    for (const rec of records) for (const node of rec.removedNodes) rememberRemoved(node);
-    for (const rec of records) for (const node of rec.addedNodes) restoreAdded(node);
-  });
-  for (const id of ['folderList','fileList']) {
-    const el = document.getElementById(id);
-    if (el) observer.observe(el, {childList:true,subtree:true});
-  }
-  window.addEventListener('vl:media-authorized', () => { decoded.clear(); identity = scopeKey(); });
-  window.addEventListener('vl:share-member-ready', () => { decoded.clear(); identity = scopeKey(); });
-  window.addEventListener('storage', e => {
-    if (e.key === 'vinhloc_authenticated_email') { decoded.clear(); identity = scopeKey(); }
-  });
-  // Avoid keeping decoded images from an old account after an in-tab logout.
-  setInterval(() => {
-    const next = scopeKey();
-    if (next !== identity) { decoded.clear(); identity = next; }
-  }, 2000);
+  window.addEventListener('resize',schedule,{passive:true});
 })();
