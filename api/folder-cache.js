@@ -71,7 +71,8 @@ async function listFolder(id,token){
         uploadedBy:String(f.appProperties?.vlUploadedBy||'').trim().toLowerCase()||null,
         ...(folder?{
           coverImageId:ID.test(f.appProperties?.vlCoverImageId||'')?
-            f.appProperties.vlCoverImageId:null
+            f.appProperties.vlCoverImageId:null,
+          coverUpdatedAt:Date.now()
         }:{
           size:Number(f.size||0),
           createdTime:f.createdTime||'',

@@ -19,7 +19,7 @@ async function publishCover(folderId,parentId,imageId,scopeRoot){
     const saved=await redis.get(key);
     if(!saved || !Array.isArray(saved.items))return;
     const next=saved.items.map(item=>item.id===folderId&&item.type==='folder'?
-      {...item,coverImageId:imageId}:item);
+      {...item,coverImageId:imageId,coverUpdatedAt:Date.now()}:item);
     if(next.every((item,i)=>item===saved.items[i]))return;
     // Do not mark a stale listing fresh just because its cover changed.
     await redis.set(key,{...saved,items:next},{ex:48*3600});

@@ -80,7 +80,8 @@
         continue;
       }
       // Stale Redis snapshots must not undo a newer local Drive SET.
-      if(previous?.time>updatedAt&&previous.time!==0)continue;
+      const coverRevision=Number(item.coverUpdatedAt)||updatedAt;
+      if(previous?.time>coverRevision&&previous.time!==0)continue;
       driveCovers.set(item.id,{imageId:item.coverImageId,time:Date.now()});
       rememberCover(item.id,item.coverImageId);
       applyFolderCover(item.id,item.coverImageId);
