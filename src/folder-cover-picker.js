@@ -104,7 +104,8 @@
         img.addEventListener('error',()=>{
           if (coverIdFromURL(img.getAttribute('src')) !==
               img.dataset.vlFolderRequestedImage) return;
-          img.style.opacity='0';
+          img.classList.add('hidden');
+          img.style.opacity='';
           const folderClass=[...img.classList].find(x=>x.startsWith('item-cover-img-'));
           const folderId=folderClass?.slice('item-cover-img-'.length);
           if(folderId)document.querySelectorAll('.item-cover-icon-'+folderId)
@@ -121,12 +122,17 @@
         showImage();
         return;
       }
-      // Keep image in layout (including browsers with loading="lazy") so
-      // its loading is not postponed by display:none.
-      img.classList.remove('hidden');
-      img.style.opacity='0';
+      // The pending preview and fallback are flex siblings. Keep exactly
+      // one of them in layout so the row cannot double in width.
+      img.loading='eager';
+      img.classList.add('hidden');
+      img.style.opacity='';
       showFallback();
-      if (original!==src) img.setAttribute('src',src);
+      const sameProxy=coverIdFromURL(original)===imageId&&
+        (()=>{try{const u=new URL(original,location.href);
+          return u.origin===location.origin&&u.pathname==='/api/media'&&u.searchParams.get('variant')==='thumb';}
+          catch(_){return false;}})();
+      if (!sameProxy && original!==src) img.setAttribute('src',src);
       if (img.complete&&img.naturalWidth>0&&
           coverIdFromURL(img.currentSrc||img.getAttribute('src'))===imageId) {
         img.style.opacity='';

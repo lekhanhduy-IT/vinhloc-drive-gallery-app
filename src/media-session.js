@@ -332,6 +332,17 @@
     if ((img.getAttribute('src') || '').startsWith('blob:')) return;
     const id = selectedMediaId(img);
     if (!id) return;
+    // A saved folder cover has its own URL owner. Changing the proxy
+    // query version here causes a src mutation loop against the cover picker.
+    if (img.closest('#folderList') &&
+        [...img.classList].some(c=>c.startsWith('item-cover-img-'))) {
+      try {
+        const u=new URL(img.getAttribute('src')||'',location.href);
+        if(u.origin===location.origin && u.pathname===API &&
+           u.searchParams.get('fileId')===id &&
+           u.searchParams.get('variant')==='thumb') return;
+      } catch (_) {}
+    }
     // Never replace a preview that has already decoded successfully.
     // A later reconciliation can race a Drive fallback and put a broken
     // thumb URL back on the same file, making thumbnails flicker.
