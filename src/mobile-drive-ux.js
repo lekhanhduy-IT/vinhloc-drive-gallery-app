@@ -142,10 +142,11 @@
       for(const attr of [...view.attributes])if(/^on[a-z]/i.test(attr.name))view.removeAttribute(attr.name);
       if(real.hidden||real.classList.contains('hidden')||getComputedStyle(real).display==='none')
         view.style.setProperty('display','none','important');
-      if(real.matches('button,a,[onclick],[role="menuitem"],[data-vl-owned],[data-vl-owner-action]')){
-        view.dataset.vlProxyAction=String(actions.push(real)-1);
-        if(real.disabled)view.setAttribute('disabled','');
-      }
+      // Mirror every inner element, not only buttons: some legacy menu
+      // rows install listeners on a DIV while the user taps its child icon.
+      // Dispatching a click on that ORIGINAL child preserves bubbling.
+      view.dataset.vlProxyAction=String(actions.push(real)-1);
+      if(real.disabled)view.setAttribute('disabled','');
     }
     originalActions=actions;
     slot.replaceChildren(copy);
@@ -183,7 +184,8 @@
     e.preventDefault();e.stopImmediatePropagation();
     const real=originalActions[Number(action.dataset.vlProxyAction)];
     if(!real?.isConnected||real.disabled||real.hidden||
-       real.classList.contains('hidden')||getComputedStyle(real).display==='none')return;
+       real.closest('button:disabled,[aria-disabled="true"],[hidden],.hidden')||
+       getComputedStyle(real).display==='none')return;
     try{real.click();}catch(error){
       console.error('[QL Ảnh] Menu action failed:',error);
       window.showToast?.('Không chạy được thao tác này',true);
