@@ -1,11 +1,30 @@
 /* Authoritative folder thumbnail reference, stored on the folder itself.
    Requires the existing verified Google session; never exposes public Drive links. */
 import {verifiedAccount,serverDriveToken} from './media.js';
+import {Redis} from '@upstash/redis';
 
 const API='https://www.googleapis.com/drive/v3/files';
 const DRIVE='0AMLRHzF05fTFUk9PVA';
 const FOLDER='application/vnd.google-apps.folder';
 const COVER_KEY='vlCoverImageId';
+const ROOT='1xWDed1IBzGdCA4r5vbds1x6AF31hSIUT';
+const redis=Redis.fromEnv();
+// Republish only the edited cover reference, never re-fetch every sibling
+// or invalidate an otherwise valid list on another device.
+async function publishCover(folderId,parentId,imageId,scopeRoot){
+  if(!idOK(parentId))return;
+  const scopes=[...new Set([ROOT,scopeRoot].filter(idOK))];
+  await Promise.all(scopes.map(async root=>{
+    const key='vl:folder:v3:'+root+':'+parentId;
+    const saved=await redis.get(key);
+    if(!saved || !Array.isArray(saved.items))return;
+    const next=saved.items.map(item=>item.id===folderId&&item.type==='folder'?
+      {...item,coverImageId:imageId}:item);
+    if(next.every((item,i)=>item===saved.items[i]))return;
+    // Do not mark a stale listing fresh just because its cover changed.
+    await redis.set(key,{...saved,items:next},{ex:48*3600});
+  }));
+}
 const idOK=id=>typeof id==='string'&&/^[A-Za-z0-9_-]{10,180}$/.test(id);
 export const config={maxDuration:60};
 function respond(res,code,message,extra={}){
@@ -119,6 +138,8 @@ export default async function handler(req,res){
         });
       if(written.appProperties?.[COVER_KEY]!==imageId)
         return respond(res,502,'Drive chưa xác nhận lưu thumbnail');
+      try{await publishCover(folderId,folder.parents?.[0],imageId,account.scopeRoot||null);}
+      catch(error){console.warn('[folder-cover] Redis sẽ cập nhật ở lần đồng bộ tiếp theo',error);}
       return respond(res,200,'Đã lưu thumbnail trên Drive',{folderId,imageId});
     }
     return respond(res,400,'Thao tác không hỗ trợ');
