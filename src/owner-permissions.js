@@ -9,6 +9,35 @@
   const current=()=>{try{return Array.isArray(currentDriveItems)?currentDriveItems:window.currentDriveItems||[];}catch(_){return window.currentDriveItems||[];}};
   const idsCache=new Map();
   const pendingIds=new Set();
+  const signedListings=new Map();
+  function liveFolder(){
+    try{return String(typeof currentFolderId!=='undefined'?currentFolderId:window.currentFolderId||'');}
+    catch(_){return String(window.currentFolderId||'');}
+  }
+  function primeSignedList(payload){
+    if(!payload || !sessionValid || !verifiedEmail ||
+       String(payload.viewerEmail||'').toLowerCase()!==verifiedEmail)return;
+    if(window.vlShareScope && verifiedScope!==window.vlShareScope.root)return;
+    const items=payload.items;
+    if(!Array.isArray(items))return;
+    let changed=false;
+    for(const item of items){
+      if(!/^[A-Za-z0-9_-]{10,180}$/.test(item?.id||'') ||
+         typeof item.uploadedBy!=='string' || !item.uploadedBy)continue;
+      const prev=idsCache.get(item.id);
+      if(prev && Date.now()-prev.at<TTL)continue;
+      idsCache.set(item.id,{
+        allowed:item.uploadedBy.toLowerCase()===verifiedEmail &&
+          !(window.vlShareScope && item.id===window.vlShareScope.root),
+        provenance:'drive-app-properties',at:Date.now()
+      });
+      changed=true;
+    }
+    if(changed){
+      showHeader();
+      window.vlMenuController?.refreshVisible();
+    }
+  }
   let checkedFolder='',lastListSignature='',lastCheckError='',lastChecking=false;
   const TTL=90000;
   let verifiedEmail='', verifiedScope='', sessionValid=false;
@@ -80,6 +109,7 @@
         sessionValid=true;
         sessionCheckedAt=Date.now();
         lastCheckError='';
+        primeSignedList(signedListings.get(liveFolder()));
         return true;
       }catch(error){
         sessionValid=false;
@@ -113,7 +143,9 @@
     const ok=await ensureSession(true);
     if(!ok){showHeader();return;}
     if(epoch!==sessionEpoch && !sessionValid)return;
-    await checkIds(current(),true);
+    // The signed Redis list already carries Drive uploader metadata.
+    // Check only missing/expired IDs; delete POST independently revalidates.
+    await checkIds(current(),false);
     window.vlMenuController?.refreshVisible();
   }
   function isOpen(){return !!document.querySelector('#headerDropdown:not(.hidden)');}
@@ -388,6 +420,15 @@
     };
     install();
   }
+  window.addEventListener('vl:verified-folder-snapshot',event=>{
+    const info=event.detail;
+    if(!info?.viewerEmail || !Array.isArray(info.items) ||
+       String(info.folderId)!==liveFolder())return;
+    signedListings.set(info.folderId,info);
+    if(signedListings.size>4)signedListings.delete(signedListings.keys().next().value);
+    if(sessionValid)primeSignedList(info);
+    else void ensureSession(false).then(ok=>{if(ok)primeSignedList(info);});
+  });
   // Session lifecycle is independent of IndexedDB and Drive cache. As
   // soon as Google grants a fresh signed cookie, refill rights on this device.
   window.addEventListener('vl:media-authorized',()=>{
