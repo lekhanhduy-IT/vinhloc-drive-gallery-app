@@ -19,7 +19,9 @@
   let node=img;
   for(let i=0;node&&i<12;node=node.parentElement,i++){
    if(node.parentElement===list)return node;
-   if(node.matches?.('[id^="menu-"]'))return null;
+   // A detached card has no #fileList parent after an innerHTML rebuild.
+   // Its immutable menu marker is still available inside the detached tree.
+   if(node!==img && node.querySelector?.('[id^="menu-"]'))return node;
   }
   return null;
  }
