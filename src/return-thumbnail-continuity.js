@@ -203,6 +203,10 @@
          decoded.setAttribute('height',size.h);
        }
        const frame=decoded.parentElement;
+       // Some legacy render paths initially hide the entire media frame
+       // until the new IMG emits load. A reused decoded IMG won't re-emit it.
+       frame?.classList?.remove('hidden');
+       if(frame?.style?.display==='none')frame.style.display='';
        frame?.removeAttribute('data-vl-preview-pending');
        frame?.style?.removeProperty('--vl-preview-ratio');
      }else{
