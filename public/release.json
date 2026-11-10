@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.76",
-  "deployment_purpose": "Fix folder-cover rendering regression by disabling decoded IMG node replacement and keeping the folder fallback icon until a saved photo loads successfully. Leave gallery file thumbnails, menus, user permissions and Drive data unchanged.",
+  "version": "3.1.77",
+  "deployment_purpose": "Fix repeating folder-cover src rewrites and image/fallback width jumps. Move folder child cover IDs and verified uploader metadata into the existing authenticated Redis folder cache for cross-device hydration; propagate only changed cover refs and prime verified owner actions without weakening delete authorization.",
   "deployment_trigger_date": "2026-11-11"
 }
