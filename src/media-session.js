@@ -452,6 +452,27 @@
     });
     void checkSession(false);
   }
+  // A longer-lived signed session is not a permanent login. Revoke it
+  // after a REAL in-app sign-out, never as a side effect of code deployment.
+  let signedInEmail=localStorage.getItem('vinhloc_authenticated_email')||'';
+  function detectExplicitLogout(){
+    if(window.vlShareScope)return;
+    const email=localStorage.getItem('vinhloc_authenticated_email')||'';
+    if(signedInEmail && !email){
+      ready=false;window.vlMediaProxyReady=false;lastSessionStatus=401;
+      lastSessionCheckAt=Date.now();
+      hidePanel();
+      void fetch(API,{method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'logout'}),cache:'no-store'})
+        .catch(error=>console.warn('[QL Ảnh] Đăng xuất phiên media',error));
+    }
+    signedInEmail=email;
+  }
+  window.addEventListener('storage',e=>{
+    if(e.key==='vinhloc_authenticated_email')detectExplicitLogout();
+  });
+  setInterval(detectExplicitLogout,1000);
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',initObservers);
   else initObservers();
 })();

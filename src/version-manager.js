@@ -1,6 +1,6 @@
 /* VinhLoc QL Anh deployment-version observer.
-   Each new Vercel build invalidates only this app's login, never localforage.
-   Active uploads finish before sign-out/reload. */
+   New Vercel builds reload UI assets without signing the user out or clearing localforage.
+   Active uploads finish before the reload. */
 (() => {
   'use strict';
   if(window.__vlVersionManager)return;
