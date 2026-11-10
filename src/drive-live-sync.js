@@ -102,7 +102,11 @@
   }
   function canRefresh(force) {
     if (!force && (document.hidden || Date.now() - lastRun < 9000)) return false;
-    if (new URLSearchParams(location.search).has('shareId')) return false;
+    // Shared-folder access is allowed only after signed scope verification.
+    // Its fetch interceptor routes list() to /api/shared-folder.
+    if(window.vlShareScope &&
+       (!window.vlShareScope.ready?.() ||
+        !window.vlShareScope.allowed?.(activeFolder())))return false;
     // The old loading overlay can stay mounted after login; do not block Drive reads.
     if ((!force && busy()) || !endpoint() || !activeFolder()) return false;
     return !!folderCache();
@@ -265,7 +269,7 @@
       item?.isPending && String(item.id).startsWith('temp_file_') &&
       fromDrive.some(real => real.type!=='folder' && real.name===item.name) &&
       !fromDrive.some(real=>real.name===item.name && real.createdTime));
-    if(pendingNeedsReconcile) {
+    if(pendingNeedsReconcile && !window.vlShareScope) {
       try { fromDrive=await directDriveList(id); }
       catch(err) { console.warn('[QL Ảnh] Chờ metadata đối chiếu file upload',err); }
     }
@@ -355,7 +359,8 @@
       // Recheck the active directory frequently. Its ancestors and expanded
       // mega-rows use a slower deep pass to avoid repeated Drive queries and
       // thumbnail re-renders across every connected device.
-      const deep = force || Date.now() - lastDeepRun >= FULL_REFRESH_INTERVAL;
+      const deep = !window.vlShareScope &&
+        (force || Date.now() - lastDeepRun >= FULL_REFRESH_INTERVAL);
       if (deep) {
         for (const parent of path.slice(0, -1)) {
           try { liveParents.set(parent.id, await syncOne(parent.id)); }

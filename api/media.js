@@ -10,6 +10,8 @@ const SHARED_DRIVE_ID = '0AMLRHzF05fTFUk9PVA';
 const GALLERY_ROOT_ID = '1xWDed1IBzGdCA4r5vbds1x6AF31hSIUT';
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx3xI-bNWfeffsEH-iIc0yYfF9bHYvAiKZKWIfco6j7Z7GOtOAv7Q8WE1_y9xjen7c/exec';
 const COOKIE = 'vl_verified_media';
+// Same-device first-party internal session; each request still checks Drive role.
+const INTERNAL_TTL_SECONDS = 7 * 24 * 60 * 60;
 const SHARE_COOKIE='vl_share_scope';
 const MAX_IMAGE = 40 * 1024 * 1024;
 const MAX_VIDEO = 1024 * 1024 * 1024;
@@ -82,7 +84,10 @@ function sealSession(identity) {
     ...(identity.scopeRoot?{scopeRoot:identity.scopeRoot}:{}),
     member:identity.member===true,
     role:identity.role||'guest',
-    exp:Math.min(identity.exp,Math.floor(Date.now()/1000)+3300)
+    // Shared-folder grants expire with the original Google credential.
+    // Internal members use a signed session so PWA reopens retain owner rights.
+    exp:identity.scopeRoot ? Math.min(identity.exp,Math.floor(Date.now()/1000)+3300) :
+      Math.floor(Date.now()/1000)+INTERNAL_TTL_SECONDS
   })).toString('base64url');
   const signature = createHmac('sha256',key).update(payload).digest('base64url');
   return 'vl1.'+payload+'.'+signature;
@@ -262,8 +267,11 @@ export default async function handler(req, res) {
       identity.member=currentRole!=='guest';
       if(!grant && currentRole==='guest')
         return error(res,403,'Tài khoản chưa được cấp quyền Shared Drive. Vui lòng dùng liên kết chia sẻ hợp lệ.');
-      const life = Math.min(3300, Math.max(1,identity.exp - Math.floor(Date.now()/1000) - 10));
-      const session=sealSession(identity) || body.credential;
+      const signed=sealSession(identity);
+      // Never give a raw Google ID token an artificial seven-day lifetime.
+      const life=signed && !identity.scopeRoot ? INTERNAL_TTL_SECONDS :
+        Math.min(3300,Math.max(1,identity.exp-Math.floor(Date.now()/1000)-10));
+      const session=signed || body.credential;
       res.setHeader('Set-Cookie',[
         COOKIE+'=; HttpOnly; Secure; SameSite=Strict; Path=/api/media; Max-Age=0',
         COOKIE+'='+session+'; HttpOnly; Secure; SameSite=Strict; Path=/api; Max-Age='+life,

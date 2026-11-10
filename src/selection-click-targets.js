@@ -24,8 +24,12 @@
       return null;
 
     const fileName=element.closest('#fileList .drive-img-name, #fileList [class*="item-name-"]');
-    if (fileName)
-      return {id:prefixId(fileName,'item-name-'),kind:'file'};
+    if (fileName) {
+      const card=fileName.closest('#fileList > div');
+      const id=card?.querySelector('[id^="menu-"]')?.id?.slice(5);
+      return {id:/^[A-Za-z0-9_-]{10,180}$/.test(id||'') ?
+        id:prefixId(fileName,'item-name-'),kind:'file'};
+    }
 
     const folderCover=element.closest(
       '#folderList [class*="item-cover-img-"], #folderList [class*="item-cover-icon-"]'

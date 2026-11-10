@@ -5,7 +5,7 @@
   'use strict';
   if(window.__vlVersionManager)return;
   window.__vlVersionManager=true;
-  const RELEASE='3.1.69';
+  const RELEASE='3.1.74';
   const BUILD_KEY='vinhloc_deployed_build_v1';
   const OLD_VERSION='2.9.8'; // old obfuscated script.js still checks this tag
   const knownLegacy=localStorage.getItem('vinhloc_app_version');
@@ -57,22 +57,9 @@
     try {
       // Commit first, so reload does not trigger repeated sign-outs.
       localStorage.setItem(BUILD_KEY,data.build);
-      if(localStorage.getItem('vinhloc_authenticated_email')){
-        localStorage.removeItem('vinhloc_authenticated_email');
-        localStorage.removeItem('vinhloc_spider_pwa_loaded');
-        localStorage.removeItem('vinhloc_spider_browser_loaded');
-        localStorage.removeItem('vinhloc_loaded_accounts');
-        localStorage.removeItem('vinhloc_device_patched');
-        try {window.google?.accounts?.id?.disableAutoSelect?.();}catch(_){}
-        try {
-          await Promise.race([
-            fetch('/api/media',{method:'POST',credentials:'same-origin',
-              headers:{'Content-Type':'application/json'},
-              body:JSON.stringify({action:'logout'}),cache:'no-store'}),
-            new Promise(resolve=>setTimeout(resolve,2500))
-          ]);
-        }catch(error){console.warn('[QL Ảnh] Không thể đóng phiên media:',error);}
-      }
+      // Build changes reload UI assets but are NOT account sign-outs.
+      // Logout is a separate explicit user action, and server-side Drive
+      // permissions remain independently verified for every protected call.
       const url=new URL(location.href);
       url.searchParams.set('vl_build',short(data.build));
       location.replace(url.pathname+url.search+url.hash);

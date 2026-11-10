@@ -70,7 +70,16 @@
     if (!idOk(id) || !idOk(imageId)) return;
     const src = imageURL(imageId);
     document.querySelectorAll('.item-cover-img-' + id).forEach(img => {
-      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      const existing=img.getAttribute('src')||'';
+      let correctDecoded=false;
+      try {
+        const u=new URL(existing,location.href);
+        correctDecoded=img.complete&&img.naturalWidth>0 &&
+          (u.searchParams.get('fileId')||u.searchParams.get('id'))===imageId;
+      }catch(_){}
+      // A different signed/proxy URL for the SAME already-decoded cover
+      // must not briefly replace the visible photo with a blank image.
+      if(!correctDecoded && existing!==src) img.setAttribute('src',src);
       img.classList.remove('hidden');
     });
     document.querySelectorAll('.item-cover-icon-' + id).forEach(icon => icon.classList.add('hidden'));

@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.69",
-  "deployment_purpose": "Use branded custom confirmation instead of browser confirm for Admin one-time recursive folder thumbnail operation; position paste destination popup below the measured top app header on iPhone and desktop. No gallery/paste or login wallpaper logic changes.",
-  "deployment_trigger_date": "2026-11-09"
+  "version": "3.1.74",
+  "deployment_purpose": "Mobile native bottom-sheet display without moving menu handlers; prevent media grid jumps; reuse folder cover images across navigation; preserve signed owner authentication after PWA reopens and updates; scoped shared-folder refresh and exact selection.",
+  "deployment_trigger_date": "2026-11-11"
 }
