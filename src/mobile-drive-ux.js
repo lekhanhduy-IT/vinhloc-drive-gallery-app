@@ -256,9 +256,9 @@
     menu.classList.remove('hidden');
     menu.style.setProperty('display', 'block', 'important');
     title.textContent = displayName.slice(0, 150);
-    showEmpty(menu, id, isHeader);
     layer.classList.add('open');
     document.body.classList.add('vl-sheet-open');
+    showEmpty(menu, id, isHeader);
   }
   // Capture the clicked element before the protected legacy handlers run.
   document.addEventListener('pointerdown', e => {
