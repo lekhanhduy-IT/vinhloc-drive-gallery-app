@@ -34,7 +34,7 @@
   // so writing window.appMeta does NOT reliably update its actual data model.
   const driveCovers = new Map();
   const inFlight = new Set();
-  const CACHE_TTL = 25000;
+  const CACHE_TTL = 10*60*1000;
   let scanTimer = null;
   let saveBusy = false;
   let replayLegacySave = false;
@@ -65,6 +65,27 @@
     return ['infoName', 'infoDesc', 'infoType'].map(id => byId(id)?.value ?? '');
   }
   restoreCovers();
+  // A second device receives saved Drive cover IDs from the same Redis
+  // folder-list snapshot. Only changed cover IDs cause a new image request.
+  window.addEventListener('vl:verified-folder-snapshot',event=>{
+    const items=event.detail?.items;
+    if(!Array.isArray(items))return;
+    const updatedAt=Number(event.detail?.updatedAt)||0;
+    for(const item of items){
+      if(item?.type!=='folder'||!idOk(item.id)||!idOk(item.coverImageId))continue;
+      const previous=driveCovers.get(item.id);
+      if(previous?.imageId===item.coverImageId){
+        // Do not touch an already displayed/decoded IMG.
+        if(previous.time===0)driveCovers.set(item.id,{imageId:item.coverImageId,time:Date.now()});
+        continue;
+      }
+      // Stale Redis snapshots must not undo a newer local Drive SET.
+      if(previous?.time>updatedAt&&previous.time!==0)continue;
+      driveCovers.set(item.id,{imageId:item.coverImageId,time:Date.now()});
+      rememberCover(item.id,item.coverImageId);
+      applyFolderCover(item.id,item.coverImageId);
+    }
+  });
 
   // The thumbnail image and its fallback icon must change atomically.
   // Never hide the folder icon before a real picture has decoded.

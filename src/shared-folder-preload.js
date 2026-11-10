@@ -69,12 +69,20 @@
       }
     },1400);
   }
-  function apply(id,items,updatedAt,mode='snapshot'){
+  function apply(id,items,updatedAt,mode='snapshot',viewerEmail=''){
     if(!ID.test(id)||!Array.isArray(items))return;
     if(window.vlShareScope &&
        !window.vlShareScope.allowed?.(id) && !serverPermitted.has(id))return;
     verified.set(id,Number(updatedAt)||Date.now());
     verifiedItems.set(id,items);
+    if(viewerEmail){
+      // Metadata from a scope-verified, same-origin Redis snapshot.
+      // Events never carry Google tokens or the underlying private image.
+      window.dispatchEvent(new CustomEvent('vl:verified-folder-snapshot',{
+        detail:{folderId:id,items,viewerEmail:String(viewerEmail).toLowerCase(),
+          updatedAt:Number(updatedAt)||Date.now()}
+      }));
+    }
     const cache=localCache(),sub=subCache();
     if(!cache)return;
     const old=Array.isArray(cache[id])?cache[id]:null;
@@ -153,7 +161,7 @@
     do{
       if(!auth||document.hidden)return;
       const page=await call('snapshot',{offset,limit:12});
-      for(const item of page.entries||[])apply(item.id,item.items,item.updatedAt,'snapshot');
+      for(const item of page.entries||[])apply(item.id,item.items,item.updatedAt,'snapshot',page.viewerEmail);
       offset=Number(page.nextOffset)||0;
       rounds++;
       // Bounded work. Future ticks resume remaining pages on demand.
@@ -190,7 +198,7 @@
   }
   async function warm(id,force=false){
     const result=await call('warm',{folderId:id,force});
-    apply(id,result.data,result.updatedAt,result.source==='drive'?'drive':'snapshot');
+    apply(id,result.data,result.updatedAt,result.source==='drive'?'drive':'snapshot',result.viewerEmail);
     return result;
   }
   function work(){
@@ -227,7 +235,7 @@
     if(window.vlShareScope&&!window.vlShareScope.allowed?.(id)&&
        !serverPermitted.has(id))return false;
     const response=await call('get',{folderId:id});
-    apply(id,response.data,response.updatedAt,'snapshot');
+    apply(id,response.data,response.updatedAt,'snapshot',response.viewerEmail);
     return true;
   }
   function refreshFolder(id){
