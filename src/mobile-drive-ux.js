@@ -180,6 +180,7 @@
       .some(el => !el.disabled && !el.classList.contains('hidden') &&
         getComputedStyle(el).display !== 'none' &&
         getComputedStyle(el).visibility !== 'hidden' &&
+        el.getClientRects().length > 0 &&
         !el.closest('[hidden],.hidden'));
     if (visible) return;
 
