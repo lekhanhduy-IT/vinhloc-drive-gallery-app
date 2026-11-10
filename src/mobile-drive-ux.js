@@ -25,6 +25,8 @@
         object-fit:contain!important;object-position:center!important;
       }
       #fileList.vl-pinterest:not(.list-view)>div .drive-img-name{overflow-wrap:anywhere;}
+      #fileList.vl-pinterest:not(.list-view)>div{isolation:isolate;}
+      #fileList .vl-preview-reserve,#fileList .vl-selection-check{pointer-events:none!important;}
     }
     #vlDriveSheetLayer{position:fixed;inset:0;z-index:2147482000;visibility:hidden;pointer-events:none;}
     #vlDriveSheetLayer.open{visibility:visible;pointer-events:auto;}
@@ -53,7 +55,8 @@
     }
     #vlSheetClose svg{display:block;width:22px;height:22px;pointer-events:none;}
     #vlSheetActions{overflow-y:auto;overscroll-behavior:contain;padding:6px 14px 10px;min-height:0;}
-    #vlSheetActions>.item-action-menu,#vlSheetActions>#headerDropdown{
+    .vl-sheet-native-hidden{visibility:hidden!important;opacity:0!important;pointer-events:none!important;}
+    #vlSheetActions>.vl-sheet-proxy{
       display:block!important;position:static!important;inset:auto!important;
       transform:none!important;width:100%!important;min-width:0!important;
       max-width:none!important;max-height:none!important;overflow:visible!important;
@@ -61,6 +64,7 @@
       background:transparent!important;margin:0!important;opacity:1!important;
       visibility:visible!important;
     }
+    #vlSheetActions>.vl-sheet-proxy{display:block!important;visibility:visible!important;opacity:1!important;position:static!important;transform:none!important;max-height:none!important;overflow:visible!important;}
     #vlSheetActions :is(button,a,[role="menuitem"]){
       box-sizing:border-box;min-height:46px;cursor:pointer;touch-action:manipulation;
     }
@@ -86,7 +90,8 @@
   const slot = layer.querySelector('#vlSheetActions');
   const title = layer.querySelector('#vlSheetTitle');
   const closeButton = layer.querySelector('#vlSheetClose');
-  let active = null, placeholder = null, trigger = null, timer = 0, lastTrigger = null;
+  let active = null, trigger = null, timer = 0, lastTrigger = null;
+  let sourceObserver = null, frame = 0, originalActions = [];
   const currentFolder = () => {
     try { return typeof currentFolderId !== 'undefined' ? currentFolderId : window.currentFolderId; }
     catch (_) { return window.currentFolderId; }
@@ -119,51 +124,75 @@
       row?.querySelector('.font-bold,.font-semibold')?.textContent?.trim();
     return name || 'Mục đã chọn';
   }
-  function restore() {
-    if (!active) return;
-    const node = active, marker = placeholder;
-    active = null; placeholder = null;
-    if (node.isConnected && marker?.parentNode) marker.replaceWith(node);
-    else if (node.isConnected) node.remove();
-    else marker?.remove();
-    node.classList.add('hidden');
-    node.style.removeProperty('display');
-    node.style.removeProperty('max-height');
-    node.style.removeProperty('overflow-y');
-    node.style.removeProperty('width');
+  function paintMenu(){
+    if(!active?.isConnected){close(true);return;}
+    const copy=active.cloneNode(true);
+    copy.removeAttribute('id');
+    copy.classList.remove('hidden','vl-sheet-native-hidden');
+    copy.classList.add('vl-sheet-proxy');
+    copy.style.setProperty('display','block','important');
+    copy.style.setProperty('visibility','visible','important');
+    const originals=[...active.querySelectorAll('*')];
+    const mirrors=[...copy.querySelectorAll('*')];
+    const actions=[];
+    for(let i=0;i<originals.length;i++){
+      const real=originals[i],view=mirrors[i];
+      if(!view)continue;
+      view.removeAttribute('id');
+      for(const attr of [...view.attributes])if(/^on[a-z]/i.test(attr.name))view.removeAttribute(attr.name);
+      if(real.hidden||real.classList.contains('hidden')||getComputedStyle(real).display==='none')
+        view.style.setProperty('display','none','important');
+      if(real.matches('button,a,[onclick],[role="menuitem"],[data-vl-owned],[data-vl-owner-action]')){
+        view.dataset.vlProxyAction=String(actions.push(real)-1);
+        if(real.disabled)view.setAttribute('disabled','');
+      }
+    }
+    originalActions=actions;
+    slot.replaceChildren(copy);
+  }
+  function schedulePaint(){
+    if(frame||!active)return;
+    frame=requestAnimationFrame(()=>{frame=0;if(active)paintMenu();});
+  }
+  function restore(){
+    sourceObserver?.disconnect();sourceObserver=null;
+    if(frame){cancelAnimationFrame(frame);frame=0;}
+    const real=active;active=null;originalActions=[];
+    if(real?.isConnected){real.classList.remove('vl-sheet-native-hidden');real.classList.add('hidden');}
     slot.replaceChildren();
   }
-  function close(immediate = false) {
-    if (!active && !layer.classList.contains('open')) return;
-    layer.classList.remove('open');
-    document.body.classList.remove('vl-sheet-open');
+  function close(immediate=false){
+    if(!active&&!layer.classList.contains('open'))return;
+    layer.classList.remove('open');document.body.classList.remove('vl-sheet-open');
     clearTimeout(timer);
-    if (immediate || matchMedia('(prefers-reduced-motion: reduce)').matches) restore();
-    else timer = setTimeout(restore, 280);
-    if (trigger?.isConnected) {
-      try { trigger.focus({preventScroll:true}); } catch (_) {}
-    }
-    trigger = null;
+    if(immediate||matchMedia('(prefers-reduced-motion: reduce)').matches)restore();
+    else timer=setTimeout(restore,280);
+    if(trigger?.isConnected)try{trigger.focus({preventScroll:true});}catch(_){}
+    trigger=null;
   }
-  closeButton.addEventListener('click', e => {
-    e.preventDefault(); e.stopImmediatePropagation(); close();
-  }, true);
-  layer.querySelector('#vlDriveSheetDim').addEventListener('click', e => {
-    e.preventDefault(); e.stopImmediatePropagation(); close();
-  }, true);
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && layer.classList.contains('open')) {
-      e.preventDefault(); e.stopPropagation(); close();
-    }
-  }, true);
-  slot.addEventListener('click', e => {
-    if (e.target.closest('button,a,[onclick],[data-vl-owned],[data-vl-owner-action]')) {
-      setTimeout(() => close(), 0);
-    }
-  });
-  document.addEventListener('click', e => {
-    if (active && e.target.closest('#btnBack,.subfolder-row,.mega-header,[onclick*="loadFolder"]')) close(true);
-  }, true);
+  closeButton.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();close();},true);
+  layer.querySelector('#vlDriveSheetDim').addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();close();},true);
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&layer.classList.contains('open')){e.preventDefault();e.stopPropagation();close();}
+  },true);
+  // Keep every original action in its file/folder DOM ancestor. The visible
+  // sheet mirrors it, and calls the original element inside the same user tap.
+  slot.addEventListener('click',e=>{
+    const action=e.target.closest?.('[data-vl-proxy-action]');
+    if(!action)return;
+    e.preventDefault();e.stopImmediatePropagation();
+    const real=originalActions[Number(action.dataset.vlProxyAction)];
+    if(!real?.isConnected||real.disabled||real.hidden||
+       real.classList.contains('hidden')||getComputedStyle(real).display==='none')return;
+    try{real.click();}catch(error){
+      console.error('[QL Ảnh] Menu action failed:',error);
+      window.showToast?.('Không chạy được thao tác này',true);
+    }finally{close(true);}
+  },true);
+  document.addEventListener('click',e=>{
+    if(active&&e.target.closest?.('#btnBack,.subfolder-row,.mega-header,[onclick*="loadFolder"]'))
+      close(true);
+  },true);
 
   function showEmpty(menu, id, isHeader = false) {
     menu.querySelector('.vl-sheet-empty')?.remove();
@@ -235,25 +264,29 @@
       menu.appendChild(message);
     }
   }
-  function open(menu, id, source, isHeader = false) {
-    if (!mobile() || !menu || !menu.parentNode) return;
+  function open(menu,id,source,isHeader=false){
+    if(!mobile()||!menu?.isConnected)return;
     clearTimeout(timer);
-    if (active) restore();
-    const displayName = isHeader
-      ? (window.vlShareScope ? (window.vlShareScope.name || 'Bộ nhớ dùng chung') :
-         (String(currentFolder() || '') ? 'Tùy chọn ' + (document.getElementById('currentFolderName')?.textContent?.trim() || 'thư mục') : 'Tùy chọn'))
-      : labelFor(id, menu, source);
-    trigger = source || lastTrigger || document.activeElement;
-    placeholder = document.createComment('Original action menu slot');
-    menu.parentNode.insertBefore(placeholder, menu);
-    active = menu; // Important: close() must know which menu to restore.
-    slot.replaceChildren(menu);
-    menu.classList.remove('hidden');
-    menu.style.setProperty('display', 'block', 'important');
-    title.textContent = displayName.slice(0, 150);
-    layer.classList.add('open');
-    document.body.classList.add('vl-sheet-open');
-    showEmpty(menu, id, isHeader);
+    if(active===menu){schedulePaint();return;}
+    if(active)restore();
+    const name=isHeader?(window.vlShareScope?.name||
+      document.getElementById('currentFolderName')?.textContent?.trim()||'Tùy chọn'):
+      labelFor(id,menu,source);
+    trigger=source||lastTrigger||document.activeElement;
+    title.textContent=String(name).slice(0,150);
+    showEmpty(menu,id,isHeader);
+    active=menu;
+    paintMenu();
+    // Do not detach the source from the row: all original click handlers stay
+    // live and see the correct file/folder ID and account permission context.
+    menu.classList.add('vl-sheet-native-hidden');
+    sourceObserver=new MutationObserver(records=>{
+      if(records.every(r=>r.target===menu&&r.attributeName==='class'))return;
+      schedulePaint();
+    });
+    sourceObserver.observe(menu,{childList:true,subtree:true,attributes:true,
+      attributeFilter:['class','style','disabled']});
+    layer.classList.add('open');document.body.classList.add('vl-sheet-open');
   }
   // Capture the clicked element before the protected legacy handlers run.
   document.addEventListener('pointerdown', e => {

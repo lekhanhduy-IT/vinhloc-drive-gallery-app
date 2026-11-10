@@ -102,7 +102,10 @@
   }
   function canRefresh(force) {
     if (!force && (document.hidden || Date.now() - lastRun < 9000)) return false;
-    if (new URLSearchParams(location.search).has('shareId')) return false;
+    // A share guest may refresh the already scoped folder; the
+    // /api/shared-folder backend independently checks the signed grant.
+    const scope=window.vlShareScope;
+    if(scope&&(!scope.ready?.()||!scope.allowed?.(activeFolder())))return false;
     // The old loading overlay can stay mounted after login; do not block Drive reads.
     if ((!force && busy()) || !endpoint() || !activeFolder()) return false;
     return !!folderCache();
@@ -355,7 +358,8 @@
       // Recheck the active directory frequently. Its ancestors and expanded
       // mega-rows use a slower deep pass to avoid repeated Drive queries and
       // thumbnail re-renders across every connected device.
-      const deep = force || Date.now() - lastDeepRun >= FULL_REFRESH_INTERVAL;
+      const deep = !window.vlShareScope &&
+        (force || Date.now() - lastDeepRun >= FULL_REFRESH_INTERVAL);
       if (deep) {
         for (const parent of path.slice(0, -1)) {
           try { liveParents.set(parent.id, await syncOne(parent.id)); }

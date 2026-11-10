@@ -198,11 +198,19 @@
     installRenderGuard();
     // Avoid full gallery repaint per item: root mega rows flashed during delete.
     // The live Drive refresh runs once after the completed batch instead.
-    if(globals('folder')===parent) {
-      const menu=document.getElementById('menu-'+id);
-      const card=menu?.closest('.file-item-card,.image-card,.subfolder-row,[data-file-id],[data-id]');
-      const list=document.getElementById('fileList');
-      if(card&&list?.contains(card))card.remove();
+    // Drive deletion is confirmed. Remove the actual Pinterest/row tile,
+    // which may have no legacy file-item-card CSS class at all.
+    const menu=document.getElementById('menu-'+id);
+    const list=document.getElementById('fileList');
+    let card=menu;
+    while(card&&card.parentElement!==list)card=card.parentElement;
+    if(card?.parentElement===list)card.remove();
+    const folders=document.getElementById('folderList');
+    if(folders){
+      for(const name of folders.querySelectorAll('.item-name-'+id)){
+        const row=name.closest('.subfolder-row,.mega-row');
+        if(row)row.remove();
+      }
     }
     window.vinhloc_cache_modified=true;
   }
