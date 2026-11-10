@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.75",
-  "deployment_purpose": "Correct mobile menu stacking with native top-layer popover: keep three-dot button fixed and dim entire background. Disable experimental preview CSS and file DOM transplantation that might suppress images.",
+  "version": "3.1.76",
+  "deployment_purpose": "Fix folder-cover rendering regression by disabling decoded IMG node replacement and keeping the folder fallback icon until a saved photo loads successfully. Leave gallery file thumbnails, menus, user permissions and Drive data unchanged.",
   "deployment_trigger_date": "2026-11-11"
 }

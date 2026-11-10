@@ -66,23 +66,73 @@
   }
   restoreCovers();
 
+  // The thumbnail image and its fallback icon must change atomically.
+  // Never hide the folder icon before a real picture has decoded.
+  function coverIdFromURL(raw) {
+    try {
+      const u=new URL(raw||'',location.href);
+      const id=u.searchParams.get('fileId')||u.searchParams.get('id')||'';
+      return idOk(id)?id:'';
+    } catch (_) { return ''; }
+  }
   function applyFolderCover(id, imageId) {
     if (!idOk(id) || !idOk(imageId)) return;
-    const src = imageURL(imageId);
-    document.querySelectorAll('.item-cover-img-' + id).forEach(img => {
-      const existing=img.getAttribute('src')||'';
-      let correctDecoded=false;
-      try {
-        const u=new URL(existing,location.href);
-        correctDecoded=img.complete&&img.naturalWidth>0 &&
-          (u.searchParams.get('fileId')||u.searchParams.get('id'))===imageId;
-      }catch(_){}
-      // A different signed/proxy URL for the SAME already-decoded cover
-      // must not briefly replace the visible photo with a blank image.
-      if(!correctDecoded && existing!==src) img.setAttribute('src',src);
+    const src=imageURL(imageId);
+    const icons=()=>document.querySelectorAll('.item-cover-icon-'+id);
+    const showFallback=()=>{
+      icons().forEach(icon=>icon.classList.remove('hidden'));
+    };
+    const showImage=()=>{
+      icons().forEach(icon=>icon.classList.add('hidden'));
+    };
+    document.querySelectorAll('.item-cover-img-'+id).forEach(img=>{
+      img.dataset.vlFolderRequestedImage=imageId;
+      if (img.dataset.vlFolderCoverWatch!=='1') {
+        img.dataset.vlFolderCoverWatch='1';
+        img.addEventListener('load',()=>{
+          const expected=img.dataset.vlFolderRequestedImage;
+          if (!expected || img.naturalWidth<1 ||
+              coverIdFromURL(img.currentSrc||img.getAttribute('src'))!==expected)
+            return;
+          img.style.opacity='';
+          img.classList.remove('hidden');
+          // Use the live folder ID, not a stale closure after re-render.
+          document.querySelectorAll('.item-cover-icon-'+
+            [...img.classList].find(x=>x.startsWith('item-cover-img-'))?.slice('item-cover-img-'.length)
+          ).forEach(icon=>icon.classList.add('hidden'));
+        });
+        img.addEventListener('error',()=>{
+          if (coverIdFromURL(img.getAttribute('src')) !==
+              img.dataset.vlFolderRequestedImage) return;
+          img.style.opacity='0';
+          const folderClass=[...img.classList].find(x=>x.startsWith('item-cover-img-'));
+          const folderId=folderClass?.slice('item-cover-img-'.length);
+          if(folderId)document.querySelectorAll('.item-cover-icon-'+folderId)
+            .forEach(icon=>icon.classList.remove('hidden'));
+        });
+      }
+      const original=img.getAttribute('src')||'';
+      const alreadyDecoded=img.complete && img.naturalWidth>0 &&
+        (coverIdFromURL(img.currentSrc||original)===imageId);
+      // Existing decoded covers must never be flashed out or re-requested.
+      if (alreadyDecoded) {
+        img.style.opacity='';
+        img.classList.remove('hidden');
+        showImage();
+        return;
+      }
+      // Keep image in layout (including browsers with loading="lazy") so
+      // its loading is not postponed by display:none.
       img.classList.remove('hidden');
+      img.style.opacity='0';
+      showFallback();
+      if (original!==src) img.setAttribute('src',src);
+      if (img.complete&&img.naturalWidth>0&&
+          coverIdFromURL(img.currentSrc||img.getAttribute('src'))===imageId) {
+        img.style.opacity='';
+        showImage();
+      }
     });
-    document.querySelectorAll('.item-cover-icon-' + id).forEach(icon => icon.classList.add('hidden'));
   }
   function applyDialogCover(id, imageId) {
     if (edit?.id !== id || !idOk(imageId) || cover) return;
