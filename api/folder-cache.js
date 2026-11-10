@@ -19,8 +19,8 @@ const reply=(res,status,message,extra={})=>{
   res.setHeader('X-Content-Type-Options','nosniff');
   return res.status(status).json({success:status<400,message,...extra});
 };
-const key=(root,id)=>'vl:folder:v2:'+root+':'+id;
-const indexKey=root=>'vl:folder:v2:index:'+root;
+const key=(root,id)=>'vl:folder:v3:'+root+':'+id;
+const indexKey=root=>'vl:folder:v3:index:'+root;
 async function getDrive(url,token){
   const response=await fetch(url,{
     headers:{Authorization:'Bearer '+token},
@@ -66,7 +66,13 @@ async function listFolder(id,token){
         id:f.id,name:String(f.name||'').slice(0,255),
         type:folder?'folder':'file',mimeType:f.mimeType||'',
         description:String(f.description||'').slice(0,1500),
-        ...(folder?{}:{
+        // These references come from Drive appProperties, not browser claims.
+        // The Redis data remains within a verified folder scope.
+        uploadedBy:String(f.appProperties?.vlUploadedBy||'').trim().toLowerCase()||null,
+        ...(folder?{
+          coverImageId:ID.test(f.appProperties?.vlCoverImageId||'')?
+            f.appProperties.vlCoverImageId:null
+        }:{
           size:Number(f.size||0),
           createdTime:f.createdTime||'',
           modifiedTime:f.modifiedTime||'',
@@ -110,7 +116,7 @@ export default async function handler(req,res){
       const values=page.length?await redis.mget(...page.map(id=>key(scope,id))):[];
       const entries=page.flatMap((id,i)=>values[i]&&Array.isArray(values[i].items)?
         [{id,items:values[i].items,updatedAt:values[i].updatedAt||0}]:[]);
-      return reply(res,200,'OK',{entries,offset,nextOffset:offset+page.length,
+      return reply(res,200,'OK',{entries,viewerEmail:String(account.email||'').toLowerCase(),offset,nextOffset:offset+page.length,
         total:all.length,hasMore:offset+page.length<all.length});
     }
     if(!['get','warm'].includes(action))return reply(res,400,'Thao tác không hợp lệ');
@@ -124,6 +130,7 @@ export default async function handler(req,res){
     if(cached&&Array.isArray(cached.items)&&
       (action==='get'||(!data.force&&Date.now()-Number(cached.updatedAt||0)<FRESH_MS))){
       return reply(res,200,'OK',{folderId:id,data:cached.items,
+        viewerEmail:String(account.email||'').toLowerCase(),
         updatedAt:cached.updatedAt,source:'shared-cache',
         fresh:Date.now()-Number(cached.updatedAt||0)<FRESH_MS});
     }
@@ -131,7 +138,8 @@ export default async function handler(req,res){
     const updatedAt=Date.now();
     await redis.set(cacheKey,{items,updatedAt},{ex:DATA_TTL});
     await redis.sadd(indexKey(scope),id);
-    return reply(res,200,'OK',{folderId:id,data:items,updatedAt,
+    return reply(res,200,'OK',{folderId:id,data:items,
+      viewerEmail:String(account.email||'').toLowerCase(),updatedAt,
       source:'drive',fresh:true});
   }catch(error){
     console.error('[folder-cache] ',error?.message||error);
