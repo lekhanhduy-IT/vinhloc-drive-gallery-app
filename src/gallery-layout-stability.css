@@ -1,0 +1,30 @@
+/* v3.1.74: Mobile media cards reserve dimensions before images load. */
+@media(max-width:767px){
+ #fileList.vl-pinterest:not(.list-view)>div{
+  position:relative!important;box-sizing:border-box!important;
+  break-inside:avoid-column!important;-webkit-column-break-inside:avoid!important;isolation:isolate
+ }
+ #fileList.vl-pinterest:not(.list-view)>div>.h-32{
+  position:relative!important;display:block!important;box-sizing:border-box!important;
+  width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;
+  aspect-ratio:4/5!important;flex:0 0 auto!important;overflow:hidden!important;
+  border-radius:10px;background:#f1f5f9
+ }
+ #fileList.vl-pinterest:not(.list-view)>div>.h-32>img.drive-img-item,
+ #fileList.vl-pinterest:not(.list-view)>div>.h-32>video{
+  display:block!important;box-sizing:border-box!important;position:absolute!important;
+  inset:0!important;width:100%!important;height:100%!important;min-height:0!important;
+  max-height:none!important;aspect-ratio:auto!important;object-fit:contain!important;object-position:center!important
+ }
+ #fileList.vl-pinterest:not(.list-view)>div:not(:has(> .h-32))::before{
+  content:"";display:block;box-sizing:border-box;width:100%;aspect-ratio:4/5;
+  flex:0 0 auto;border-radius:10px;background:#f1f5f9;
+  margin-bottom:8px;pointer-events:none
+ }
+ #fileList.vl-pinterest:not(.list-view)>div.ring-2{
+  --tw-ring-shadow:0 0 #0000!important;
+  box-shadow:inset 0 0 0 2px #01adee!important;border-radius:14px!important
+ }
+ #fileList.vl-pinterest:not(.list-view)>div>.vl-selection-check{pointer-events:none!important}
+ #fileList.vl-pinterest:not(.list-view)>div .drive-img-name{overflow-wrap:anywhere}
+}
