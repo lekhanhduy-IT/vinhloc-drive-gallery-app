@@ -171,21 +171,72 @@
     if (active && e.target.closest('#btnBack,.subfolder-row,.mega-header,[onclick*="loadFolder"]')) close(true);
   }, true);
 
-  function showEmpty(menu) {
+  function showEmpty(menu, id, isHeader = false) {
     menu.querySelector('.vl-sheet-empty')?.remove();
-    // The existing permission-aware menu is authoritative. Never force
-    // display:none restricted actions to become visible or create a mutation.
+    menu.querySelector('.vl-sheet-fallback')?.remove();
+    // Reuse existing owner/admin controls whenever any usable row exists.
+    // Restricted (display:none) mutations must never become visible.
     const visible = [...menu.querySelectorAll('button,a,[onclick],[role="menuitem"]')]
       .some(el => !el.disabled && !el.classList.contains('hidden') &&
         getComputedStyle(el).display !== 'none' &&
         getComputedStyle(el).visibility !== 'hidden' &&
         !el.closest('[hidden],.hidden'));
-    if (!visible) {
-      const message = document.createElement('p');
-      message.className = 'vl-sheet-empty';
-      message.textContent = window.vlShareScope
-        ? 'Tài khoản dùng chung chưa có thao tác được cấp quyền cho mục này.'
-        : 'Chưa có thao tác khả dụng cho mục này.';
+    if (visible) return;
+
+    // Some shared-drive accounts have no native actions at all. Supply only
+    // non-mutating read actions; never manufacture edit/delete/share rights.
+    const share = window.vlShareScope;
+    const authenticated = share ? share.ready?.() === true :
+      !!localStorage.getItem('vinhloc_authenticated_email');
+    const item = cacheList()?.find?.(entry => entry.id === id);
+    const type = item?.type === 'folder' || isHeader ? 'folder' : 'file';
+    const targetId = isHeader && share ? share.root : id;
+    const targetName = isHeader ? title.textContent : title.textContent;
+    const actions = document.createElement('div');
+    actions.className = 'vl-sheet-fallback vinhloc-safe-item';
+    actions.style.cssText = 'display:flex!important;flex-direction:column!important;width:100%;padding:4px;';
+    const add = (label, icon, run) => {
+      const button = document.createElement('button');
+      button.type='button';
+      button.className='vinhloc-safe-item';
+      button.style.cssText = 'display:flex!important;align-items:center;gap:14px;width:100%;min-height:48px;padding:11px 14px;text-align:left;color:#374151;font:600 15px system-ui;';
+      const glyph = document.createElement('i');
+      glyph.className=icon;
+      glyph.style.cssText='width:21px;text-align:center;color:#01adee;';
+      const text=document.createElement('span');
+      text.textContent=label;
+      button.append(glyph,text);
+      button.addEventListener('click',e=>{
+        e.preventDefault();e.stopPropagation();
+        close();
+        run(e);
+      });
+      actions.appendChild(button);
+    };
+    if (authenticated && ID.test(targetId)) {
+      if (!isHeader && typeof window.downloadItem === 'function') {
+        add('Tải xuống','fas fa-download', e =>
+          window.downloadItem(targetId,type,targetName,e));
+      }
+      add('Sao chép đường dẫn Drive','fas fa-link', async () => {
+        const url=type==='folder' ?
+          'https://drive.google.com/drive/folders/'+encodeURIComponent(targetId) :
+          'https://drive.google.com/file/d/'+encodeURIComponent(targetId)+'/view';
+        try {
+          await navigator.clipboard.writeText(url);
+          window.showToast?.('Đã sao chép đường dẫn Drive');
+        } catch (_) {
+          // A denied clipboard permission should not create a fake success.
+          window.showToast?.('Trình duyệt chưa cho phép sao chép đường dẫn',true);
+        }
+      });
+    }
+    if(actions.childElementCount) menu.appendChild(actions);
+    else {
+      const message=document.createElement('p');
+      message.className='vl-sheet-empty';
+      message.textContent=authenticated ? 'Không có thao tác khả dụng với mục này.' :
+        'Cần xác thực tài khoản để xem các thao tác được cấp quyền.';
       menu.appendChild(message);
     }
   }
@@ -205,7 +256,7 @@
     menu.classList.remove('hidden');
     menu.style.setProperty('display', 'block', 'important');
     title.textContent = displayName.slice(0, 150);
-    showEmpty(menu);
+    showEmpty(menu, id, isHeader);
     layer.classList.add('open');
     document.body.classList.add('vl-sheet-open');
   }
