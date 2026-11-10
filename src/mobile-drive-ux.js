@@ -186,7 +186,10 @@
     if(!real?.isConnected||real.disabled||real.hidden||
        real.closest('button:disabled,[aria-disabled="true"],[hidden],.hidden')||
        getComputedStyle(real).display==='none')return;
-    try{real.click();}catch(error){
+    try{
+      if(typeof real.click==='function')real.click();
+      else real.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,composed:true}));
+    }catch(error){
       console.error('[QL Ảnh] Menu action failed:',error);
       window.showToast?.('Không chạy được thao tác này',true);
     }finally{close(true);}
