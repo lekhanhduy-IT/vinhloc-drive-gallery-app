@@ -91,16 +91,7 @@
       throw error;
     } finally {authorizing = false;}
   }
-  let loginFlight=null,loginFlightCredential='';
-  function authorizeFromLogin(credential){
-    if(!credential)return Promise.reject(new Error('Chưa có mã Google'));
-    if(ready)return Promise.resolve({success:true});
-    if(loginFlight && loginFlightCredential===credential)return loginFlight;
-    loginFlightCredential=credential;
-    loginFlight=authorize(credential).finally(()=>{loginFlight=null;loginFlightCredential='';});
-    return loginFlight;
-  }
-  window.vlMediaAuthorize = authorizeFromLogin;
+  window.vlMediaAuthorize = authorize;
 
   // Intercept the app's Google Sign-in credential when it is already asking
   // the user to log in, without changing its authorization callback.
@@ -115,7 +106,7 @@
         ...opts,
         callback(response) {
           if (response?.credential)
-            void authorizeFromLogin(response.credential).catch(err =>
+            void authorize(response.credential).catch(err =>
               console.warn('[QL Ảnh] Chưa có phiên xem media:',err));
           if (typeof callback === 'function') return callback(response);
         }
@@ -344,7 +335,7 @@
     // Never replace a preview that has already decoded successfully.
     // A later reconciliation can race a Drive fallback and put a broken
     // thumb URL back on the same file, making thumbnails flicker.
-    if (img.closest('#fileList,#folderList') && img.complete && img.naturalWidth>0) return;
+    if (img.closest('#fileList') && img.complete && img.naturalWidth>0) return;
     const full = !!img.closest('#mediaContent');
     const desired = proxy(id, full ? 'full':'thumb');
     const current = img.getAttribute('src') || '';

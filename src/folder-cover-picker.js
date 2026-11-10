@@ -70,11 +70,7 @@
     if (!idOk(id) || !idOk(imageId)) return;
     const src = imageURL(imageId);
     document.querySelectorAll('.item-cover-img-' + id).forEach(img => {
-      const raw=img.getAttribute('src')||'';
-      let sameDecoded=false;
-      try{const url=new URL(raw,location.href);sameDecoded=img.complete&&img.naturalWidth>0&&(url.searchParams.get('fileId')||url.searchParams.get('id'))===imageId;}
-      catch(_){}
-      if (!sameDecoded && raw !== src) img.setAttribute('src', src);
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
       img.classList.remove('hidden');
     });
     document.querySelectorAll('.item-cover-icon-' + id).forEach(icon => icon.classList.add('hidden'));

@@ -95,13 +95,7 @@
         // Do not modify the native Google iframe, size or click target.
         ...(typeof callback==='function'?{
           callback:function(response){
-            if(response?.credential){
-              window.vlAuthWait?.begin();
-              // The one Google account selection also grants the private
-              // thumbnail session; no second login prompt in the gallery.
-              void Promise.resolve(window.vlMediaAuthorize?.(response.credential))
-                .catch(error=>console.warn('[QL Ảnh] Media login',error));
-            }
+            if(response?.credential)window.vlAuthWait?.begin();
             return callback.call(this,response);
           }
         }:{}),
