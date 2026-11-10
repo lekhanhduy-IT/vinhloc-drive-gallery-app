@@ -193,6 +193,11 @@
        }
        incoming.replaceWith(decoded);
        saveRatio(id,decoded);
+       const size=ratios.get(id);
+       if(size){
+         decoded.setAttribute('width',size.w);
+         decoded.setAttribute('height',size.h);
+       }
        const frame=decoded.parentElement;
        frame?.removeAttribute('data-vl-preview-pending');
        frame?.style?.removeProperty('--vl-preview-ratio');
