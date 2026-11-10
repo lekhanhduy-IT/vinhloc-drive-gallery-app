@@ -81,7 +81,8 @@
  function sourceIdentity(img){
    const raw=img.getAttribute('src')||img.getAttribute('data-url')||'';
    if(!raw)return '';
-   if(raw.startsWith('blob:')||raw.startsWith('data:'))return raw.slice(0,25);
+   if(raw.startsWith('blob:'))return raw;
+   if(raw.startsWith('data:'))return raw.slice(0,80);
    try{
      const u=new URL(raw,location.href);
      return u.searchParams.get('fileId')||u.searchParams.get('id')||
@@ -105,7 +106,9 @@
  }
  function selectors(node,kind){
    if(node?.nodeType!==1)return [];
-   const selector=kind==='folder'?'img[class*="item-cover-img-"]':'img.drive-img-item';
+   // Also cover local video-poster images used during verified uploads.
+   const selector=kind==='folder'?'img[class*="item-cover-img-"]':
+     'img.drive-img-item, .h-32 > img';
    const hits=node.matches?.(selector)?[node]:[];
    return hits.concat([...node.querySelectorAll?.(selector)||[]]);
  }
