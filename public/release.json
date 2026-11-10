@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.74",
-  "deployment_purpose": "Mobile native bottom-sheet display without moving menu handlers; prevent media grid jumps; reuse folder cover images across navigation; preserve signed owner authentication after PWA reopens and updates; scoped shared-folder refresh and exact selection.",
+  "version": "3.1.75",
+  "deployment_purpose": "Correct mobile menu stacking with native top-layer popover: keep three-dot button fixed and dim entire background. Disable experimental preview CSS and file DOM transplantation that might suppress images.",
   "deployment_trigger_date": "2026-11-11"
 }
