@@ -245,11 +245,11 @@
   scheduleFolderScan();
   // Revalidate from Drive when another device may have changed a cover.
   // Keep the current image displayed while the new result is fetched.
-  window.addEventListener('focus', () => scanRenderedFolders(true));
+  window.addEventListener('focus', () => scanRenderedFolders());
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) scanRenderedFolders(true);
+    if (!document.hidden) scanRenderedFolders();
   });
-  window.addEventListener('online', () => scanRenderedFolders(true));
+  window.addEventListener('online', () => scanRenderedFolders());
   // The one-time Admin job saves Drive references without changing folder
   // lists. Revalidate visible covers once it finishes.
   window.addEventListener('vl:bulk-covers-saved', () => scanRenderedFolders(true));
