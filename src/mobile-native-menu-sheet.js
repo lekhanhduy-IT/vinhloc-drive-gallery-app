@@ -70,6 +70,8 @@
      .find(el=>Array.from(el.classList).some(cl=>cl==='item-name-'+id))||
      row?.querySelector('.drive-img-name,[class*="item-name-"]');
    if(own?.textContent?.trim())return own.textContent.trim();
+   const rowTitle=row?.querySelector('.font-bold,.font-semibold,.text-lg');
+   if(rowTitle?.textContent?.trim())return rowTitle.textContent.trim();
    const all=document.querySelectorAll('#folderList [class*="item-name-"],#fileList [class*="item-name-"]');
    for(const el of all)if(el.classList.contains('item-name-'+id)&&el.textContent.trim())
      return el.textContent.trim();
@@ -107,6 +109,14 @@
      e.preventDefault();e.stopImmediatePropagation();close();return;
    }
    if(!e.target.closest('.vl-native-sheet-heading'))queueMicrotask(close);
+ },true);
+ // Owner action handlers can stop the click event at window capture.
+ // A completed touch gesture still closes the sheet without intercepting it.
+ window.addEventListener('pointerup',e=>{
+   if(!current||!current.contains(e.target)||
+      e.target.closest('.vl-native-sheet-heading'))return;
+   const opened=current;
+   setTimeout(()=>{if(current===opened)close();},260);
  },true);
  window.addEventListener('resize',()=>{if(current&&!isMobile())close();},{passive:true});
  function open(menu,id,header=false){
