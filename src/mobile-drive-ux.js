@@ -244,18 +244,27 @@
   let identity = scopeKey();
   function imageKey(img) {
     if (!img || !img.matches('img')) return '';
-    if (!img.closest('#fileList,#folderList') &&
-        !img.closest('.mega-row,.mega-header,.subfolder-row')) return '';
+    if (!img.closest('#fileList,#folderList,.mega-row,.mega-header,.subfolder-row') &&
+        !img.classList.contains('drive-img-item') &&
+        ![...img.classList].some(name => name.startsWith('item-cover-img-'))) return '';
     for (const cls of img.classList) {
       if (cls.startsWith('item-cover-img-')) {
         const id = cls.slice('item-cover-img-'.length);
         if (ID.test(id)) return 'cover:' + id;
       }
     }
-    const row = img.closest('.subfolder-row,.mega-row,.mega-header,#fileList > div,#folderList > div');
+    let row = img.closest('.subfolder-row,.mega-row,.mega-header,#fileList > div,#folderList > div');
+    // Disconnected file cards lose their #fileList parent. Walk upwards to
+    // the nearest card with the immutable item-name/menu id.
+    if (!row) {
+      for (let cursor=img.parentElement, depth=0; cursor && depth<7; cursor=cursor.parentElement,depth++) {
+        if (cursor.querySelector('[id^="menu-"],[class*="item-name-"]')) { row=cursor; break; }
+      }
+    }
     const id = row?.querySelector('.item-action-menu[id^="menu-"]')?.id?.slice(5) ||
       row?.querySelector('[class*="item-name-"]')?.className?.match(/item-name-([\w-]{10,180})/)?.[1] || '';
-    if (ID.test(id)) return row.closest('#fileList') ? 'file:' + id : 'folder:' + id;
+    if (ID.test(id)) return img.classList.contains('drive-img-item') || !!row.closest('#fileList')
+      ? 'file:' + id : 'folder:' + id;
     try {
       const url = new URL(img.getAttribute('src') || '', location.href);
       const key = url.searchParams.get('fileId') || url.searchParams.get('id');
