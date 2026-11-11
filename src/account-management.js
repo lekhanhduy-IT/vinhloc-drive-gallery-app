@@ -43,21 +43,64 @@
     document.body.dataset.vlVerifiedAdmin=role==='admin'?'true':'false';
     window.vlAccountRole=role; // display only; backend never trusts this property
     const menu=el('menu-quanly');
-    if(menu)menu.hidden=role!=='admin';
+    if(menu){
+      // Navigation is visible to all signed-in users, including mobile;
+      // verified Admin permission is required before entering the page.
+      menu.hidden=false;
+      menu.dataset.vlVerifiedRole=role;
+    }
     if(viewing&&role!=='admin')close();
     window.dispatchEvent(new CustomEvent('vl:account-role',{detail:{role,email}}));
   }
+  function accessNotice(){
+    const text='Chỉ tài khoản Admin đã được xác minh mới có quyền Quản lý.';
+    if(typeof window.showToast==='function'){
+      window.showToast(text,true);
+      return;
+    }
+    // Non-blocking inline feedback, never a native alert dialog.
+    const old=el('vlManagerAccessNotice');
+    old?.remove();
+    const node=create('p','vl-manager-access-notice',text);
+    node.id='vlManagerAccessNotice';
+    node.setAttribute('role','status');
+    el('menu-quanly')?.insertAdjacentElement('afterend',node);
+    setTimeout(()=>node.remove(),4500);
+  }
   function installMenu(){
-    if(el('menu-quanly'))return;
-    const target=el('menu-ytuong');
-    if(!target)return;
-    adminMenu=create('div','sidebar-item','');
-    adminMenu.id='menu-quanly';
-    adminMenu.hidden=true;
-    const icon=create('i','fas fa-users-cog w-6 text-center');
-    adminMenu.append(icon,document.createTextNode(' Quản lý'));
-    adminMenu.addEventListener('click',()=>{if(role==='admin')open();});
-    target.insertAdjacentElement('afterend',adminMenu);
+    let menu=el('menu-quanly');
+    if(!menu){
+      // Fallback for browsers still holding an older cached index.html.
+      const target=el('menu-ytuong');
+      if(!target)return;
+      menu=create('div','sidebar-item','');
+      menu.id='menu-quanly';
+      const icon=create('i','fas fa-users-cog w-6 text-center');
+      menu.append(icon,document.createTextNode(' Quản lý'));
+      target.insertAdjacentElement('afterend',menu);
+    }
+    adminMenu=menu;
+    menu.hidden=false;
+    menu.setAttribute('role','button');
+    menu.setAttribute('tabindex','0');
+    if(menu.dataset.vlAdminBound==='1')return;
+    menu.dataset.vlAdminBound='1';
+    const activate=async()=>{
+      // Never trust the visible tab or a browser-side role flag:
+      // verification remains with the authenticated server endpoint.
+      if(role!=='admin'){
+        const ok=await check(true);
+        if(!ok||role!=='admin'){accessNotice();return;}
+      }
+      open();
+    };
+    menu.addEventListener('click',()=>void activate());
+    menu.addEventListener('keydown',event=>{
+      if(event.key==='Enter'||event.key===' '){
+        event.preventDefault();
+        void activate();
+      }
+    });
   }
   function message(text,error=false){
     const node=el('vlAdminMessage');
@@ -233,10 +276,13 @@
   }
   async function check(force=false){
     if(checking)return checking;
-    if(!authEmail()||share()){
+    if(share()){
       setRole(null);
       return false;
     }
+    // A valid signed HttpOnly session can outlive a localStorage login hint.
+    // Let the server verify the account, rather than permanently hiding
+    // the management navigation when that hint is temporarily absent.
     checking=(async()=>{
       try{
         const data=await request('me');

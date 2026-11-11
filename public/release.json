@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.78",
-  "deployment_purpose": "Eliminate thumbnail flashing on returning to previously visited folders by reusing decoded file/video/folder IMG elements by scoped Drive ID, restoring intrinsic aspect ratios, and preserving current menus, selection and permissions. No Drive data or authorization changes.",
+  "version": "3.1.79",
+  "deployment_purpose": "Keep Quản lý visible beside Triển khai and Ý tưởng on mobile and desktop, independent of admin-check timing; require server-verified Admin role for account management actions.",
   "deployment_trigger_date": "2026-11-11"
 }
