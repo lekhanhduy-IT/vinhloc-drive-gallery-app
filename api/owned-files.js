@@ -201,7 +201,15 @@ export default async function handler(req,res) {
     if(action==='startUpload'){
       const parentId=body.folderId;
       if(typeof parentId!=='string'||!idPattern.test(parentId))return respond(res,400,'ID thư mục cha không hợp lệ');
-      await folder(parentId);
+      // Always bind the uploader to the verified session, never the device doing the PUT.
+      const expectedOwner=String(body.expectedOwner||'').trim().toLowerCase();
+      if(expectedOwner && expectedOwner!==email)return respond(res,409,'Tài khoản đã thay đổi trong lúc upload');
+      const destination=await fileInfo(parentId);
+      const internalRoot=admin&&!scopeRoot&&await withinConfiguredRoot(parentId);
+      if(destination.mimeType!=='application/vnd.google-apps.folder' ||
+        destination.trashed || (!inGallery(destination)&&!internalRoot))
+        return respond(res,403,'Thư mục upload ngoài phạm vi cấp quyền');
+      await requireScope(parentId,scopeRoot);
       const name=String(body.name||'').trim().slice(0,250);
       const mime=String(body.mimeType||'application/octet-stream');
       const size=Number(body.size);
@@ -219,7 +227,7 @@ export default async function handler(req,res) {
       const uploadUrl=session.headers.get('location');
       if(!uploadUrl||!uploadUrl.startsWith('https://www.googleapis.com/'))
         return respond(res,502,'Drive không trả địa chỉ upload hợp lệ');
-      return respond(res,200,'Đã tạo phiên upload',{uploadUrl});
+      return respond(res,200,'Đã tạo phiên upload',{uploadUrl,uploaderEmail:email});
     }
     if(action==='inspectUpload'){
       const id=String(body.id||'');
@@ -251,7 +259,12 @@ export default async function handler(req,res) {
       if(typeof parentId!=='string'||!idPattern.test(parentId)||
          !uploadKeyPattern.test(uploadKey))
         return respond(res,400,'Mã đối chiếu upload không hợp lệ');
-      await folder(parentId);
+      const destination=await fileInfo(parentId);
+      const internalRoot=admin&&!scopeRoot&&await withinConfiguredRoot(parentId);
+      if(destination.mimeType!=='application/vnd.google-apps.folder' ||
+         destination.trashed || (!inGallery(destination)&&!internalRoot))
+        return respond(res,403,'Thư mục xác minh ngoài phạm vi cấp quyền');
+      await requireScope(parentId,scopeRoot);
       const escaped=uploadKey.replace(/'/g,"\\'");
       const q=new URLSearchParams({
         q:"'"+parentId+"' in parents and trashed=false and appProperties has { key='"+uploadKeyField+"' and value='"+escaped+"' }",
@@ -259,7 +272,7 @@ export default async function handler(req,res) {
         pageSize:'50',supportsAllDrives:'true',includeItemsFromAllDrives:'true'
       });
       const listed=await jsonDrive(api+'?'+q);
-      const matching=(listed.files||[]).filter(x=>inGallery(x)&&(admin||own(x,email))&&
+      const matching=(listed.files||[]).filter(x=>(inGallery(x)||internalRoot)&&(admin||own(x,email))&&
         x.appProperties?.[uploadKeyField]===uploadKey);
       if(matching.length>1)return respond(res,409,'Mã upload bị trùng, cần kiểm tra thủ công');
       const file=matching[0]||null;
