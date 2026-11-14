@@ -4,6 +4,10 @@
   "description": "Auto-rotating login backgrounds; regenerated from the images in this directory during build.",
   "images": [
     {
+      "src": "/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_43%209%20thg%2011%2C%202026-9.png",
+      "alt": "Ảnh ChatGPT 03_20_43 9 thg 11, 2026-9"
+    },
+    {
       "src": "/login-backgrounds/316e9496-bd61-457c-a431-37259a524b75.png",
       "alt": "316e9496-bd61-457c-a431-37259a524b75"
     },
@@ -38,10 +42,6 @@
     {
       "src": "/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_42%209%20thg%2011%2C%202026-8.png",
       "alt": "Ảnh ChatGPT 03_20_42 9 thg 11, 2026-8"
-    },
-    {
-      "src": "/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_43%209%20thg%2011%2C%202026-9.png",
-      "alt": "Ảnh ChatGPT 03_20_43 9 thg 11, 2026-9"
     },
     {
       "src": "/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_43%209%20thg%2011%2C%202026-10.png",
