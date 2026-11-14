@@ -10,13 +10,7 @@ const files = await readdir(directory, { withFileTypes: true });
 const photos = files
   .filter(entry => entry.isFile() && /\.(png|jpe?g|webp|avif)$/i.test(entry.name))
   .map(entry => entry.name)
-  .sort((a, b) => {
-    // Keep the selected opening image first, then the remaining photos in stable order.
-    const first = "Ảnh ChatGPT 03_20_43 9 thg 11, 2026-9.png";
-    if (a === first) return -1;
-    if (b === first) return 1;
-    return a.localeCompare(b, 'vi', { numeric: true });
-  });
+  .sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }));
 const manifest = {
   version: 1,
   title: 'QL Ảnh — login background collection',

@@ -3,7 +3,7 @@
 Bạn có thể **tự tải ảnh** (PNG, JPG, JPEG, WebP, AVIF) vào thư mục `public/login-backgrounds/`.
 
 - Hiện có 11 ảnh. Khi deploy, `npm run build` tự quét các file ảnh và tạo lại `backgrounds.json`; không cần thêm từng file bằng tay.
-- Trang đăng nhập lấy danh sách trong `backgrounds.json`, **phát theo thứ tự cố định trong `backgrounds.json`**, bắt đầu bằng ảnh `Ảnh ChatGPT 03_20_43 9 thg 11, 2026-9.png` và **chuyển ảnh sau mỗi 8,5 giây** bằng hiệu ứng mờ.
+- Trang đăng nhập lấy danh sách trong `backgrounds.json`, **xáo trộn thứ tự** và **chuyển ảnh sau mỗi 8,5 giây** bằng hiệu ứng mờ.
 - Trên điện thoại, ảnh tập trung phía trên; phần dưới trắng dần để nút Google và thông tin đăng nhập dễ đọc.
 - Ảnh tiếp theo chỉ tải sau khi ảnh trước xuất hiện; khi tab ẩn hoặc đã đóng màn hình đăng nhập sẽ tạm dừng.
 - Nếu không có ảnh hoặc ảnh lỗi, màn hình đăng nhập vẫn hiển thị nền trắng và hoạt động bình thường.
