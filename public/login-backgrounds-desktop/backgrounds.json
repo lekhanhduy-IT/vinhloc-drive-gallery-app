@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "title": "QL Ảnh — desktop login backgrounds",
+  "description": "Auto-rotating login backgrounds; regenerated during build.",
+  "images": [
+    {
+      "src": "/login-backgrounds-desktop/1.png",
+      "alt": "1"
+    },
+    {
+      "src": "/login-backgrounds-desktop/2.png",
+      "alt": "2"
+    },
+    {
+      "src": "/login-backgrounds-desktop/3.png",
+      "alt": "3"
+    }
+  ]
+}

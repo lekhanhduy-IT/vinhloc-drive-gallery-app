@@ -13,12 +13,17 @@
   const FADE_MS = 1150;
   const LOAD_TIMEOUT_MS = 4200;
   const builtInSources = ["/login-backgrounds/316e9496-bd61-457c-a431-37259a524b75.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_37%209%20thg%2011%2C%202026-1.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_38%209%20thg%2011%2C%202026-2.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_38%209%20thg%2011%2C%202026-3.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_39%209%20thg%2011%2C%202026-4.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_40%209%20thg%2011%2C%202026-5.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_40%209%20thg%2011%2C%202026-6.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_41%209%20thg%2011%2C%202026-7.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_42%209%20thg%2011%2C%202026-8.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_43%209%20thg%2011%2C%202026-9.png","/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_43%209%20thg%2011%2C%202026-10.png"];
+  // Independent wallpaper collection for desktop-width windows.
+  const desktopBuiltInSources = ["/login-backgrounds-desktop/1.png","/login-backgrounds-desktop/2.png","/login-backgrounds-desktop/3.png"];
+  const desktopMedia = window.matchMedia?.('(min-width: 1024px)');
+  const isDesktop = () => !!desktopMedia?.matches;
+  const openingWallpapers = { mobile: "https://raw.githubusercontent.com/lekhanhduy-IT/vinhloc-drive-gallery-app/main/public/login-backgrounds/%E1%BA%A2nh%20ChatGPT%2003_20_43%209%20thg%2011%2C%202026-9.png", desktop: "https://raw.githubusercontent.com/lekhanhduy-IT/vinhloc-drive-gallery-app/main/public/login-backgrounds-desktop/1.png" };
   const remoteBases = [
     'https://raw.githubusercontent.com/lekhanhduy-IT/vinhloc-drive-gallery-app/main/public',
     'https://cdn.jsdelivr.net/gh/lekhanhduy-IT/vinhloc-drive-gallery-app@main/public'
   ];
   const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-  let sources = shuffle(builtInSources.slice());
+  let sources = shuffle((isDesktop() ? desktopBuiltInSources : builtInSources).slice());
   let cursor = 0;
   let timer = null;
   let busy = false;
@@ -48,12 +53,14 @@
   function canonical(src) {
     try {
       const path = new URL(src, location.href).pathname;
-      const where = path.indexOf('/login-backgrounds/');
-      return where >= 0 ? path.slice(where) : path;
+      const where = /\/login-backgrounds(?:-desktop)?\//.exec(path);
+      return where ? path.slice(where.index) : path;
     } catch (_) { return String(src || ''); }
   }
-  const initialUrl = /url\((['"]?)(.*?)\1\)/.exec(overlay.style.backgroundImage);
-  let current = canonical(initialUrl ? initialUrl[2] : builtInSources[0]);
+  // Computed style includes the desktop opening photo from the critical CSS.
+  const initialUrl = /url\((['"]?)(.*?)\1\)/.exec(getComputedStyle(overlay).backgroundImage);
+  let current = canonical(initialUrl ? initialUrl[2] :
+    (isDesktop() ? desktopBuiltInSources[0] : builtInSources[0]));
 
   function shown() {
     if (document.hidden || overlay.hidden || overlay.classList.contains('hidden')) return false;
@@ -140,7 +147,7 @@
 
       if (media?.matches) {
         // Reduced motion removes animation only, NEVER stops the slideshow.
-        overlay.style.backgroundImage = cssImage;
+        overlay.style.setProperty('background-image', cssImage, 'important');
       } else {
         layer.classList.remove('is-visible');
         layer.style.backgroundImage = cssImage;
@@ -149,7 +156,7 @@
         layer.classList.add('is-visible');
         await sleep(FADE_MS);
         if (token !== generation || !visible) return;
-        overlay.style.backgroundImage = cssImage;
+        overlay.style.setProperty('background-image', cssImage, 'important');
         layer.classList.remove('is-visible');
       }
       current = canonical(candidate);
@@ -170,26 +177,55 @@
   document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('pageshow', onVisibility);
 
-  fetch('/login-backgrounds/backgrounds.json', {cache:'no-store'})
-    .then(response => {
-      if (!response.ok) throw Error('Manifest HTTP ' + response.status);
-      return response.json();
-    })
-    .then(data => {
-      if (!Array.isArray(data.images)) return;
-      const valid = data.images.map(item => item?.src).filter(src =>
-        typeof src === 'string' &&
-        src.startsWith('/login-backgrounds/') &&
-        /\.(?:png|jpe?g|webp|avif)$/i.test(src)
-      );
-      if (valid.length > 1) {
-        sources = shuffle([...new Set(valid)]);
-        cursor = 0;
-        // The manifest must NEVER reset the current photo or its countdown.
-        schedule();
-      }
-    })
-    .catch(err => console.warn('[login background] Embedded image list in use:',err));
+  let manifestSequence = 0;
+  function loadManifest() {
+    const request = ++manifestSequence;
+    const prefix = isDesktop() ? '/login-backgrounds-desktop' : '/login-backgrounds';
+    fetch(prefix + '/backgrounds.json', {cache:'no-store'})
+      .then(response => {
+        if (!response.ok) throw Error('Manifest HTTP ' + response.status);
+        return response.json();
+      })
+      .then(data => {
+        if (request !== manifestSequence || !Array.isArray(data.images)) return;
+        const valid = data.images.map(item => item?.src).filter(src =>
+          typeof src === 'string' &&
+          src.startsWith(prefix + '/') &&
+          /\.(?:png|jpe?g|webp|avif)$/i.test(src)
+        );
+        if (valid.length) {
+          sources = shuffle([...new Set(valid)]);
+          cursor = 0;
+          // Manifest changes must not interrupt the current photo.
+          schedule();
+        }
+      })
+      .catch(err => console.warn('[login background] Embedded image list in use:', err));
+  }
+
+  function onScreenModeChange() {
+    generation++;
+    cancelTimer();
+    layer.classList.remove('is-visible');
+    layer.style.backgroundImage = '';
+    sources = shuffle((isDesktop() ? desktopBuiltInSources : builtInSources).slice());
+    cursor = 0;
+    const first = isDesktop() ? openingWallpapers.desktop : openingWallpapers.mobile;
+    const token = generation;
+    allowedAt = Date.now() + INTERVAL_MS;
+    rememberDue();
+    loadManifest();
+    // Do not replace the current wallpaper until the new source has loaded.
+    void probe(first).then(ok => {
+      if (!ok || token !== generation) return;
+      overlay.style.setProperty('background-image', 'url(' + JSON.stringify(first) + ')', 'important');
+      current = canonical(first);
+    });
+    if (visible) schedule();
+  }
+  if (desktopMedia?.addEventListener) desktopMedia.addEventListener('change', onScreenModeChange);
+  else desktopMedia?.addListener?.(onScreenModeChange);
+  loadManifest();
 
   // The HTML has already painted the initial background. No slideshow image
   // is painted until its full first 8.5-second hold completes.

@@ -1,6 +1,6 @@
 {
   "application": "vinhloc-drive-gallery-app",
-  "version": "3.1.80",
-  "deployment_purpose": "Make selected login wallpaper the first image immediately on open, and play remaining wallpapers in a deterministic order.",
+  "version": "3.1.81",
+  "deployment_purpose": "Use login-backgrounds-desktop for widths >= 1024px; keep the existing mobile wallpaper gallery and slideshow behavior unchanged.",
   "deployment_trigger_date": "2026-11-14"
 }
